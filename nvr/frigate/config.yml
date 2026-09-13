@@ -1,0 +1,91 @@
+# Frigate config for Jetson Orin Nano Super (8 GB), JetPack 7 / L4T R39.
+#
+# Two platform facts shape this file:
+#
+# 1. Orin Nano has NO hardware encoder. NVIDIA states plainly that "the Jetson Orin Nano does not
+#    have the NVENC engine" and directs users to software (libx264) encoding. Anything that
+#    re-encodes therefore costs CPU, so recordings use stream copy and birdseye is disabled.
+#
+# 2. Docker here has only the `runc` runtime registered - no nvidia container runtime - and
+#    Frigate's TensorRT detector images target JetPack 6 (l4t r36) against a CUDA 13.2 host.
+#    So this uses the stock arm64 image with the CPU detector. That is a deliberate choice, not
+#    an oversight: object detection only has to be good enough to *trigger* an event, because the
+#    actual scene understanding is done by Cosmos3-Edge downstream.
+#
+# RAM is the binding constraint (the model holds ~3.8 GB of 8 GB), so detect runs at low
+# resolution and low fps. Raise detect fps/resolution only after checking `free -m`.
+
+mqtt:
+  enabled: true
+  host: mosquitto
+  port: 1883
+  topic_prefix: frigate
+  client_id: frigate
+
+detectors:
+  cpu1:
+    type: cpu
+
+# Re-encodes a composite stream; pointless CPU cost on a board with no hardware encoder.
+birdseye:
+  enabled: false
+
+logger:
+  default: info
+
+record:
+  enabled: true
+  # Stream copy - never re-encode on this board.
+  retain:
+    days: 3
+    mode: motion
+  alerts:
+    retain:
+      days: 14
+  detections:
+    retain:
+      days: 14
+
+snapshots:
+  enabled: true
+  bounding_box: true
+  retain:
+    default: 14
+
+objects:
+  track:
+    - person
+    - car
+    - dog
+    - cat
+
+# Keep clips short: the bridge samples 3 frames per event, and short clips make those frames
+# far more representative of what actually happened.
+cameras:
+  front_porch:
+    enabled: true
+    ffmpeg:
+      # Replace this input with the Ring stream once ring-mqtt is authenticated, e.g.
+      #   path: rtsp://127.0.0.1:8554/<ring_device_id>_live
+      # ring-mqtt exposes each camera on its bundled go2rtc at port 8554.
+      inputs:
+        - path: /media/frigate/samples/loop.mp4
+          input_args:
+            - -re
+            - -stream_loop
+            - "-1"
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 480
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true

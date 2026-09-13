@@ -1,0 +1,53 @@
+name: nvr
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    mem_limit: 64m
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  ring-mqtt:
+    image: tsightler/ring-mqtt:latest
+    container_name: ring-mqtt
+    restart: unless-stopped
+    mem_limit: 400m
+    depends_on:
+      - mosquitto
+    ports:
+      - "8554:8554"     # RTSP (bundled go2rtc) - Frigate consumes these
+      - "55123:55123"   # setup web UI - Ring account auth happens HERE
+    volumes:
+      - ./ring-mqtt/data:/data
+    environment:
+      - MQTTURL=mqtt://mosquitto:1883
+      - DEBUG=ring-*
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: frigate
+    restart: unless-stopped
+    # Hard cap: the Cosmos3-Edge model holds ~3.8GB of this board's 8GB. A container OOM here is
+    # recoverable; a host OOM would take the model down with it.
+    mem_limit: 1400m
+    shm_size: 128m
+    depends_on:
+      - mosquitto
+    ports:
+      - "5000:5000"     # Frigate UI + API (the bridge reads event clips from here)
+      - "8971:8971"     # authenticated UI
+    volumes:
+      - ./frigate/config:/config
+      - ./frigate/media:/media/frigate
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 256000000
+    environment:
+      - FRIGATE_RTSP_PASSWORD=change_me
