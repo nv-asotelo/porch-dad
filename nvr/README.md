@@ -322,3 +322,67 @@ state per camera over time, which should only be built once the underlying signa
 For an iPhone the honest ranking is: **Frigate's own web push first**, then **ntfy or Pushover**.
 Both beat WhatsApp and iMessage here on effort and reliability, and neither sends your camera imagery
 to a third-party messaging platform.
+
+## Gate / door state: measured, and not viable on this model
+
+The request was "alert when the gate has been open too long". It was tested properly and **not
+built**, because the underlying signal does not exist. Across ~9 probes on a genuinely open entryway,
+spanning 256 to 522 prompt tokens (including a tight upscaled crop of the doorway):
+
+| Probe | Answer | Truth |
+|---|---|---|
+| "gate open or closed?" ×3 | CLOSED | OPEN |
+| "door open or closed?" ×3 | CLOSED | OPEN |
+| "any door or gate standing open?" | "No." | OPEN |
+| upscaled door crop, 522 tokens | CLOSED | OPEN |
+| free-form description | "a wooden gate that is currently open" | OPEN |
+
+Earlier, on a camera with **no gate in frame at all**, it answered CLOSED 5/5 even when offered NONE.
+
+Two compounding causes, both real:
+
+1. **The model has a hard CLOSED bias.** It never declines to answer. Tellingly, asked to describe the
+   doorway it said *"the bright light streaming through the doorway creates an illusion of depth,
+   making it appear as though I could walk through"* — it perceives light through an open doorway and
+   still answers CLOSED to the binary question. Its free-form text contradicts its direct answers on
+   the same image, so neither is usable.
+2. **The pixels lack the information.** `latest.jpg` serves the *detect* stream, which is 640x360
+   here, and that doorway is backlit with highlights clipped to pure white. The state is not reliably
+   readable by a human from that frame either.
+
+For "open too long" — which is also inherently **stateful**, something Frigate's per-event GenAI is
+not — use a **physical contact sensor** (YoLink/Zigbee/Z-Wave) into Home Assistant. That yields a
+deterministic boolean with a real timestamp, and HA does "open for > N minutes" natively. Route its
+alert to the same ntfy topic and gate alerts land beside the camera descriptions.
+
+Use the model for what it demonstrably does well on this hardware: *"male, wearing black shirt,
+carrying black backpack"*, *"bald, wearing black t-shirt, black shorts, black flip-flops, walking on
+a porch"*, and *"covering his face with both hands"* correctly escalated to ALERT.
+
+## Token budget: the limits that actually bind
+
+Frigate sends roughly six frames per GenAI request even with `use_snapshot: true`. Two separate
+engine limits apply, and both produce failures that look like generic errors:
+
+```
+EDGELLM_INPUT_TOO_LONG: input length 1800 exceeds engine max_input_len 1536
+Failed to handle generation request          <- silently: exceeded max_image_tokens 1024
+```
+
+Measured at a 150-token per-image cap:
+
+| Images | Prompt tokens | Result |
+|---|---|---|
+| 1 | 240 | OK |
+| 2 | 386 | OK |
+| 4 | 678 | OK |
+| 6 | 970 | OK |
+| 8 | — | fails |
+
+So `max_image_tokens_per_image: 150` in the engine's `visual/config.json` (runtime-read, no rebuild)
+keeps Frigate's payload inside both limits.
+
+**But fewer frames give better text.** At one image: *"a delivery worker standing in the front
+driveway, wearing a black shirt"*. At two: *"Person detected in front driveway, San Diego,
+California"* - a hallucinated location. At four: *"back view."* If descriptions look thin, reduce the
+frame count rather than raising the token budget.

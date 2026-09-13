@@ -98,7 +98,15 @@ objects:
 
   genai:
     enabled: true
-    use_snapshot: false
+    # MUST stay true on this engine. With use_snapshot: false Frigate sends a *sequence* of
+    # thumbnails, and the runtime rejects it:
+    #   EDGELLM_INPUT_TOO_LONG: expanded multimodal input length 2609 exceeds the engine's
+    #   maxPositionEmbeddings 2048
+    # Each image costs ~302 prompt tokens, so a multi-frame sequence plus the prompt overruns the
+    # 2048-token position limit and every genai call fails silently (descriptions stay null).
+    # One snapshot lands near ~500 tokens total. Raising this needs an engine rebuild with a larger
+    # maxInputLen, not a config change.
+    use_snapshot: true
     objects:
       - person
       - car
@@ -120,55 +128,45 @@ objects:
     #    CLOSED 5/5 even on a camera with no gate in frame, so a global gate instruction
     #    only produces false readings. Gate handling lives on front_driveway only.
     prompt: >-
-      Look at home security camera '{camera}' and report only what is actually visible, in one
-      or two short sentences. Cover: people (what they are doing, their appearance, what they
-      carry), animals (name the species as specifically as you can), vehicles, and whether
-      exterior lamps are lit. Report visible smoke, fire or flames first if present. Ignore
-      sunlight, shadows, weather and moving foliage. Write it like a short text message to the
-      homeowner.
+      Look at home camera '{camera}'. In one or two short sentences say what is actually
+      visible: people (what they are doing and carrying), animals (name the species), vehicles,
+      and whether exterior lamps are lit. Report smoke or fire first if present. Ignore
+      sunlight, shadows, weather and moving plants.
     object_prompts:
       person: >-
-        Look at home security camera '{camera}' and describe the person in one or two short
-        sentences: what they are doing, their appearance, and what they carry or interact with.
-        Include delivery drivers, couriers and service workers, and say what they delivered,
-        collected or did. Call out explicitly if they are loitering, concealing or covering
-        their face, climbing a fence or window, or forcing a door. Report visible smoke, fire or
-        flames first if present. Ignore sunlight, shadows, weather and moving foliage.
+        Look at home camera '{camera}'. In one or two short sentences describe the person: what
+        they are doing, their appearance, and what they carry. Include delivery and service
+        workers and say what they did. Say so explicitly if they are loitering, covering their
+        face, climbing a fence or window, or forcing a door. Report smoke or fire first if
+        present.
       bird: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
       cat: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
       dog: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
       bear: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
       horse: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
       cow: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
       sheep: >-
-        Look at home security camera '{camera}' and identify the animal's species as
-        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
-        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
-        in one or two short sentences. Report visible smoke, fire or flames first if present.
+        Look at home camera '{camera}'. Name the animal's species as specifically as you can
+        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
+        in one short sentence. Report smoke or fire first if present.
 
 review:
   genai:
@@ -199,7 +197,11 @@ cameras:
   # then add more.
 
   front_door:
-    enabled: true          # lpd_v4 doorbell - wired (transformer)
+    # Disabled: this camera fails to stream even with ?video ("Invalid data found when processing
+    # input") and separately times out on ring-mqtt snapshot retrieval, so it has a genuine
+    # connectivity problem rather than a config one. Left here documented; re-enable once the
+    # camera itself is healthy.
+    enabled: false          # lpd_v4 doorbell - wired (transformer)
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/90486cee0ffc_live?video

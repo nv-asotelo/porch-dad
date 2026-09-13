@@ -1,0 +1,41 @@
+# Push Frigate events to a phone. Switch providers by changing `provider` and restarting:
+#   sudo systemctl restart frigate-notify
+provider: ntfy          # ntfy | pushover
+
+frigate_url: "http://127.0.0.1:5000"
+# Must be reachable FROM THE PHONE - it becomes the tap-through link on the notification.
+frigate_public_url: "http://<jetson-ip>:5000"
+
+mqtt_host: "127.0.0.1"
+mqtt_port: 1883
+
+# Only notify for these Frigate cameras; empty list means all.
+cameras: []
+min_seconds_between: 30        # per-camera throttle, stops a busy camera spamming your phone
+description_wait_seconds: 25   # Frigate writes the GenAI description after the event ends
+
+# Raise notification priority when the description contains any of these. Deliberately a keyword
+# list rather than asking the model to classify: on this hardware a text-only classification pass
+# labelled "smoke is rising from the garage" ROUTINE, which is the failure mode that matters.
+alert_keywords:
+  - smoke
+  - fire
+  - flames
+  - loiter
+  - covering his face
+  - covering her face
+  - covering their face
+  - concealing
+  - mask
+  - climbing
+  - prying
+  - forcing
+
+ntfy:
+  server: "https://ntfy.sh"    # or your self-hosted server
+  topic: "CHANGE-ME-to-something-long-and-unguessable"
+  token: ""                    # optional; required if your server uses auth
+
+pushover:
+  api_token: ""                # from https://pushover.net/apps/build
+  user_key: ""                 # from your Pushover dashboard
