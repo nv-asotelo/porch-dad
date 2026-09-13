@@ -50,6 +50,17 @@ MIN_CLIP_WAIT = float(CFG.get("clip_wait_seconds", 3.0))
 # a full build; see nvr/README.md.
 FFMPEG = CFG.get("ffmpeg", "ffmpeg")
 FFPROBE = CFG.get("ffprobe", "ffprobe")
+CAMERA_LABELS = CFG.get("camera_labels") or {}
+
+# Ring event source. Ring's *live* stream is an on-demand WebRTC session that ring-mqtt transcodes
+# to RTSP; it cannot be consumed as a continuous NVR feed (ffmpeg reports "Invalid data found when
+# processing input" even while ring-mqtt reports the WebRTC session connected), and holding it open
+# would drain battery cameras. Ring is event-driven by design, so we consume motion/ding events and
+# the JPEG snapshots ring-mqtt publishes instead. This works for every camera, wired or battery.
+RING_ENABLED = bool(CFG.get("ring_enabled", True))
+RING_CAMERAS = CFG.get("ring_cameras") or {}          # device id -> friendly name
+RING_WINDOW = float(CFG.get("ring_snapshot_window", 8.0))
+RING_COOLDOWN = float(CFG.get("ring_cooldown", 45.0))  # per-camera, avoids event storms
 SYSTEM_PROMPT = CFG["system_prompt"]
 USER_PROMPT_TMPL = CFG["user_prompt"]
 
@@ -266,7 +277,7 @@ def handle_event(after: dict, publish) -> None:
         return fail("no frames could be extracted from the clip")
 
     try:
-        text, ms = describe(frames, camera, eid)
+        text, ms = describe(frames, CAMERA_LABELS.get(camera, camera), eid)
     except Exception as e:
         return fail(f"Cosmos3-Edge inference failed: {type(e).__name__}: {e}")
 
@@ -284,6 +295,85 @@ def handle_event(after: dict, publish) -> None:
             ("id", "camera", "label", "category", "description", "start_time", "latency_ms")}))
 
 
+# --------------------------------------------------------------------------- ring
+_ring_snaps: dict[str, list] = {}      # device id -> [(ts, jpeg bytes)]
+_ring_last: dict[str, float] = {}      # device id -> last handled event ts
+_ring_lock = threading.Lock()
+
+
+def ring_snapshot(dev: str, payload: bytes) -> None:
+    if not payload or len(payload) < 2048:
+        return
+    with _ring_lock:
+        buf = _ring_snaps.setdefault(dev, [])
+        buf.append((time.time(), payload))
+        del buf[:-6]
+
+
+def ring_recent(dev: str, window: float) -> list[bytes]:
+    """Most recent distinct snapshots within the window, newest last."""
+    now = time.time()
+    with _ring_lock:
+        buf = list(_ring_snaps.get(dev, []))
+    out, seen = [], set()
+    for ts, data in buf:
+        if now - ts > window:
+            continue
+        h = (len(data), data[:64])
+        if h in seen:
+            continue
+        seen.add(h)
+        out.append(data)
+    return out[-NUM_FRAMES:]
+
+
+def handle_ring_event(dev: str, kind: str, publish) -> None:
+    """Ring motion/ding -> collect snapshots -> describe.
+
+    Unlike the Frigate path there is no clip, so the frame count is whatever snapshots arrived
+    during the window (1..NUM_FRAMES). One good snapshot still yields a useful description, so we
+    degrade gracefully rather than discarding the event.
+    """
+    now = time.time()
+    if now - _ring_last.get(dev, 0) < RING_COOLDOWN:
+        return
+    _ring_last[dev] = now
+    name = RING_CAMERAS.get(dev, dev)
+    eid = f"ring-{dev}-{int(now)}"
+    print(f"[porch-dad] ring {kind} on {name} ({dev})", flush=True)
+
+    deadline = now + RING_WINDOW
+    while time.time() < deadline and len(ring_recent(dev, RING_WINDOW + 5)) < NUM_FRAMES:
+        time.sleep(0.5)
+    frames = ring_recent(dev, RING_WINDOW + 5)
+
+    def fail(reason: str) -> None:
+        print(f"[porch-dad] {eid}: {reason}", flush=True)
+        save_event({"id": eid, "camera": name, "label": kind,
+                    "start_time": now, "end_time": time.time(),
+                    "category": "ERROR",
+                    "description": f"Ring {kind} captured but not analyzed: {reason}",
+                    "raw": json.dumps({"device": dev, "kind": kind}), "num_frames": 0,
+                    "latency_ms": 0, "created_at": time.time()})
+
+    if not frames:
+        return fail("no snapshot arrived from ring-mqtt within the window")
+    try:
+        text, ms = describe(frames, name, eid)
+    except Exception as e:
+        return fail(f"Cosmos3-Edge inference failed: {type(e).__name__}: {e}")
+
+    cat, reason = categorize(text)
+    save_event({"id": eid, "camera": name, "label": kind,
+                "start_time": now, "end_time": time.time(), "category": cat,
+                "description": text, "raw": json.dumps({"device": dev, "kind": kind}),
+                "num_frames": len(frames), "latency_ms": ms, "created_at": time.time()})
+    print(f"[porch-dad] {eid} [{cat}/{reason}] {ms}ms {len(frames)}f :: {text[:100]}", flush=True)
+    publish("porchdad/events", json.dumps(
+        {"id": eid, "camera": name, "label": kind, "category": cat,
+         "description": text, "start_time": now, "latency_ms": ms}))
+
+
 # --------------------------------------------------------------------------- mqtt
 def mqtt_loop() -> None:
     import paho.mqtt.client as mqtt
@@ -291,8 +381,28 @@ def mqtt_loop() -> None:
     def on_connect(client, *_a):
         client.subscribe(CFG["mqtt_topic"])
         print(f"[porch-dad] subscribed to {CFG['mqtt_topic']}", flush=True)
+        if RING_ENABLED:
+            for t in ("ring/+/camera/+/motion/state",
+                      "ring/+/camera/+/ding/state",
+                      "ring/+/camera/+/snapshot/image"):
+                client.subscribe(t)
+            print(f"[porch-dad] subscribed to ring motion/ding/snapshot "
+                  f"({len(RING_CAMERAS)} named cameras)", flush=True)
 
     def on_message(client, _u, msg):
+        parts = msg.topic.split("/")
+        if RING_ENABLED and len(parts) >= 5 and parts[2] == "camera":
+            dev = parts[3]
+            leaf = "/".join(parts[4:])
+            if leaf == "snapshot/image":
+                ring_snapshot(dev, msg.payload)
+                return
+            if leaf in ("motion/state", "ding/state"):
+                if msg.payload.decode(errors="ignore").strip().upper() == "ON":
+                    kind = "motion" if leaf.startswith("motion") else "ding"
+                    threading.Thread(target=handle_ring_event,
+                                     args=(dev, kind, client.publish), daemon=True).start()
+                return
         try:
             data = json.loads(msg.payload.decode())
         except Exception:

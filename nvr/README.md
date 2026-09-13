@@ -54,30 +54,65 @@ device, so scoping it limits what a compromise reaches.
 **When the token stops working** — after a password change or a session revoke — ring-mqtt logs an
 authentication failure. Redo the same web-UI flow; nothing else needs touching.
 
-## Wiring Ring cameras into Frigate
+## How Ring cameras are consumed (and why not through Frigate)
 
-After authentication, ring-mqtt exposes each camera on its bundled go2rtc at port 8554. List them:
+**Ring's live stream cannot be used as a continuous NVR source, and no subscription changes that.**
 
-```bash
-docker exec ring-mqtt cat /data/config.json
-mosquitto_sub -h <jetson-ip> -t 'ring/+/camera/+/info' -C 1
+ring-mqtt exposes each camera at `ring-mqtt:8554/<device_id>_live`, but that is an on-demand
+**WebRTC** session transcoded to RTSP, not a persistent feed like an ONVIF camera. Pointed at
+Frigate it fails:
+
+```
+ffmpeg.front_door.detect ERROR : rtsp://ring-mqtt:8554/90486cee0ffc_live:
+                                 Invalid data found when processing input
 ```
 
-Then replace the placeholder camera in `frigate/config.yml`:
+…even while ring-mqtt reports the session healthy (`WebRTC session is connected`, `new consumer
+stream=..._live`). ffprobe with a 20s analyze window fails identically. Two further problems make
+this the wrong shape regardless of the transport bug:
 
-```yaml
-cameras:
-  front_porch:
-    ffmpeg:
-      inputs:
-        - path: rtsp://127.0.0.1:8554/<ring_device_id>_live
-          roles: [detect, record]
+- **Battery drain.** Frigate's continuous detect holds the stream open permanently. A
+  battery-powered Ring camera lasts hours under that, not months.
+- **No paid tier fixes it.** Ring's 24/7 Continuous Recording records to *Ring's cloud* for the Ring
+  app. It does not expose a persistent local RTSP stream, and it requires wired power anyway. Do not
+  buy a subscription expecting it to make this work.
+
+### The event-driven path (what this repo actually does)
+
+Ring is event-driven by design, so the bridge consumes what Ring naturally emits:
+
+```
+Ring motion/ding ──MQTT──▶ porch-dad ──▶ snapshot(s) from ring/+/camera/+/snapshot/image
+                                          └──▶ Cosmos3-Edge ──▶ feed
 ```
 
-and `docker compose restart frigate`.
+This works for **every** camera, wired or battery, adds no continuous load, and needs no live
+stream. Configure it under `ring_*` in `bridge/config.yaml`; map device IDs to friendly names in
+`ring_cameras` so `{camera}` renders readably in the prompt.
 
-The shipped config uses a looping sample file so Frigate starts and can be verified before any
-camera exists. Once a real camera is wired, delete that input.
+Verified against real cameras and a real person walking past:
+
+```
+[ROUTINE] Front Driveway · motion · 1f · 902ms
+  [03:57] [ROUTINE] A silver SUV is parked under a covered driveway. A person wearing a black
+  shirt and shorts is standing next to the vehicle, holding a device, possibly a phone.
+
+[ROUTINE] Office · motion · 1f · 717ms
+  [04:55:17] Human male, bald, wearing black t-shirt, black shorts, black flip-flops,
+  walking on a porch.
+```
+
+**Known limitation: one frame per Ring event.** Unlike the Frigate path, which samples 3 frames from
+a clip, Ring publishes a single snapshot per motion event, so descriptions capture one moment rather
+than a sequence. The bridge degrades gracefully (1..3 frames) rather than discarding the event, and
+one snapshot still produces the quality shown above. A per-camera `ring_cooldown` (default 45s)
+stops a busy camera flooding the feed.
+
+Frigate remains in the stack for genuine continuous-stream cameras (ONVIF/RTSP), where it does the
+recording and object detection it is good at. Its `front_door` entry ships **disabled** as a
+documented example of the Ring input that does not work.
+
+## Wiring a real RTSP camera into Frigate
 
 ## Platform constraints that shaped this setup
 

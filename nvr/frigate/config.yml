@@ -36,9 +36,6 @@ logger:
 record:
   enabled: true
   # Stream copy - never re-encode on this board.
-  retain:
-    days: 3
-    mode: motion
   alerts:
     retain:
       days: 14
@@ -46,6 +43,10 @@ record:
     retain:
       days: 14
 
+  continuous:
+    days: 0
+  motion:
+    days: 3
 snapshots:
   enabled: true
   bounding_box: true
@@ -62,25 +63,31 @@ objects:
 # Keep clips short: the bridge samples 3 frames per event, and short clips make those frames
 # far more representative of what actually happened.
 cameras:
-  front_porch:
-    enabled: true
+  # Ring cameras are exposed by ring-mqtt's bundled go2rtc at ring-mqtt:8554 (same compose network).
+  #
+  # WARNING - only point Frigate at WIRED cameras. Frigate's continuous detect holds the RTSP
+  # stream open permanently, which drains a battery-powered Ring camera in hours and hammers Ring's
+  # cloud. Front Door is an lpd_v4 (Doorbell Pro), which is transformer-powered.
+  # For battery cameras use ring-mqtt's motion/ding MQTT events instead of a continuous stream.
+  #
+  # Discovered device IDs:
+  #   Office              ac9fc327c838      Front entryway      343ea4e653f3
+  #   Front Door          90486cee0ffc      Pinky               cc3bfb1999ad
+  #   Front Driveway      343ea4e422a6      2nd floor patio     9c7613a0ec61
+  #   2nd floor driveway  649a631f4214
+  front_door:
+    enabled: false
     ffmpeg:
-      # Replace this input with the Ring stream once ring-mqtt is authenticated, e.g.
-      #   path: rtsp://127.0.0.1:8554/<ring_device_id>_live
-      # ring-mqtt exposes each camera on its bundled go2rtc at port 8554.
       inputs:
-        - path: /media/frigate/samples/loop.mp4
-          input_args:
-            - -re
-            - -stream_loop
-            - "-1"
+        - path: rtsp://ring-mqtt:8554/90486cee0ffc_live
+          input_args: preset-rtsp-generic
           roles:
             - detect
             - record
     detect:
       enabled: true
       width: 640
-      height: 480
+      height: 360
       fps: 5
     motion:
       threshold: 30
@@ -89,3 +96,4 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+version: 0.18-0

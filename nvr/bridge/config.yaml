@@ -34,6 +34,12 @@ clip_wait_seconds: 3.0    # Frigate finalizes the clip shortly after the event e
 # Restrict to specific Frigate camera names; empty list means all cameras.
 cameras: []
 
+# Frigate camera keys cannot contain spaces; this maps them to the friendly name substituted
+# into {camera} in the user prompt.
+camera_labels:
+  front_door: "Front Door"
+
+
 system_prompt: |
   You are an automated residential security monitoring system. Your primary goal is to identify potential security threats, unexpected visitors, and localized hazards.
 
@@ -50,3 +56,24 @@ system_prompt: |
 user_prompt: |
   Review these {num_frames} sampled frames from the home security camera '{camera}' (Stream ID: {stream_id}).
   Is there any human activity or hazard present? If yes, describe the person's actions, appearance, and what objects they are interacting with. If no activity is present, respond with 'No activity detected'. Keep the output small, as if a text message is being sent.
+
+# --- Ring event source -------------------------------------------------------------------------
+# Ring's live stream cannot be used as a continuous NVR feed (verified: ffmpeg reports "Invalid
+# data found when processing input" even while ring-mqtt reports the WebRTC session connected), and
+# holding it open would drain battery cameras. Ring is event-driven, so the bridge consumes
+# motion/ding events plus the JPEG snapshots ring-mqtt publishes. Works for wired and battery alike.
+#
+# Note: no Ring subscription tier exposes a persistent local RTSP stream. Ring's paid 24/7
+# Continuous Recording records to Ring's cloud for the Ring app; it does not change this API.
+ring_enabled: true
+ring_snapshot_window: 8.0    # seconds to gather snapshots after an event fires
+ring_cooldown: 45.0          # per-camera, prevents one busy camera flooding the feed
+
+ring_cameras:
+  "90486cee0ffc": "Front Door"
+  "ac9fc327c838": "Office"
+  "343ea4e653f3": "Front entryway"
+  "cc3bfb1999ad": "Pinky"
+  "343ea4e422a6": "Front Driveway"
+  "9c7613a0ec61": "2nd floor patio"
+  "649a631f4214": "2nd floor driveway"
