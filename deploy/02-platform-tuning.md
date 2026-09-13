@@ -55,18 +55,25 @@ cache tricks) failed while Round 3 (shrinking the weights) succeeded:
 
 At 76% of theoretical peak memory bandwidth there is no scheduling trick left to find. Context-cache
 reuse bought −3.5% and greedy decode bought −4.3%, both below the improvement bar, because neither
-one reduces the bytes that have to cross the memory bus. The only levers that move a number like
-that are (a) raising the bus clock, which is what EMC 2133 → 3199 MHz does, and (b) making the
-weights smaller, which is what the INT4 W4A16 round did (3.135 GB → 0.818 GB of engine on disk).
+one reduces the bytes that have to cross the memory bus. Only two things move a number like that:
+how fast the bus runs, and how many bytes have to cross it.
 
-Those two levers compose. INT4 cut the resident weights by 3.88× (TensorRT-reported weights memory,
-3,355,696,384 B → 865,480,704 B), and the EMC clock sets how
-fast the remaining bytes move. Leaving the memory controller at its default clock throws away part
-of the quantization win you paid for in weight error.
+**In practice only the second one was available.** Measuring the two clock policies directly (see
+*What `jetson_clocks` is actually worth*, below) showed that pinning EMC to 3199 MHz does **not**
+improve the sustained decode rate — because during a long decode the DVFS governor ramps EMC to that
+ceiling on its own. The EMC *frequency* absolutely governs decode throughput; what `jetson_clocks`
+adds is not a higher ceiling but the removal of ramp latency, which pays off on the bursty
+ViT-encode-and-prefill phase rather than on steady-state decode.
 
-The GPU core clock is not irrelevant — the vision tower *is* compute-bound (the ViT achieved
-~8.9 TFLOPS against a ~16.7 TFLOPS dense FP16 peak, about 53% of peak, during a 248 ms encode) — but
-on a VLM workload where decode dominates total latency, EMC is where the leverage is.
+So the lever that actually delivered the decode win was reducing the bytes: INT4 cut the resident
+weights by 3.88× (TensorRT-reported weights memory, 3,355,696,384 B → 865,480,704 B). That is why
+Round 3 succeeded where Round 2 did not.
+
+The GPU core clock is not irrelevant either — the vision tower *is* compute-bound (the ViT achieved
+~8.9 TFLOPS against a ~16.7 TFLOPS dense FP16 peak, about 53% of peak, during a 248 ms encode). And
+note that decode does not always dominate: after Round 4 the fixed term (~265–289 ms) and the decode
+term (~13 ms/token, so ~290 ms at a typical 22-token reply) are of comparable size. Which half to
+attack depends on your response lengths.
 
 ## Applying and verifying
 
@@ -177,6 +184,46 @@ ssh "$JETSON_HOST" 'sudo jetson_clocks --restore || true; sudo nvpmodel -m 0; su
 
 `jetson_clocks --store` / `--restore` save and replay the pre-pin clock state; storing before you
 first pin is the clean way to get an exact revert. A reboot is the reliable fallback.
+
+## What `jetson_clocks` is actually worth (measured)
+
+An unplanned reboot during this project produced a clean natural experiment: `nvpmodel` had persisted
+as MAXN_SUPER, but `jetson_clocks` had not, so the board was running the fully-tuned INT4 stack with
+DVFS free-running. That allowed an A/B on an otherwise idle device where **only the clock policy
+differed**, using 12 requests per run with unique images (so the encoder cache could not interfere)
+and the same fixed/marginal regression used everywhere else in this repo.
+
+| Clock policy | Marginal (decode) | Fixed (ViT + prefill) | R² |
+|---|---|---|---|
+| DVFS, not pinned (EMC idling at 2133 MHz) | 12.31 ms/token | **313 ms** | 0.971 |
+| `jetson_clocks` pinned (EMC 3199 MHz), run 1 | 12.77 ms/token | **265 ms** | 1.000 |
+| `jetson_clocks` pinned, run 2 | 12.79 ms/token | 265 ms | 1.000 |
+| `jetson_clocks` pinned, run 3 | 12.81 ms/token | 263 ms | 1.000 |
+
+Two things fall out, and the second is the useful one:
+
+**The sustained decode rate barely moves.** This is initially counter-intuitive for a
+memory-bandwidth-bound workload, but it is what you would expect from demand-driven DVFS: during a
+long decode the governor ramps EMC and the GPU to their ceilings on its own. Pinning them does not
+raise a ceiling the governor was already reaching.
+
+**The fixed cost drops by ~48 ms (−15%).** The ViT encode and prefill are a *short burst* at the start
+of each request — they can finish before the governor has finished ramping. Pinning the clocks removes
+that ramp latency, which is exactly where a bursty workload loses time.
+
+**Reproducibility also improves sharply.** The three pinned runs agree to within 0.04 ms/token and
+2 ms of fixed cost at R² = 1.000; the unpinned run fits at R² = 0.971. That noise is the governor
+ramping at slightly different points across requests. Treat the unpinned marginal figure (12.31) with
+suspicion for this reason: in a noisier fit the slope and intercept trade off against each other, so
+the apparently *faster* decode is most likely a fitting artifact rather than a real effect.
+
+Caveats: **one** unpinned sample against three pinned ones, 12 requests each, on one device; the
+comparison is not reversible without another reboot (`jetson_clocks` was applied without a prior
+`--store`). Take the direction and rough magnitude, not the third significant figure.
+
+The practical conclusion: `jetson_clocks` is worth applying — but for **latency stability and the
+bursty fixed cost**, not because it raises steady-state decode throughput. And because it does not
+survive a reboot, the systemd unit above is not optional if you care about consistent numbers.
 
 ## The cost: power and heat
 
