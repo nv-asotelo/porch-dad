@@ -271,3 +271,54 @@ curl localhost:8095/healthz
 ```
 
 Then open **`http://<jetson-ip>:8095`** on your phone.
+
+## Prompt tuning: what a 4B model actually does
+
+The prompts in `frigate/config.yml` were hill-climbed against real frames from these cameras, not
+written from intuition. Findings worth keeping:
+
+| Attempt | Result |
+|---|---|
+| Structured fields (`GATE:` / `HAZARD:` / `PEOPLE:` …) | **Echoes the template back verbatim** instead of filling it in. Unusable. |
+| Very terse (<25 words) | **Hallucinates.** Invented "a small, open wooden gate" on a camera with no gate. |
+| "Never state what is absent" | Output degraded to literally `No, no, no.` |
+| Hazard-first numbered list | Gets the gate right but **ignores the rest of the scene** (missed a parked SUV entirely) |
+| Scene description + explicit coverage list | **Best.** Accurate, no hallucination, text-message length. |
+
+Two general lessons: this model needs an *explicit* instruction list to stay grounded, and any
+negative instruction ("don't mention X", "never say what's missing") tends to derail it.
+
+### Gate state is not a reliable signal
+
+Asked directly, with `NONE` offered as an option:
+
+| Camera | Ground truth | Model answer (5 runs, temp 0) |
+|---|---|---|
+| front_driveway | gate **closed** | CLOSED ×5 ✓ |
+| front_entryway | **no gate in frame** | CLOSED ×5 ✗ |
+
+The model is perfectly stable but **biased to CLOSED** — it answers CLOSED for a camera with no gate
+at all, and never returns NONE. "Closed" therefore carries almost no information: it is the default.
+
+For a "gate left open too long" alert this is the **dangerous** failure direction: a genuinely open
+gate would most likely still read CLOSED, producing silence instead of an alert. Gate language is
+therefore kept out of the shared prompts entirely, and gate alerting is **not implemented** until
+OPEN detection is measured against a genuinely open gate.
+
+Note also that "open too long" is inherently **stateful**, which Frigate's GenAI is not — it captions
+each event independently and has no memory between them. It needs a small watcher tracking last-known
+state per camera over time, which should only be built once the underlying signal is trustworthy.
+
+## Push notifications to your phone
+
+| Route | Effort | Notes |
+|---|---|---|
+| **Frigate native web push** | lowest | Built into Frigate 0.14+. Install the Frigate UI as a PWA on the phone and enable notifications in Settings. Works on Android and on iOS 16.4+ (must be added to the Home Screen). No extra service, no third party. |
+| **ntfy / Pushover** | low | Subscribe to MQTT `frigate/events`, POST title/body/image. ntfy is free and self-hostable; both have good iOS apps and support attaching the snapshot. Best choice if the Frigate PWA is not enough. |
+| **Telegram** | low | Create a bot with @BotFather, get the token and chat id, then POST to `api.telegram.org/bot<TOKEN>/sendPhoto`. Free, no approval, supports images. |
+| **WhatsApp** | high | Requires the WhatsApp Business Cloud API (Meta developer account, business verification, a dedicated number) or a paid relay such as Twilio. Business-initiated messages need pre-approved templates. Unofficial libraries violate the ToS. |
+| **Apple Messages** | not directly possible | iMessage has no public send API and cannot be driven from Linux. Practical options: an Apple Shortcuts automation triggered by a webhook, or simply use ntfy/Pushover, which deliver native iOS notifications. |
+
+For an iPhone the honest ranking is: **Frigate's own web push first**, then **ntfy or Pushover**.
+Both beat WhatsApp and iMessage here on effort and reliability, and neither sends your camera imagery
+to a third-party messaging platform.

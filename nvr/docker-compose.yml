@@ -17,7 +17,7 @@ services:
     image: tsightler/ring-mqtt:latest
     container_name: ring-mqtt
     restart: unless-stopped
-    mem_limit: 400m
+    mem_limit: 700m
     depends_on:
       - mosquitto
     ports:
@@ -37,6 +37,10 @@ services:
     # recoverable; a host OOM would take the model down with it.
     mem_limit: 1400m
     shm_size: 128m
+    # Lets Frigate's GenAI reach the Cosmos3-Edge shim, which listens on the host rather than
+    # in a container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - mosquitto
     ports:

@@ -1,19 +1,26 @@
+# Declared so Frigate skips its config migration. Without this key Frigate re-migrates on
+# every start, and that migration rewrites the file - it moves genai.cosmos into
+# objects.genai as a YAML alias and discards the entire prompt block, leaving Frigate in
+# safe mode with no cameras.
+version: 0.18-0
+
 # Frigate config for Jetson Orin Nano Super (8 GB), JetPack 7 / L4T R39.
 #
-# Two platform facts shape this file:
+# Platform facts that shape this file:
 #
-# 1. Orin Nano has NO hardware encoder. NVIDIA states plainly that "the Jetson Orin Nano does not
-#    have the NVENC engine" and directs users to software (libx264) encoding. Anything that
-#    re-encodes therefore costs CPU, so recordings use stream copy and birdseye is disabled.
+# 1. Orin Nano has NO hardware encoder. NVIDIA states that "the Jetson Orin Nano does not have the
+#    NVENC engine" and directs users to software libx264. So recordings use stream copy and
+#    birdseye is disabled - anything that re-encodes costs CPU we do not have.
 #
-# 2. Docker here has only the `runc` runtime registered - no nvidia container runtime - and
-#    Frigate's TensorRT detector images target JetPack 6 (l4t r36) against a CUDA 13.2 host.
-#    So this uses the stock arm64 image with the CPU detector. That is a deliberate choice, not
-#    an oversight: object detection only has to be good enough to *trigger* an event, because the
-#    actual scene understanding is done by Cosmos3-Edge downstream.
+# 2. Docker here has only the `runc` runtime - no nvidia container runtime - and Frigate has no
+#    official JetPack 7.2 build (onnxruntime-gpu has no prebuilt Orin wheel for CUDA 13.2, and the
+#    classic TensorRT detector was removed in JP7). Detection therefore runs on CPU. That is a
+#    deliberate choice: GPU detection would contend with Cosmos3-Edge for the GPU and for the
+#    scarce 8 GB, and the detector only has to TRIGGER an event - the scene understanding is done
+#    by Cosmos3-Edge via the genai block below.
 #
-# RAM is the binding constraint (the model holds ~3.8 GB of 8 GB), so detect runs at low
-# resolution and low fps. Raise detect fps/resolution only after checking `free -m`.
+# CPU is the binding constraint. Two 2624x1472 Ring streams already consume ~4 of 6 cores at
+# 5 fps detect. Check `docker stats` and `uptime` before enabling more cameras.
 
 mqtt:
   enabled: true
@@ -26,7 +33,6 @@ detectors:
   cpu1:
     type: cpu
 
-# Re-encodes a composite stream; pointless CPU cost on a board with no hardware encoder.
 birdseye:
   enabled: false
 
@@ -35,7 +41,13 @@ logger:
 
 record:
   enabled: true
-  # Stream copy - never re-encode on this board.
+  # Frigate 0.18 schema: record.retain{days,mode} was replaced by continuous/motion/alerts/
+  # detections. Because this file pins `version:` (to stop the migration rewriting the genai
+  # prompts), it must be written in 0.18-native schema - migration will not fix it for us.
+  continuous:
+    days: 0            # no 24/7 retention; disk is ample but CPU/IO is not
+  motion:
+    days: 3
   alerts:
     retain:
       days: 14
@@ -43,43 +55,154 @@ record:
     retain:
       days: 14
 
-  continuous:
-    days: 0
-  motion:
-    days: 3
 snapshots:
   enabled: true
   bounding_box: true
   retain:
     default: 14
 
+# ---------------------------------------------------------------------------------------------
+# GenAI provider: Frigate captions its own events using the LOCAL Cosmos3-Edge shim.
+# The shim is OpenAI-compatible, so provider: openai + a custom base_url keeps everything on the
+# LAN with no external API. host.docker.internal resolves to the Jetson via the extra_hosts entry
+# in docker-compose.yml, because the shim listens on the host rather than in a container.
+#
+# Timestamps come from Frigate, which stamps every event itself. The prompts deliberately do NOT
+# ask the model to produce one: it cannot know the wall clock, and when asked it emitted
+# meaningless values ([04:55:17]) and once the literal placeholder "[MM:SS]".
+genai:
+  cosmos:
+    provider: openai
+    base_url: http://host.docker.internal:8000/v1
+    api_key: "none"
+    model: cosmos3-edge
+    roles:
+      - descriptions
+
 objects:
   track:
     - person
     - car
-    - dog
+    - truck
+    # Wildlife. NOTE: the CPU detector uses a COCO model, which has NO class for deer, raccoon,
+    # coyote or squirrel. Frigate can only trigger on the classes below - a deer often trips
+    # "horse"/"cow"/"sheep", and a squirrel may trip "cat" or nothing at all. That is acceptable
+    # here: Frigate only needs to fire the event, and Cosmos3-Edge names the actual species.
+    - bird
     - cat
+    - dog
+    - bear
+    - horse
+    - cow
+    - sheep
 
-# Keep clips short: the bridge samples 3 frames per event, and short clips make those frames
-# far more representative of what actually happened.
+  genai:
+    enabled: true
+    use_snapshot: false
+    objects:
+      - person
+      - car
+      - truck
+      - bird
+      - cat
+      - dog
+      - bear
+      - horse
+      - cow
+      - sheep
+    # Tuned by hill-climbing against real frames from these cameras. Findings:
+    #  - A structured template (GATE:/HAZARD:/...) makes this 4B model ECHO the template
+    #    back verbatim instead of filling it in. Do not use field-style output.
+    #  - Prompts under ~25 words cause hallucination (it invented an open gate that does
+    #    not exist), so keep the instruction explicit.
+    #  - Telling it 'never state what is absent' degraded output to 'No, no, no.'
+    #  - GATE LANGUAGE IS DELIBERATELY ABSENT HERE. Asked about gates the model answers
+    #    CLOSED 5/5 even on a camera with no gate in frame, so a global gate instruction
+    #    only produces false readings. Gate handling lives on front_driveway only.
+    prompt: >-
+      Look at home security camera '{camera}' and report only what is actually visible, in one
+      or two short sentences. Cover: people (what they are doing, their appearance, what they
+      carry), animals (name the species as specifically as you can), vehicles, and whether
+      exterior lamps are lit. Report visible smoke, fire or flames first if present. Ignore
+      sunlight, shadows, weather and moving foliage. Write it like a short text message to the
+      homeowner.
+    object_prompts:
+      person: >-
+        Look at home security camera '{camera}' and describe the person in one or two short
+        sentences: what they are doing, their appearance, and what they carry or interact with.
+        Include delivery drivers, couriers and service workers, and say what they delivered,
+        collected or did. Call out explicitly if they are loitering, concealing or covering
+        their face, climbing a fence or window, or forcing a door. Report visible smoke, fire or
+        flames first if present. Ignore sunlight, shadows, weather and moving foliage.
+      bird: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+      cat: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+      dog: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+      bear: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+      horse: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+      cow: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+      sheep: >-
+        Look at home security camera '{camera}' and identify the animal's species as
+        specifically as the image allows (for example deer, raccoon, coyote, squirrel, skunk,
+        fox, bird of prey, songbird, cat or dog). Say what it is doing and where it is heading,
+        in one or two short sentences. Report visible smoke, fire or flames first if present.
+
+review:
+  genai:
+    enabled: true
+    alerts: true
+    detections: true
+    additional_concerns:
+      - visible smoke, fire, flames or a growing glow anywhere in frame
+      - a person loitering with no clear purpose
+      - a person concealing or covering their face
+      - a person climbing a fence, wall or window, or forcing a door
+      - an unfamiliar animal on the property
+      - a gate left open
+      - exterior lights switching on or off unexpectedly
+
 cameras:
-  # Ring cameras are exposed by ring-mqtt's bundled go2rtc at ring-mqtt:8554 (same compose network).
+  # Ring streams work ONLY with the ?video query. Without it ffmpeg fails with "Invalid data found
+  # when processing input", because ring-mqtt's go2rtc advertises two competing audio codecs
+  # (default_query: video&audio=aac&audio=opus) and the negotiation breaks the parse.
   #
-  # WARNING - only point Frigate at WIRED cameras. Frigate's continuous detect holds the RTSP
-  # stream open permanently, which drains a battery-powered Ring camera in hours and hammers Ring's
-  # cloud. Front Door is an lpd_v4 (Doorbell Pro), which is transformer-powered.
-  # For battery cameras use ring-mqtt's motion/ding MQTT events instead of a continuous stream.
+  # POWER WARNING: Frigate's continuous detect holds the RTSP stream open permanently. That is fine
+  # for a mains/transformer-powered camera and will flatten a BATTERY camera in hours. Cameras below
+  # marked BATTERY ship disabled on purpose - leave them on the event-driven path (ring_* in
+  # bridge/config.yaml), which needs no live stream and costs them nothing.
   #
-  # Discovered device IDs:
-  #   Office              ac9fc327c838      Front entryway      343ea4e653f3
-  #   Front Door          90486cee0ffc      Pinky               cc3bfb1999ad
-  #   Front Driveway      343ea4e422a6      2nd floor patio     9c7613a0ec61
-  #   2nd floor driveway  649a631f4214
+  # CPU WARNING: these streams are 2624x1472. Decode is on CPU (Docker here has no nvidia runtime),
+  # so each enabled camera is expensive. Enable a few, run `docker stats` and `uptime`, and only
+  # then add more.
+
   front_door:
-    enabled: false
+    enabled: true          # lpd_v4 doorbell - wired (transformer)
     ffmpeg:
       inputs:
-        - path: rtsp://ring-mqtt:8554/90486cee0ffc_live
+        - path: rtsp://ring-mqtt:8554/90486cee0ffc_live?video
           input_args: preset-rtsp-generic
           roles:
             - detect
@@ -96,4 +219,135 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
-version: 0.18-0
+
+  front_entryway:
+    enabled: true          # stickup_cam_longfin - CHECK POWER
+    ffmpeg:
+      inputs:
+        - path: rtsp://ring-mqtt:8554/343ea4e653f3_live?video
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
+
+  front_driveway:
+    enabled: true          # stickup_cam_longfin - CHECK POWER
+    ffmpeg:
+      inputs:
+        - path: rtsp://ring-mqtt:8554/343ea4e422a6_live?video
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
+
+  office:
+    enabled: false          # df_doorbell doorbell
+    ffmpeg:
+      inputs:
+        - path: rtsp://ring-mqtt:8554/ac9fc327c838_live?video
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
+
+  pinky:
+    enabled: false          # cocoa_camera_v2 - likely BATTERY
+    ffmpeg:
+      inputs:
+        - path: rtsp://ring-mqtt:8554/cc3bfb1999ad_live?video
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
+
+  patio_2nd_floor:
+    enabled: false          # cocoa_camera - likely BATTERY
+    ffmpeg:
+      inputs:
+        - path: rtsp://ring-mqtt:8554/9c7613a0ec61_live?video
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
+
+  driveway_2nd_floor:
+    enabled: false          # cocoa_camera - likely BATTERY
+    ffmpeg:
+      inputs:
+        - path: rtsp://ring-mqtt:8554/649a631f4214_live?video
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 5
+    motion:
+      threshold: 30
+      contour_area: 15
+    record:
+      enabled: true
+    snapshots:
+      enabled: true
