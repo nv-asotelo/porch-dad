@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenAI-compatible shim for Cosmos3-Edge (TensorRT-Edge-LLM backend)
+After=network.target cosmos3-edge-default.service
+Wants=cosmos3-edge-default.service
+
+[Service]
+Type=simple
+User=orin
+WorkingDirectory=/home/orin/TensorRT-Edge-LLM
+Environment=PATH=/home/orin/TensorRT-Edge-LLM/.venv/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/python /opt/tensorrt-edgellm/cosmos3_shim_v1.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Model artifacts and engines are large and device-specific — never commit them.
+# TensorRT engines must be built on the target device anyway.
+*.engine
+*.onnx
+*.onnx.data
+*.safetensors
+*.plan
+models/
+engines/
+onnx/
+
+# Local scratch
+*.log
+.DS_Store
+
+# Internal authoring scaffolding — never publish
+FACTS.md

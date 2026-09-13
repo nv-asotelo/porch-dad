@@ -1,0 +1,16 @@
+[Unit]
+Description=Live VLM WebUI (Cosmos3-Edge backend via cosmos3-edge-shim)
+After=network.target cosmos3-edge-shim.service
+Wants=cosmos3-edge-shim.service
+
+[Service]
+Type=simple
+User=orin
+WorkingDirectory=/home/orin/TensorRT-Edge-LLM
+Environment=PATH=/home/orin/TensorRT-Edge-LLM/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/live-vlm-webui --host 0.0.0.0 --port 8090 --model nvidia/Cosmos3-Edge --api-base http://localhost:8000/v1 --api-key EMPTY
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cosmos3-Edge on Orin Nano Super — Optimization Deck</title>
+<style>
+  :root{--green:#76b900;--bg:#0b0d0c;--panel:#161a15;--line:#2a2f28;--fg:#e8ece7;
+        --mut:#9aa396;--warn:#ffb020;--bad:#ff5c5c}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--fg);overflow:hidden;
+       font:18px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;
+         padding:6vh 8vw;animation:fade .28s ease}
+  .slide.on{display:flex}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .eyebrow{color:var(--green);font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+           font-size:clamp(11px,1.2vw,14px);margin-bottom:14px}
+  h1{font-size:clamp(30px,5.2vw,60px);line-height:1.08;margin:0 0 18px;letter-spacing:-.025em}
+  h1 span,em{color:var(--green);font-style:normal}
+  h2{font-size:clamp(24px,3.4vw,40px);line-height:1.14;margin:0 0 22px;letter-spacing:-.02em}
+  p.lead{font-size:clamp(16px,1.9vw,23px);color:var(--mut);max-width:46ch;margin:0}
+  ul{font-size:clamp(15px,1.7vw,21px);margin:8px 0;padding-left:26px;max-width:60ch}
+  li{margin:12px 0}
+  li b{color:var(--green)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-top:8px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .stat .v{font-size:clamp(26px,3.6vw,44px);font-weight:780;color:var(--green);letter-spacing:-.03em;line-height:1}
+  .stat .k{color:var(--mut);font-size:clamp(11px,1.1vw,13px);text-transform:uppercase;
+           letter-spacing:.09em;margin-bottom:10px}
+  .stat .d{color:var(--mut);font-size:clamp(12px,1.2vw,14px);margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:clamp(13px,1.4vw,18px);margin-top:6px}
+  th,td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left}
+  th{color:var(--mut);font-size:clamp(10px,1vw,12px);text-transform:uppercase;letter-spacing:.08em}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#1f241d;
+       border:1px solid var(--line);border-radius:5px;padding:1px 7px;font-size:.88em}
+  .ok{color:var(--green);font-weight:700}.no{color:var(--bad);font-weight:700}.wn{color:var(--warn);font-weight:700}
+  .big{font-size:clamp(38px,8vw,104px);font-weight:800;color:var(--green);letter-spacing:-.04em;line-height:1}
+  .nav{position:fixed;bottom:16px;right:22px;color:var(--mut);font-size:13px;
+       font-family:ui-monospace,monospace;z-index:10}
+  .bar{position:fixed;top:0;left:0;height:3px;background:var(--green);transition:width .28s;z-index:10}
+  .hint{position:fixed;bottom:16px;left:22px;color:#5a6356;font-size:12px;z-index:10}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:start}
+  @media(max-width:760px){.two{grid-template-columns:1fr;gap:18px}}
+  .quote{background:var(--panel);border-left:3px solid var(--green);border-radius:0 10px 10px 0;
+         padding:14px 18px;font-size:clamp(13px,1.4vw,17px);color:var(--mut)}
+  .quote.bad{border-left-color:var(--bad)}
+  .quote.warn{border-left-color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+
+<!-- 1 -->
+<section class="slide on">
+  <div class="eyebrow">Jetson Orin Nano Super · 8 GB · JetPack 7.2.1</div>
+  <h1>Running Cosmos3-Edge fast on<br><span>8 GB</span> of unified memory</h1>
+  <p class="lead">Four measured optimization rounds: 22.5× lower latency and 2.32 GB of RAM
+  given back — on the smallest board in the Orin family.</p>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <div class="eyebrow">The result</div>
+  <h2>What changed</h2>
+  <div class="grid">
+    <div class="stat"><div class="k">End-to-end</div><div class="v">22.5×</div><div class="d">13.91 s → 619 ms</div></div>
+    <div class="stat"><div class="k">Decode</div><div class="v">3.38×</div><div class="d">22.5 → 76.0 tok/s</div></div>
+    <div class="stat"><div class="k">Process RSS</div><div class="v">−2.32 GB</div><div class="d">6.02 → 3.70 GB</div></div>
+    <div class="stat"><div class="k">RAM free</div><div class="v">5.7×</div><div class="d">472 MB → 2.7 GB</div></div>
+    <div class="stat"><div class="k">Engine</div><div class="v">3.83×</div><div class="d">3.13 → 0.82 GB</div></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <div class="eyebrow">Perspective</div>
+  <h2>An Orin Nano 8 GB now decodes faster<br>than an AGX Orin 64 GB</h2>
+  <div class="two">
+    <div>
+      <table>
+        <tr><th>Device</th><th>Precision</th><th>Decode</th></tr>
+        <tr><td>AGX Orin 64 GB</td><td>BF16 / vLLM</td><td>44.1 tok/s</td></tr>
+        <tr><td><b>Orin Nano 8 GB</b></td><td><b>INT4 / TRT-Edge-LLM</b></td><td class="ok"><b>76.0 tok/s</b></td></tr>
+      </table>
+      <p class="lead" style="margin-top:20px;font-size:16px">Official AGX Orin figure from Jetson AI Lab.
+      Same model, smaller and cheaper device.</p>
+    </div>
+    <div class="quote">The RAM result matters more than the latency result.
+    <b style="color:var(--fg)">472 MB of headroom is one workload away from OOM. 2.7 GB is a platform</b> —
+    enough to co-host DeepStream, Home Assistant and an OLED daemon on the same board.</div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <div class="eyebrow">Before optimizing — measure</div>
+  <h2>Two traps that produce<br>confidently wrong numbers</h2>
+  <div class="two">
+    <div class="quote bad"><b style="color:var(--bad)">Trap 1 — the embedding cache</b><br>
+    The runtime caches vision embeddings keyed on <b style="color:var(--fg)">raw pixel bytes</b>.
+    Loop the same image and you skip the entire ViT — ~250 ms of real work — and measure a fantasy.</div>
+    <div class="quote bad"><b style="color:var(--bad)">Trap 2 — contention</b><br>
+    Requests serialize. Probes run against live traffic are inflated by everything else in flight.
+    A "cache regression" was reported and retracted for exactly this reason.</div>
+  </div>
+  <p class="lead" style="margin-top:26px">Both were hit. Both produced wrong conclusions first.</p>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <div class="eyebrow">The metric that works</div>
+  <h2>Separate fixed cost from per-token cost</h2>
+  <div style="font-family:ui-monospace,monospace;font-size:clamp(15px,2.2vw,27px);
+              background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--green);
+              border-radius:0 12px 12px 0;padding:22px 26px;margin:6px 0 24px">
+    elapsed_ms = <span style="color:var(--warn)">fixed</span> +
+    <span class="ok">marginal</span> × gen_tok
+  </div>
+  <ul style="margin-top:0">
+    <li><b style="color:var(--warn)">fixed</b> — preprocessing + ViT encode + prefill &nbsp;→&nbsp; attacked by Round 4</li>
+    <li><b>marginal</b> — per-token decode &nbsp;→&nbsp; attacked by Round 3</li>
+  </ul>
+  <p class="lead" style="margin-top:14px">Response length varies per request, so raw mean latency isn't
+  comparable. Final fit: <b style="color:var(--green)">R² = 0.999</b> over 88 live requests.</p>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <div class="eyebrow">The campaign</div>
+  <h2>Four rounds</h2>
+  <table>
+    <tr><th>#</th><th>Change</th><th>Result</th><th>Verdict</th></tr>
+    <tr><td>0</td><td>CLI binary spawned per request</td><td>13.91 s</td><td>baseline</td></tr>
+    <tr><td>1</td><td>Resident runtime + CUDA graph + MAXN_SUPER</td><td>2.07 s</td><td class="ok">−85.1% ✅</td></tr>
+    <tr><td>2</td><td>Context cache, greedy decode, <code>top_k</code> fix</td><td>43.29 ms/tok</td><td class="no">−4% ❌</td></tr>
+    <tr><td>3</td><td>INT4 W4A16 self-quantization</td><td>13.38 ms/tok</td><td class="ok">−69.1% ✅</td></tr>
+    <tr><td>4</td><td>Image-token budget 512 → 320</td><td>287 ms fixed</td><td class="ok">−20.8% ✅</td></tr>
+  </table>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <div class="eyebrow">Round 1 — the biggest win was free</div>
+  <h2>Stop paying startup costs</h2>
+  <ul>
+    <li>The original path spawned a binary per request, paying <b>6–8 s of engine deserialization every time</b></li>
+    <li>Replaced with a resident shim holding <b>one LLMRuntime</b> for the process lifetime</li>
+    <li><code>capture_decoding_cuda_graph()</code> to kill per-token launch overhead</li>
+    <li><code>nvpmodel -m 2</code> + <code>jetson_clocks</code> → GPU 306→<b>1020 MHz</b>, EMC 2133→<b>3199 MHz</b></li>
+  </ul>
+  <p class="lead" style="margin-top:18px">13.91 s → 2.07 s. <b style="color:var(--green)">No model changes.</b>
+  Do this before anything clever.</p>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <div class="eyebrow">Round 2 — the failure that mattered</div>
+  <h2>Why a −4% round is worth reporting</h2>
+  <ul>
+    <li>Context-cache reuse <b class="no">−3.5%</b>, greedy decode <b class="no">−4.3%</b>, a real <code>top_k</code> bug fix — all below the bar</li>
+    <li>But it proved decode was <b>memory-bandwidth-bound</b>, not overhead-bound</li>
+  </ul>
+  <div class="quote" style="margin-top:18px">
+    At FP16: <b style="color:var(--fg)">3.36 GB moved per token in 43.29 ms ≈ 77.6 GB/s</b>
+    against a ~102 GB/s peak — <b style="color:var(--green)">76% of theoretical bandwidth</b>.
+  </div>
+  <p class="lead" style="margin-top:20px">At 76% of peak, no scheduling cleverness helps.
+  <b style="color:var(--green)">The only lever left was making the weights smaller.</b></p>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <div class="eyebrow">Round 3 — INT4</div>
+  <h2>Every obvious route was closed</h2>
+  <table>
+    <tr><th>Route</th><th>Outcome</th><th>Why</th></tr>
+    <tr><td><code>--quantization int4_awq</code></td><td class="no">silent no-op</td><td>Gated to <b>MoE models only</b>; Cosmos3-Edge is dense</td></tr>
+    <tr><td>modelopt AWQ calibration</td><td class="no">impossible</td><td><code>attention_plugin</code> body is <code>return torch.zeros(...)</code> — eager forward yields zeros</td></tr>
+    <tr><td>Community INT4 checkpoint</td><td class="wn">declined</td><td>Its own docs: the checkpoint <b>has never been executed</b></td></tr>
+    <tr><td><b>RTN + MSE clipping</b></td><td class="ok">shipped</td><td>Round-to-nearest needs <b>no activation data at all</b></td></tr>
+  </table>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <div class="eyebrow">Round 3 — the method</div>
+  <h2>modelopt as format oracle,<br>not as quantizer</h2>
+  <div class="two">
+    <div>
+      <p class="lead" style="font-size:17px">Its CUDA extension was broken on the host GPU (zeros in fp32,
+      NaN in fp16). So it was run on <b style="color:var(--green)">CPU</b> purely to extract ground truth for
+      the on-disk contract:</p>
+      <ul style="font-size:16px">
+        <li><code>scale = amax/7</code> — <b>matched to 3.7e-09</b></li>
+        <li><code>[N//2, K]</code> uint8, two int4 nibbles/byte</li>
+        <li><code>weight_scale</code> fp32 <code>[N, K//128]</code></li>
+      </ul>
+    </div>
+    <div>
+      <div class="quote"><b style="color:var(--fg)">Calibration-free MSE-optimal clipping</b><br>
+      Sweep α ∈ [0.55, 1.0] per group, keep whichever minimizes squared reconstruction error.<br><br>
+      Plain RTN <b class="wn">13.31%</b> → clipped <b class="ok">11.06%</b> mean weight error.</div>
+      <p class="lead" style="font-size:15px;margin-top:16px">169 linears quantized. Vision tower, projector,
+      embeddings and norms stay FP16.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide">
+  <div class="eyebrow">Round 3 — trust nothing</div>
+  <h2>Four verification gates</h2>
+  <ul>
+    <li>Dequant round-trip error computed <b>per tensor</b> before packing</li>
+    <li>Nibble pack/unpack asserted to reproduce the quantized tensor <b>exactly</b></li>
+    <li>Exported ONNX confirmed: <b>169 Int4GroupwiseGemmPluginV2 nodes</b>, <b>100% non-zero</b> weight bytes</li>
+    <li>Engine reported <code>Total Weights Memory 865,480,704</code> vs <code>3,355,696,384</code> — <b>3.88×</b></li>
+  </ul>
+  <p class="lead" style="margin-top:20px">A silent quantization bug stays invisible until quality collapses.
+  The all-zeros failure mode had already been seen once.</p>
+</section>
+
+<!-- 12 -->
+<section class="slide">
+  <div class="eyebrow">Round 4 — the profile inverted</div>
+  <h2>With decode 3.2× faster,<br>the FP16 vision tower became the bottleneck</h2>
+  <div class="two">
+    <div>
+      <table>
+        <tr><th>Probe</th><th>Image tokens</th><th>Latency</th></tr>
+        <tr><td>320×240</td><td>80</td><td>90 ms</td></tr>
+        <tr><td>640×480</td><td>300</td><td>288 ms</td></tr>
+        <tr><td>896×672</td><td>512 <span class="wn">capped</span></td><td>499 ms</td></tr>
+        <tr><td>1280×960</td><td>512 <span class="wn">capped</span></td><td>512 ms</td></tr>
+      </table>
+    </div>
+    <div class="quote">938 MB ViT engine — <b style="color:var(--fg)">larger than the INT4 text tower</b> —
+    The fixed term was <b style="color:var(--fg)">47% of mean latency</b>; the ViT encode alone was ~248&nbsp;ms &mdash; <b style="color:var(--fg)">55% of fixed, 26% of mean</b>.<br><br>
+    Latency is linear in image tokens, and the WebUI sat pinned at the 512 cap.</div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide">
+  <div class="eyebrow">Round 4 — result</div>
+  <h2>A constant −158 ms<br>across every bucket</h2>
+  <table>
+    <tr><th>gen_tok</th><th>before</th><th>after</th><th>delta</th></tr>
+    <tr><td>17</td><td>672 ms</td><td>516 ms</td><td class="ok">−156 ms</td></tr>
+    <tr><td>20</td><td>714 ms</td><td>556 ms</td><td class="ok">−158 ms</td></tr>
+    <tr><td>22</td><td>738 ms</td><td>582 ms</td><td class="ok">−156 ms</td></tr>
+    <tr><td>34</td><td>899 ms</td><td>740 ms</td><td class="ok">−159 ms</td></tr>
+  </table>
+  <p class="lead" style="margin-top:20px">The exact signature of a <b style="color:var(--green)">fixed-cost</b>
+  reduction — confirming the change touched prefill/ViT and not decode.
+  <b style="color:var(--green)">Weighted: 20.8%.</b> No engine rebuild; reversible in 4 seconds.</p>
+</section>
+
+<!-- 14 -->
+<section class="slide">
+  <div class="eyebrow">Round 4 — the honest part</div>
+  <h2>This one trades quality.<br>So it was measured, not assumed.</h2>
+  <table>
+    <tr><th>Content</th><th>512 tokens</th><th>320 tokens</th><th></th></tr>
+    <tr><td>Natural camera scene<br><span style="color:var(--mut);font-size:.85em">the actual use case</span></td>
+        <td colspan="2" class="ok" style="text-align:center">byte-identical output<br>across 3 prompts</td>
+        <td class="ok">lossless</td></tr>
+    <tr><td>Dense text screenshot</td>
+        <td>quoted annotations<br>verbatim</td>
+        <td>drifted vaguer,<br>partly hallucinated</td>
+        <td class="wn">lossy</td></tr>
+  </table>
+  <p class="lead" style="margin-top:20px"><b style="color:var(--green)">320 for live camera, 512 for documents.</b>
+  One config line, 4-second restart.</p>
+</section>
+
+<!-- 15 -->
+<section class="slide">
+  <div class="eyebrow">Dead ends worth publishing</div>
+  <h2>Negative results</h2>
+  <table>
+    <tr><th>Attempt</th><th>Root cause</th></tr>
+    <tr><td><code>USE_TRT_NATIVE_ATTN=1</code></td>
+        <td>Emits <code>TRT_Attention</code> — <b>requires TensorRT ≥ 11</b>; JetPack 7.2.1 ships 10.16.
+        Exports fine, then fails with <span class="no">"Plugin not found"</span> — naming the wrong cause.</td></tr>
+    <tr><td>KV-cache quantization</td><td>FP8-only; Orin sm_87 has <b>no FP8 hardware</b></td></tr>
+    <tr><td>Narrowing the ViT profile</td><td><code>opt=(min+max)/2</code> → already 514 ≈ the 512 operating point</td></tr>
+    <tr><td>Cosmos3-Edge-Policy-DROID</td><td>GEN engine OOMs on 8 GB even in isolation</td></tr>
+  </table>
+</section>
+
+<!-- 16 -->
+<section class="slide">
+  <div class="eyebrow">The ecosystem</div>
+  <h2>The repo named "framework"<br>has none of this</h2>
+  <table>
+    <tr><th>Repository</th><th>Cosmos3-Edge optimization content</th></tr>
+    <tr><td><b>nvidia/cosmos</b></td><td>Documents Cosmos3-Edge + AGX Orin; FP8/NVFP4 "coming soon"</td></tr>
+    <tr><td><b>nvidia/cosmos-framework</b></td><td class="no">None. No Jetson, no quantization, no TensorRT.</td></tr>
+    <tr><td><b>TensorRT-edge-llm</b></td><td class="ok">Where the capability actually lives</td></tr>
+    <tr><td><b>TensorRT-Model-Optimizer</b></td><td>INT4/NVFP4/FP8; edge + Jetson not called out</td></tr>
+    <tr><td><b>jetson-ai-lab.com</b></td><td class="wn">Lists Orin Nano 8 GB — but BF16 only, no numbers, no quantized path</td></tr>
+  </table>
+</section>
+
+<!-- 17 -->
+<section class="slide">
+  <div class="eyebrow">The gap</div>
+  <h2>Nobody documents<br>the intersection</h2>
+  <div class="quote warn" style="font-size:clamp(15px,1.8vw,21px)">
+    Jetson AI Lab lists Orin Nano 8 GB for Cosmos3-Edge — but gives <b style="color:var(--fg)">BF16-only</b>
+    guidance and <b style="color:var(--fg)">no numbers</b>.<br><br>
+    The TensorRT-Edge-LLM Orin Nano tutorial demonstrates INT4 AWQ — but on
+    <b style="color:var(--fg)">Qwen3-4B</b>, not Cosmos3-Edge.
+  </div>
+  <p class="lead" style="margin-top:26px"><b style="color:var(--green)">Cosmos3-Edge, quantized, on Orin Nano</b>
+  is exactly what an 8 GB board needs — and exactly what an unexecuted community checkpoint was trying to fill.</p>
+</section>
+
+<!-- 18 -->
+<section class="slide">
+  <div class="eyebrow">Recommendations</div>
+  <h2>Make cosmos-framework the index,<br>not a second copy</h2>
+  <ul style="font-size:clamp(14px,1.6vw,19px)">
+    <li><b>Per-device support matrix with real numbers</b> — including what <em>doesn't</em> fit</li>
+    <li><b>Ship a validated, executed INT4 checkpoint</b> — or the recipe plus a verification script</li>
+    <li><b>Preconditions per optimization</b> — two of this project's dead ends failed <em>silently</em></li>
+    <li><b>Document the measurement traps</b> — or users will publish wrong numbers</li>
+    <li><b>Make the edge path discoverable</b> — today the README points Orin users at vLLM</li>
+    <li><b>Close the Orin Nano × Cosmos3-Edge gap</b> in the Jetson AI Lab page + tutorial</li>
+  </ul>
+  <p class="lead" style="margin-top:16px;font-size:16px">The capability lives in TensorRT-Edge-LLM.
+  A thin accurate index beats a thick copy that drifts.</p>
+</section>
+
+<!-- 19 -->
+<section class="slide">
+  <div class="eyebrow">Caveats</div>
+  <h2>What this does not claim</h2>
+  <ul style="font-size:clamp(14px,1.6vw,19px)">
+    <li><b class="wn">Quantization quality is not fully characterized.</b> 11.06% mean weight error from
+        uncalibrated RTN; spot checks clean, but <b>no benchmark suite was run</b></li>
+    <li><b class="wn">No FP16-vs-INT4 side-by-side</b> — both engines can't be resident in 8 GB at once</li>
+    <li><b class="wn">Round 4's 20.8% is a tradeoff</b>, not a free win</li>
+    <li><b class="wn">22.5× compares against a naive baseline.</b> Against a competent FP16 resident baseline the
+        honest figure is <b>3.38× decode + 2.32 GB RAM</b></li>
+  </ul>
+</section>
+
+<!-- 20 -->
+<section class="slide">
+  <div class="eyebrow">Bottom line</div>
+  <div class="big">3.38× decode<br>2.32 GB back</div>
+  <p class="lead" style="margin-top:26px">Cosmos3-Edge runs comfortably on an 8 GB Orin Nano Super at
+  <b style="color:var(--green)">76 tok/s</b> — faster than the officially published AGX Orin 64 GB figure —
+  with room left for DeepStream and Home Assistant on the same board.</p>
+  <p class="lead" style="margin-top:18px;font-size:16px">The two biggest wins cost nothing to try:
+  <b style="color:var(--green)">a resident runtime</b> and <b style="color:var(--green)">MAXN_SUPER</b>.</p>
+</section>
+
+<div class="nav"><span id="cur">1</span> / <span id="tot">20</span></div>
+<div class="hint">← → or space · F fullscreen</div>
+
+<script>
+  const s=[...document.querySelectorAll('.slide')];let i=0;
+  document.getElementById('tot').textContent=s.length;
+  function go(n){
+    i=Math.max(0,Math.min(s.length-1,n));
+    s.forEach((el,k)=>el.classList.toggle('on',k===i));
+    document.getElementById('cur').textContent=i+1;
+    document.getElementById('bar').style.width=((i+1)/s.length*100)+'%';
+    location.hash=i+1;
+  }
+  addEventListener('keydown',e=>{
+    if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();go(i+1)}
+    else if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(i-1)}
+    else if(e.key==='Home')go(0); else if(e.key==='End')go(s.length-1);
+    else if(e.key==='f'||e.key==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()}
+  });
+  addEventListener('click',e=>{if(!e.target.closest('a'))go(i+(e.clientX>innerWidth*0.35?1:-1))});
+  go(parseInt(location.hash.slice(1))-1||0);
+</script>
+</body>
+</html>
