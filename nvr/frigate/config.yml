@@ -57,6 +57,10 @@ record:
 
 snapshots:
   enabled: true
+  # timestamp_style only defines how the clock LOOKS; each consumer has to opt in. Without this the
+  # overlay never appears on snapshots - which are exactly what gets attached to phone
+  # notifications, so this is the one that matters.
+  timestamp: true
   bounding_box: true
   retain:
     default: 14
@@ -78,6 +82,20 @@ genai:
     model: cosmos3-edge
     roles:
       - descriptions
+
+# Burned-in clock. This is what puts a time on the live view, on snapshots, and therefore on the
+# image attached to phone notifications - so a notification carries its own timestamp even if the
+# message text does not. `format` is strftime, and strftime passes literal characters through, which
+# is how the camera name gets prefixed per-camera below.
+timestamp_style:
+  position: tl
+  format: "%a %d %b %Y  %H:%M:%S"
+  color:
+    red: 255
+    green: 255
+    blue: 255
+  thickness: 2
+  effect: shadow      # keeps it readable over bright driveway concrete
 
 objects:
   track:
@@ -221,6 +239,8 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "FRONT DOOR  %a %d %b  %H:%M:%S"
 
   front_entryway:
     enabled: true          # stickup_cam_longfin - CHECK POWER
@@ -243,6 +263,8 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "FRONT ENTRYWAY  %a %d %b  %H:%M:%S"
 
   front_driveway:
     enabled: true          # stickup_cam_longfin - CHECK POWER
@@ -265,9 +287,13 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "FRONT DRIVEWAY  %a %d %b  %H:%M:%S"
 
   office:
-    enabled: false          # df_doorbell doorbell
+    # df_doorbell_clownfish. Probed healthy: h264 480x480 (square doorbell aspect). Detect matches
+    # the native geometry, so there is no downscale cost - far cheaper than the 2624x1472 cameras.
+    enabled: true
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/ac9fc327c838_live?video
@@ -277,8 +303,8 @@ cameras:
             - record
     detect:
       enabled: true
-      width: 640
-      height: 360
+      width: 480
+      height: 480
       fps: 5
     motion:
       threshold: 30
@@ -287,6 +313,8 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "OFFICE DOORBELL  %a %d %b  %H:%M:%S"
 
   pinky:
     enabled: false          # cocoa_camera_v2 - likely BATTERY
@@ -309,6 +337,8 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "PINKY  %a %d %b  %H:%M:%S"
 
   patio_2nd_floor:
     enabled: false          # cocoa_camera - likely BATTERY
@@ -331,6 +361,8 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "2ND FLOOR PATIO  %a %d %b  %H:%M:%S"
 
   driveway_2nd_floor:
     enabled: false          # cocoa_camera - likely BATTERY
@@ -353,3 +385,5 @@ cameras:
       enabled: true
     snapshots:
       enabled: true
+    timestamp_style:
+      format: "2ND FLOOR DRIVEWAY  %a %d %b  %H:%M:%S"

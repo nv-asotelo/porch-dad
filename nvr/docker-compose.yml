@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
     # Hard cap: the Cosmos3-Edge model holds ~3.8GB of this board's 8GB. A container OOM here is
     # recoverable; a host OOM would take the model down with it.
-    mem_limit: 1400m
+    mem_limit: 1700m
     shm_size: 128m
     # Lets Frigate's GenAI reach the Cosmos3-Edge shim, which listens on the host rather than
     # in a container.
@@ -55,3 +55,6 @@ services:
           size: 256000000
     environment:
       - FRIGATE_RTSP_PASSWORD=change_me
+      # Without this the container runs UTC and the burned-in clock reads 7 hours ahead of the
+      # wall clock, which is actively misleading on a security timestamp.
+      - TZ=America/Los_Angeles
