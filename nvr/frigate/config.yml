@@ -153,17 +153,17 @@ objects:
     #    CLOSED 5/5 even on a camera with no gate in frame, so a global gate instruction
     #    only produces false readings. Gate handling lives on front_driveway only.
     prompt: >-
-      Look at home camera '{camera}'. In one or two short sentences say what is actually
-      visible: people (what they are doing and carrying), animals (name the species), vehicles,
-      and whether exterior lamps are lit. Report smoke or fire first if present. Ignore
-      sunlight, shadows, weather and moving plants.
+      Look at home camera '{camera}' and describe only what is visible, in one or two short
+      sentences: people (what they are doing, wearing and carrying), animals (name the species
+      as specifically as you can), vehicles, and whether exterior lamps are lit. Report visible
+      smoke, fire or flames first if present. Ignore sunlight, shadows, weather and moving
+      foliage.
     object_prompts:
       person: >-
         Look at home camera '{camera}'. In one or two short sentences describe the person: what
-        they are doing, their appearance, and what they carry. Include delivery and service
-        workers and say what they did. Say so explicitly if they are loitering, covering their
-        face, climbing a fence or window, or forcing a door. Report smoke or fire first if
-        present.
+        they are doing, what they are wearing, and what they are carrying. Describe only what is
+        visible. Say so explicitly if they are loitering, covering their face, climbing a fence
+        or window, or forcing a door. Report smoke or fire first if present.
       bird: >-
         Look at home camera '{camera}'. Name the animal's species as specifically as you can
         (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
@@ -213,6 +213,16 @@ review:
       - exterior lights switching on or off unexpectedly
 
 cameras:
+  # MOTION GATING (the DeepStream/VSS principle: gate inference cheaply, do not run the detector on
+  # everything). These views are full of vegetation, and wind was keeping motion ON across four
+  # cameras at once, starving a shared CPU detector already at ~116ms/inference. contour_area is
+  # raised so leaf-scale movement is ignored, and threshold raised so subtle luminance shifts
+  # (shadows, cloud) do not trigger. This enforces "ignore trees, wind and shadows" at the cheap
+  # layer instead of asking the VLM to do it.
+  #
+  # DETECT FPS is split by importance: primary cameras 4fps, secondary 2fps. Total demand must stay
+  # under detector capacity (~8.6 inferences/sec at 116ms), or every camera starves and real people
+  # go undetected - which is exactly what happened at 6 cameras x 5fps = 30fps demanded.
   # Ring streams work ONLY with the ?video query. Without it ffmpeg fails with "Invalid data found
   # when processing input", because ring-mqtt's go2rtc advertises two competing audio codecs
   # (default_query: video&audio=aac&audio=opus) and the negotiation breaks the parse.
@@ -243,10 +253,10 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 5
+      fps: 2
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 40
+      contour_area: 40
     record:
       enabled: true
     snapshots:
@@ -267,10 +277,10 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 5
+      fps: 4
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 40
+      contour_area: 40
     record:
       enabled: true
     snapshots:
@@ -291,10 +301,10 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 5
+      fps: 4
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 40
+      contour_area: 40
     record:
       enabled: true
     snapshots:
@@ -317,10 +327,10 @@ cameras:
       enabled: true
       width: 480
       height: 480
-      fps: 5
+      fps: 4
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 40
+      contour_area: 30
     record:
       enabled: true
     snapshots:
@@ -341,10 +351,10 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 5
+      fps: 2
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 45
+      contour_area: 60
     record:
       enabled: true
     snapshots:
@@ -365,10 +375,10 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 5
+      fps: 2
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 45
+      contour_area: 60
     record:
       enabled: true
     snapshots:
@@ -389,10 +399,10 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 5
+      fps: 2
     motion:
-      threshold: 30
-      contour_area: 15
+      threshold: 45
+      contour_area: 60
     record:
       enabled: true
     snapshots:

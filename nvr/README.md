@@ -440,3 +440,85 @@ The entryway failures were not a model limitation but an **image** limitation: t
 backlit with highlights clipped to pure white, and the state is not reliably readable by a human
 either. Vision-based door state is workable on a well-exposed camera. For "open too long" a physical
 contact sensor is still the better instrument, because that requirement is stateful and deterministic.
+
+## Engine sizing: measured, and smaller won
+
+Three engine builds were measured against the workload that actually produces good captions.
+
+| Engine | maxInputLen | max_image_tokens | KV | Shim RSS | vs v1 |
+|---|---|---|---|---|---|
+| v1 | 1536 | 1024 | 2048 | 3.410 GB | — |
+| v2 | 3072 | 2048 | 3072 | 3.692 GB | **+8.3%** |
+| **v3 (deployed)** | **1024** | **640** | **1024** | **3.395 GB** | −0.44% |
+
+v2 was built to unblock `review.genai`, and it worked: 8 images at 1334 tokens pass where 6 failed
+before. But it cost **+282 MB to enable frame counts that degrade output**:
+
+| Images | Prompt tokens | Output |
+|---|---|---|
+| 1 | 249 | "Black male carrying black bag in left hand" |
+| 2 | 404 | "male wearing a black hoodie" |
+| 6 | 1024 | `person: 63% Confidence.\nperson: (n/d)` |
+| 8 | 1334 | "Person walking in front of home." |
+
+That is the third independent replication that **more frames make this model worse**. So v3 went the
+other way - sized for one snapshot (~250 prompt tokens) plus 512 generated, with
+`maxKVCacheCapacity 1024` per Jetson AI Lab's own Orin Nano guidance. It is the smallest of the
+three and loses nothing usable.
+
+**RAM is dominated by fixed costs**, which is why the tunable limits barely move it: 0.818 GB LLM
+engine + 0.915 GB visual engine + 0.500 GB embeddings = 2.23 GB of the 3.4 GB. Engine limits are
+worth roughly 300 MB in total. The only remaining large lever is INT4 on the vision tower.
+
+### Vision tower INT4: quantized, but not loadable
+
+The quantization works - 110 linears, 11.52% mean relative error, 0.911 GB -> 0.611 GB - and the
+weights are kept for later. The export pipeline cannot consume them:
+
+- This is a **modular checkpoint** (`transformer/` + `vision_encoder/` subdirs), so
+  `_load_all_weights(model_dir)` returns nothing at the root.
+- `_tower_model_config` decides a tower is quantized only if it finds `.weight_scale` in that root
+  dict, finds none, and resets the tower to FP16.
+- The exporter then builds `FP16Linear` against packed `[N//2, K]` weights:
+  `RuntimeError: The size of tensor a (576) must match the size of tensor b (1152)`.
+
+Fixing it needs a vendor source patch. Note also that the ViT MLP can **never** be INT4 here: it is
+1152 <-> 4304 and `4304 % 64 == 16` fails the kernel's alignment rule, so ~268M of ~488M params are
+permanently FP16 and any future saving is capped near a third of the tower.
+
+## Detector budget and motion gating
+
+The CPU detector is a shared, finite resource: at ~86-116 ms per inference it sustains roughly
+**9-11 detections/sec across all cameras combined**. Six cameras at 5 fps demand 30/sec, so every
+camera starves and real people go undetected - which is exactly what happened.
+
+Following the DeepStream/VSS principle of gating inference cheaply rather than running the detector
+on everything:
+
+- `motion.contour_area` 15 -> 40 (primary) / 60 (secondary) so leaf-scale movement is ignored
+- `motion.threshold` 30 -> 40 / 45 so subtle luminance shifts (shadow, cloud) do not trigger
+- `detect.fps` split by importance: primary 4, secondary 2
+
+Result: detector inference **116 ms -> 85.6 ms**, primary cameras actually detecting (4.1-4.2
+detection_fps) while idle secondaries sit at 0.0. This also enforces "ignore wind, trees and
+shadows" at the cheap layer instead of asking the VLM to do it.
+
+On frame counts, this deliberately diverges from [NVIDIA VSS](https://docs.nvidia.com/vss/3.1.0/real-time-vlm.html),
+which samples ~8 frames per 30-second chunk. VSS targets 8B+ models such as Cosmos-Reason2; on this
+4B INT4 model more frames measurably degrade output, so one snapshot is used instead.
+
+## Prompt findings: positive framing beats prohibition
+
+Measured on real frames from these cameras:
+
+| Prompt | Result |
+|---|---|
+| "Include delivery and service workers" | Invented a **"delivery boy"** with a **"white receipt"** that do not exist |
+| "Do not guess an occupation" | **"There is no visible person"** on a frame that clearly contains one |
+| (neutral, no guidance) | Invented an **"old man"** |
+| **"Describe only what is visible"** | **"A person is leaning against the wall, wearing a black jacket and dark pants, with a black backpack on."** |
+
+Two rules follow. **Naming a role primes it** - mention delivery workers and the model will find one.
+And **prohibitions destabilise this model**: "do not guess" produced a false negative, the same
+failure class as "never state what is absent" collapsing to "No, no, no." Prefer positive
+constraints throughout.
