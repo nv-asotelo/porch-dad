@@ -1,0 +1,52 @@
+{
+ "engine": "/opt/tensorrt-edgellm/models/default",
+ "power_mode": "MAXN_SUPER",
+ "load_at_start": [
+  0.48,
+  1.19,
+  3.5
+ ],
+ "runs": 40,
+ "best_ms": 249.2,
+ "p50_ms": 253.0,
+ "mean_ms": 387.4,
+ "p90_ms": 623.9,
+ "worst_ms": 713.5,
+ "stdev_ms": 177.7,
+ "prompt_tokens": 187,
+ "completion_tokens_median": 14.0,
+ "best_tok_s": 56.2,
+ "typical_tok_s": 55.3,
+ "cpu_peak_pct": 23.5,
+ "cpu_p50_pct": 15.0,
+ "gpu_peak_pct": 99.6,
+ "gpu_p50_pct": 97.7,
+ "ram_total_mb": 7546,
+ "ram_idle_used_mb": 4946,
+ "ram_peak_used_mb": 4949,
+ "ram_available_mb": 2597,
+ "shim_rss_idle_mb": 3852,
+ "shim_rss_load_mb": 3852,
+ "engine_config": {
+  "quantization": "INT4 W4A16",
+  "maxInputLen": 1536,
+  "maxKVCapacity": 2048,
+  "numDecoderLayers": 28,
+  "hiddenSize": 2048,
+  "numKVHeads": 8,
+  "headDim": 128
+ },
+ "measured_utc": "2026-09-14",
+ "quiesced": "only cosmos3-edge-shim + live-vlm-webui running",
+ "fit_over_live_session": {
+  "n_requests": 2818,
+  "model": "elapsed_ms = 200 + 13.49 * generated_tokens",
+  "correlation_gen_tok_vs_elapsed": 0.854,
+  "fixed_ms": 200,
+  "marginal_ms_per_token": 13.49,
+  "steady_state_tok_s": 74.1,
+  "live_median_ms": 442,
+  "live_best_ms": 245,
+  "live_p90_ms": 607
+ }
+}

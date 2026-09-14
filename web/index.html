@@ -69,9 +69,10 @@
     <p class="sub">Four measured optimization rounds took a Cosmos3-Edge vision-language deployment
     from 13.9&nbsp;s per request to 619&nbsp;ms, while giving back 2.32&nbsp;GB of system RAM — enough
     headroom to co-host DeepStream and Home Assistant on the same board.</p>
-    <div class="meta">JetPack 7.2.1 · L4T R39.2.1 · CUDA 13.2 · TensorRT 10.16.2.10 · TensorRT-Edge-LLM 0.10.1 · 2026-09-13</div>
+    <div class="meta">JetPack 7.2.1 · L4T R39.2.1 · CUDA 13.2 · TensorRT 10.16.2.10 · TensorRT-Edge-LLM 0.10.1 · 2026-09-13 / 2026-09-14</div>
     <div class="toc">
-      <a href="#results">Results</a><a href="#method">Methodology</a><a href="#rounds">Rounds</a>
+      <a href="#results">Results</a><a href="#live">Live demo</a><a href="#method">Methodology</a>
+      <a href="#engine">Engine improvements</a><a href="#rounds">Rounds</a>
       <a href="#int4">INT4</a><a href="#tradeoff">Quality tradeoff</a><a href="#negative">Negative results</a>
       <a href="#repos">Repo landscape</a><a href="#recs">Recommendations</a><a href="#caveats">Caveats</a>
     </div>
@@ -157,6 +158,78 @@ almost all of the gain; Round 2 fell below its threshold but proved decode was b
 one workload away from OOM, 2.7 GB is a platform.</figcaption>
 </figure>
 
+<h2 id="live">Live demo: measured on a quiesced board</h2>
+<p>Measured 2026-09-14 with the board doing exactly one job: <code>cosmos3-edge-shim.service</code> and
+<code>live-vlm-webui.service</code> running, everything else stopped. These are therefore uncontended numbers,
+and the procedure that produced them is listed below so they can be read for what they are.</p>
+
+<h3>The quiesce procedure — what was stopped</h3>
+<p>Stopped: Frigate, ring-mqtt, Mosquitto and Home Assistant (docker containers); frigate-notify, porch-feed,
+x11vnc, gnome-remote-desktop, jetson-oled, iperf3, kerneloops and fwupd (services). Left running:
+<strong>only</strong> the Cosmos3-Edge shim and the Live VLM WebUI. The effect was
+<strong>6.73 GB used → 4.95 GB used</strong>, available <strong>0.80 GB → 2.60 GB</strong> (1.8 GB freed),
+and load average <strong>7.56 → 0.48</strong>.</p>
+
+<h3>Configuration the numbers were taken at</h3>
+<ul>
+  <li>Power mode <strong>MAXN_SUPER</strong> (<code>nvpmodel -m 2</code>)</li>
+  <li>Engine loaded by the shim: <code>/opt/tensorrt-edgellm/models/default</code> —
+      <code>maxInputLen=1536</code>, <code>maxKVCapacity=2048</code>, 28 decoder layers,
+      <code>hiddenSize=2048</code>, INT4 W4A16</li>
+  <li>Workload: one 640×360 camera frame plus a one-sentence describe prompt, ~184–187 prompt tokens</li>
+</ul>
+
+<h3>What the quiesced board does</h3>
+<table>
+<thead><tr><th>Measure</th><th>Value</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td>Best end-to-end</td><td class="ok">245 ms</td>
+    <td>live log; 249 ms in a controlled 40-run benchmark</td></tr>
+<tr><td>Typical, uncontended</td><td>253 ms median</td><td>14-token caption</td></tr>
+<tr><td>Typical, live WebUI streaming at ~1 req/s</td><td>442 ms median</td>
+    <td>18-token median caption — a longer caption, not a slower engine</td></tr>
+<tr><td>p90</td><td>607 ms live / 624 ms benchmark</td><td>worst observed 714 ms</td></tr>
+<tr><td>Steady-state decode</td><td>13.49 ms/token</td><td>74.1 tok/s</td></tr>
+<tr><td>End-to-end token rate</td><td>61.7 tok/s best / 41.5 tok/s typical</td>
+    <td>includes the 200 ms fixed term, so it sits below the decode rate</td></tr>
+<tr><td>CPU utilization</td><td>15.0% median, 23.5% peak — <strong>system-wide</strong></td>
+    <td>Across all <strong>six</strong> Cortex-A78AE cores; 100% would mean all six saturated. It is low
+    because the workload is GPU-bound, not because the CPU happens to be idle.</td></tr>
+<tr><td>GPU utilization</td><td>97.7% median, 99.6% peak</td>
+    <td>The GPU is the resource actually being spent</td></tr>
+<tr><td>System RAM</td><td>4.95 GB used of 7.37 GB</td>
+    <td>7,546 MB MemTotal; 2.60 GB available headroom under load</td></tr>
+<tr><td>Shim resident set size</td><td>3.85 GB</td><td>this is the model</td></tr>
+</tbody></table>
+
+<h3>The latency model</h3>
+<pre><code>elapsed_ms = 200 + 13.49 × generated_tokens     # n = 2,818 real requests, r = 0.854</code></pre>
+<p>A 200 ms fixed term (image encode + prefill) plus 13.49 ms per generated token accounts for the whole
+observed range. The relationship is cleanly linear:</p>
+<table>
+<thead><tr><th>Generated tokens</th><th>Elapsed</th></tr></thead>
+<tbody>
+<tr><td>12</td><td>322 ms</td></tr>
+<tr><td>20</td><td>453 ms</td></tr>
+<tr><td>30</td><td>599 ms</td></tr>
+<tr><td>41</td><td>702 ms</td></tr>
+</tbody></table>
+
+<div class="note">
+  <h4>The spread is caption <em>length</em>, not instability</h4>
+  <p style="margin:0">253 ms and 714 ms are the same engine at the same speed, on a short caption and a long
+  one. The range above is not jitter, contention or thermal behaviour — it is the generated-token count moving,
+  and the fit accounts for it. Quote latency alongside a caption length, or quote 13.49 ms/token instead.</p>
+</div>
+
+<div class="note">
+  <h4>Cross-check against an external number</h4>
+  <p style="margin:0">The <strong>74.1 tok/s</strong> measured here independently confirms this project's earlier
+  <strong>76.0 tok/s</strong> figure. Jetson AI Lab reports <strong>44.1 tok/s</strong> decode for Cosmos3-Edge on an
+  <strong>AGX Orin 64&nbsp;GB</strong> at BF16 via vLLM; this is an <strong>8&nbsp;GB Orin Nano</strong> beating that,
+  via INT4 self-quantization.</p>
+</div>
+
 <h2 id="method">Measurement methodology</h2>
 <p>Two traps produced confidently wrong numbers before being caught, and both are easy to fall into.</p>
 
@@ -180,6 +253,38 @@ that works is a regression of latency against generated tokens:</p>
 <p>This separates the two quantities that respond to different optimizations — <strong>fixed</strong>
 (preprocessing + ViT encode + prefill) and <strong>marginal</strong> (per-token decode). Final fit:
 <strong>R² = 0.999</strong> over n=699 live requests.</p>
+
+<h2 id="engine">Engine improvements</h2>
+<p>The campaign in brief — four rounds that shipped, one negative result that redirected the rest of them.
+Each is detailed in the sections that follow.</p>
+<ul>
+  <li><strong>Round 1 — resident shim + CUDA graph capture + MAXN_SUPER clocks</strong> (GPU 306→1020 MHz,
+      EMC 2133→3199 MHz): <strong>13.91 s → 2.07 s (−85.1%)</strong>. The largest single win, with
+      <em>no model changes</em>: the original path shelled out to <code>llm_inference</code> per request, paying
+      ~6–8 s of engine deserialization every single time.</li>
+  <li><strong>Round 2 — micro-optimizations</strong>: context-cache reuse (−3.5%), greedy decode (−4.3%), and a
+      real bug fix (<code>req.top_k</code> was never set, left zero-initialized instead of a validated 50).
+      <span class="no">−4% total</span> — below the threshold that was being held to.</li>
+  <li><strong>Round 2.5 — a negative result, and the one that mattered most</strong>: it established that decode was
+      <strong>memory-bandwidth-bound</strong>, not overhead-bound. At FP16 the model moved 3.36 GB per token in
+      43.29 ms = <strong>77.6 GB/s</strong> against a ~102 GB/s theoretical peak — 76% of peak. No scheduling
+      cleverness could help; the only lever with real headroom was making the weights smaller.</li>
+  <li><strong>Round 3 — INT4 W4A16 self-quantization</strong>, round-to-nearest with an MSE-optimal clipping
+      search, calibration-free: <strong>43.29 → 13.38 ms/token</strong>; LLM engine 3.135 GB → 0.818 GB
+      (3.83× smaller); process RSS 6.02 GB → 3.70 GB.</li>
+  <li><strong>Round 4 — right-sizing the image token budget</strong>. With decode 3.2× faster the profile
+      <em>inverted</em> and the FP16 vision tower became the bottleneck: the fixed term was 47% of mean latency, of
+      which ViT encode alone was ~248&nbsp;ms (26% of mean latency). Image tokens <strong>512 → 320</strong>.</li>
+</ul>
+<p>Converged at <strong>13.13 ms/token</strong>.</p>
+
+<div class="note warn">
+  <h4>How these are to be read</h4>
+  <p style="margin:0">The 22.5× headline is against a <strong>naive process-per-request baseline</strong>. Against a
+  competently configured FP16 resident baseline the honest figure is <strong>3.38× decode + 2.32&nbsp;GB RAM</strong>.
+  INT4 output quality was spot-checked at greedy decoding but <strong>not benchmarked on a task suite</strong>
+  (see <a href="#caveats">Caveats and honest limits</a>).</p>
+</div>
 
 <h2 id="rounds">The optimization rounds</h2>
 <table>
@@ -426,7 +531,7 @@ python3 compare_perf.py &lt;A_start&gt; &lt;A_end&gt; &lt;B_start&gt;     # matc
     <span class="pill"><a href="https://www.jetson-ai-lab.com/models/cosmos3-edge/">Jetson AI Lab — Cosmos3 Edge</a></span>
     <span class="pill"><a href="https://github.com/nvidia-cosmos">nvidia-cosmos</a></span>
     <span class="pill"><a href="https://huggingface.co/ubr-physical-ai/Cosmos3-Edge-INT4-AWQ">ubr-physical-ai/Cosmos3-Edge-INT4-AWQ</a></span>
-    <p style="margin-top:22px">Measured on Jetson Orin Nano Super 8 GB · 2026-09-13 · all figures from live
+    <p style="margin-top:22px">Measured on Jetson Orin Nano Super 8 GB · 2026-09-13 / 2026-09-14 · all figures from live
     Live-VLM-WebUI traffic, not synthetic loops.</p>
   </div>
 </footer>

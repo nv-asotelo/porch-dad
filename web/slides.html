@@ -278,6 +278,72 @@
 
 <!-- 15 -->
 <section class="slide">
+  <div class="eyebrow">Live demo — measured 2026-09-14</div>
+  <h2>What the board is doing<br>while the WebUI runs</h2>
+  <div class="grid">
+    <div class="stat"><div class="k">Best</div><div class="v">245 ms</div><div class="d">249 ms on a controlled 40-run benchmark</div></div>
+    <div class="stat"><div class="k">Typical · uncontended</div><div class="v">253 ms</div><div class="d">median, 14-token caption</div></div>
+    <div class="stat"><div class="k">Typical · live WebUI</div><div class="v">442 ms</div><div class="d">median at ~1 req/s, 18-token caption</div></div>
+    <div class="stat"><div class="k">CPU</div><div class="v">15.0%</div><div class="d">median, 23.5% peak</div></div>
+    <div class="stat"><div class="k">GPU</div><div class="v">97.7%</div><div class="d">median, 99.6% peak</div></div>
+    <div class="stat"><div class="k">System RAM</div><div class="v">4.95 GB</div><div class="d">of 7.37 GB · 2.60 GB available</div></div>
+  </div>
+  <p class="lead" style="margin-top:18px;font-size:16px">One 640×360 frame + a one-sentence prompt, MAXN_SUPER, INT4 W4A16.
+  Only the shim and the Live VLM WebUI are running. CPU is <b style="color:var(--fg)">system-wide across all 6 Cortex-A78AE
+  cores</b> — 100% would be all six — and it is low because the work is GPU-bound.</p>
+</section>
+
+<!-- 16 -->
+<section class="slide">
+  <div class="eyebrow">Live demo — reading the spread</div>
+  <h2>245 ms or 714 ms is<br>caption length, not jitter</h2>
+  <div style="font-family:ui-monospace,monospace;font-size:clamp(15px,2.2vw,27px);
+              background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--green);
+              border-radius:0 12px 12px 0;padding:22px 26px;margin:6px 0 24px">
+    elapsed_ms = <span style="color:var(--warn)">200</span> +
+    <span class="ok">13.49</span> × gen_tok
+  </div>
+  <div class="two">
+    <div>
+      <table>
+        <tr><th>gen_tok</th><th>elapsed</th></tr>
+        <tr><td>12</td><td>322 ms</td></tr>
+        <tr><td>20</td><td>453 ms</td></tr>
+        <tr><td>30</td><td>599 ms</td></tr>
+        <tr><td>41</td><td>702 ms</td></tr>
+      </table>
+    </div>
+    <div class="quote"><b style="color:var(--fg)">200 ms fixed</b> — image encode + prefill — plus
+    <b style="color:var(--fg)">13.49 ms per generated token</b>, i.e. 74.1 tok/s steady-state decode.<br><br>
+    A long caption costs more because it is long. p90 607 ms live / 624 ms benchmark; worst observed 714 ms.</div>
+  </div>
+  <p class="lead" style="margin-top:20px;font-size:16px">Fitted over 2818 real requests. Correlation between generated
+  tokens and elapsed time <b style="color:var(--green)">r = 0.854</b>.</p>
+</section>
+
+<!-- 17 -->
+<section class="slide">
+  <div class="eyebrow">How the engine got here</div>
+  <h2>Four rounds — and the negative<br>result that redirected them</h2>
+  <table>
+    <tr><th>#</th><th>Change</th><th>Result</th></tr>
+    <tr><td>1</td><td>Resident shim + CUDA graph + MAXN_SUPER clocks</td><td class="ok">13.91 s → 2.07 s, −85.1%; no model changes</td></tr>
+    <tr><td>2</td><td>Context cache, greedy decode, <code>top_k</code> bug fix</td><td class="no">−4% total — below the bar</td></tr>
+    <tr><td>2.5</td><td>Bandwidth accounting at FP16</td><td class="wn">Negative result: decode is memory-bandwidth-bound, 77.6 of ~102 GB/s</td></tr>
+    <tr><td>3</td><td>INT4 W4A16 self-quantization, calibration-free</td><td class="ok">43.29 → 13.38 ms/tok; engine 3.135 → 0.818 GB</td></tr>
+    <tr><td>4</td><td>Image-token budget 512 → 320</td><td class="ok">Profile inverted — the FP16 vision tower became the bottleneck; the fixed term was 47% of mean latency</td></tr>
+    <tr><td colspan="2"><b>Converged</b></td><td class="ok">13.13 ms/token</td></tr>
+  </table>
+  <div class="quote warn" style="margin-top:18px;font-size:clamp(13px,1.3vw,16px)">
+    <b style="color:var(--warn)">Honest framing</b> — the 22.5× headline is against a <b style="color:var(--fg)">naive
+    process-per-request baseline</b>. Against a competently configured FP16 resident baseline the honest figure is
+    <b style="color:var(--fg)">3.38× decode + 2.32 GB RAM</b>. INT4 output quality was spot-checked at greedy decoding,
+    <b style="color:var(--fg)">not benchmarked on a task suite</b>.
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide">
   <div class="eyebrow">Dead ends worth publishing</div>
   <h2>Negative results</h2>
   <table>
@@ -291,7 +357,7 @@
   </table>
 </section>
 
-<!-- 16 -->
+<!-- 19 -->
 <section class="slide">
   <div class="eyebrow">The ecosystem</div>
   <h2>The repo named "framework"<br>has none of this</h2>
@@ -305,7 +371,7 @@
   </table>
 </section>
 
-<!-- 17 -->
+<!-- 20 -->
 <section class="slide">
   <div class="eyebrow">The gap</div>
   <h2>Nobody documents<br>the intersection</h2>
@@ -319,7 +385,7 @@
   is exactly what an 8 GB board needs — and exactly what an unexecuted community checkpoint was trying to fill.</p>
 </section>
 
-<!-- 18 -->
+<!-- 21 -->
 <section class="slide">
   <div class="eyebrow">Recommendations</div>
   <h2>Make cosmos-framework the index,<br>not a second copy</h2>
@@ -335,7 +401,7 @@
   A thin accurate index beats a thick copy that drifts.</p>
 </section>
 
-<!-- 19 -->
+<!-- 22 -->
 <section class="slide">
   <div class="eyebrow">Caveats</div>
   <h2>What this does not claim</h2>
@@ -349,7 +415,7 @@
   </ul>
 </section>
 
-<!-- 20 -->
+<!-- 23 -->
 <section class="slide">
   <div class="eyebrow">Bottom line</div>
   <div class="big">3.38× decode<br>2.32 GB back</div>
@@ -360,7 +426,7 @@
   <b style="color:var(--green)">a resident runtime</b> and <b style="color:var(--green)">MAXN_SUPER</b>.</p>
 </section>
 
-<div class="nav"><span id="cur">1</span> / <span id="tot">20</span></div>
+<div class="nav"><span id="cur">1</span> / <span id="tot">23</span></div>
 <div class="hint">← → or space · F fullscreen</div>
 
 <script>

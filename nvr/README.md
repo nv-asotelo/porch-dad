@@ -775,3 +775,57 @@ of a resident's own car, which is not the "out of the ordinary" event this syste
 python3 nvr/feed/rerun_all_events.py   # fresh inference over every stored event
 python3 nvr/feed/eval_alert_policy.py  # score before/after against the judged truth set
 ```
+
+
+## Demo mode: measuring the model, not the NVR
+
+The NVR stack and the model compete for the same 8 GB and the same 6 cores. With everything
+running, the board sat at **6.73 GB used, 0.80 GB available, load average 7.56** - benchmarking the
+Live VLM WebUI in that state measures Frigate's CPU detector as much as it measures Cosmos3-Edge.
+
+```bash
+bash nvr/demo-mode.sh on                      # keep the desktop/VNC session alive
+bash nvr/demo-mode.sh on --remote-recording   # also stop VNC, if recording from another machine
+bash nvr/demo-mode.sh status
+bash nvr/demo-mode.sh off                     # full stack back
+```
+
+The WebUI needs exactly two units - `cosmos3-edge-shim.service` (holds the engine) and
+`live-vlm-webui.service`. Everything else stops. Measured effect:
+
+| | Full stack | Demo mode |
+|---|---|---|
+| RAM used | 6.73 GB | **4.83 GB** |
+| RAM available | 0.80 GB | **2.53 GB** |
+| Load average | 7.56 | **0.69** |
+
+`--remote-recording` exists because stopping `x11vnc`/`gnome-remote-desktop` kills the Orin's own
+desktop session. Only pass it when the recording is driven from another machine's browser.
+
+### Measured on the quiesced board
+
+Fitted over **2818 real requests** from a live WebUI session:
+
+```
+elapsed_ms = 200 + 13.49 x generated_tokens          (r = 0.854)
+```
+
+| | |
+|---|---|
+| Best end-to-end | **245 ms** |
+| Typical, uncontended | **253 ms** (14-token caption) |
+| Typical, live streaming ~1 req/s | **442 ms** (18-token caption) |
+| p90 | 607 ms |
+| Steady-state decode | **13.49 ms/token = 74.1 tok/s** |
+| CPU | **15.0% median, 23.5% peak** - system-wide across 6 cores |
+| GPU | 97.7% median, 99.6% peak |
+| System RAM | **4.95 GB of 7.37 GB**, shim RSS 3.85 GB, 2.60 GB free |
+
+**The latency spread is caption length, not instability.** 12 generated tokens takes 322 ms, 41
+takes 702 ms, and the relationship in between is linear. Quoting a single mean for this workload
+hides that entirely - the mean just tracks whatever caption-length distribution the traffic had.
+
+The 13.49 ms/token measured here independently reproduces the campaign's converged
+13.13 ms/token, on a different day and a differently loaded board.
+
+Reproduce with `bench/bench_live_webui.py`; the recorded run is `bench/live-webui-quiesced.json`.
