@@ -143,7 +143,11 @@ def handle(after: dict) -> None:
     # The VLM only describes; the alert decision is made here. Scope is deliberately narrow:
     # living things, moving vehicles, an open gate, a package, a lighting change. Everything else
     # the model narrates - walls, ceilings, archways, lens distortion - is not worth a notification.
-    verdict = classify(desc or "", label)
+    # Pass the detector's own confidence. A category that comes only from the label, with nothing
+    # in the caption backing it, is gated on this - every uncorroborated overnight false positive
+    # sat at 0.70-0.72 while real sightings scored 0.74-0.84.
+    score = (after.get("data") or {}).get("top_score") or after.get("top_score")
+    verdict = classify(desc or "", label, score)
     if desc and not verdict["alert"]:
         print(f"[notify] {eid} suppressed (nothing in scope): {desc[:70]}", flush=True)
         return

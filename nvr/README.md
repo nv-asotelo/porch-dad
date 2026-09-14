@@ -901,3 +901,59 @@ hardware decode via GStreamer.
 
 Costs scale directly with what Ring decides to send, so expect this number to move on its own —
 Frigate was observed at 132%, 163% and 217% within ten minutes with no configuration change at all.
+
+
+## Night-time false alerts: three bugs, none of them CPU
+
+Low light makes Ring drop resolution, and the stream streaks on the change. That produced
+erroneous alerts on a parked car overnight. The CPU work above helps only sideways — detect at
+2 fps halves exposure to glitch frames and `contour_area: 150` kills small artefacts — but a
+resolution change is a full-frame event with a huge contour, so it still fires. The real causes
+were in the classifier.
+
+Measured over one night on `front_driveway`, with the caption each event actually produced:
+
+| Score | Label | Caption | Was |
+|---|---|---|---|
+| 0.70 | person | "A **distorted, pixelated** image of a dimly lit room with a person" | ALERT |
+| 0.71 | person | "A black SUV is **parked** under a concrete overpass at night" | ALERT |
+| 0.72 | person | "A **blurry view** from a moving vehicle" | ALERT |
+| 0.82 | car | "**No people are visible.** A black cat is walking across the driveway" | ALERT person |
+| 0.71 | car | "**No exterior lamps are lit**" | ALERT lights |
+
+### 1. Negation read as sighting
+
+Matching the whole caption at once reads a word inside a denial as an observation.
+**Four of six `lights` matches in one night were "No exterior lamps are lit"** — the exact opposite
+of the thing being alerted on. The same applied to "There are no vehicles visible" and "No people
+are visible". The model volunteers these denials readily, so this was not an edge case.
+
+Fixed by matching **clause by clause** and dropping any clause containing a negation, splitting on
+sentence boundaries *and* on commas that precede a negation (the model writes
+"No people are visible, no animals are visible, no vehicles are visible" as one sentence).
+
+### 2. A degraded frame is evidence about the frame, not the scene
+
+When the caption says the image is blurry or pixelated, nothing else in it is trustworthy —
+including a person the model hallucinated into the artefact, and including the detector label,
+which is what actually fired these. A degraded frame now suppresses the whole event.
+
+The distinction that makes this safe: the degradation must describe the **image**, not a subject.
+A first attempt matched the bare adjective and suppressed *"A blurry person in a white shirt"* — a
+real person on `pinky`, seen imperfectly. Requiring an image noun (`image`, `view`, `footage`,
+`frame`) within 30 characters separates "the picture is broken" from "the subject is indistinct".
+
+### 3. Uncorroborated detector labels need confidence
+
+Every uncorroborated false positive sat at **0.70–0.72**; every real sighting the caption also
+described scored **0.74–0.84**. So a category that comes *only* from the detector label, with
+nothing in the caption backing it, now requires `top_score >= 0.75`. Caption-corroborated
+categories are deliberately **not** gated — a caption that names the thing is its own evidence at
+any score, which is what keeps the 0.71 and 0.72 real sightings on `pinky`.
+
+### Result
+
+Overnight false alerts **5 → 0**, with all nine real sightings preserved. Re-checked against the
+judged 35-event set from the earlier accuracy work: **still 97.1% overall, 96.9% on the priority
+cameras, 0 false alarms** — no regression, same single known miss (an arriving car whose own
+caption says "parked").
