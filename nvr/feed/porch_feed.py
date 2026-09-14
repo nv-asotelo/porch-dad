@@ -620,12 +620,36 @@ def api_service(key: str, action: str, request: Request):
     return {"ok": True, "message": msg or f"{SERVICES[key]['label']} {verb}"}
 
 
+def publish_camera_enabled(name: str, on: bool) -> None:
+    """Set Frigate's RUNTIME enable state over MQTT.
+
+    Editing `enabled:` in config.yml is not sufficient on Frigate 0.18. It persists a runtime
+    enable/disable state separately and RESTORES IT OVER THE CONFIG at startup:
+
+        frigate.comms.dispatcher INFO : Restored runtime state: pinky.enabled=OFF
+
+    Measured consequence: after a reboot this page reported two cameras as "powered" (it reads the
+    config) while Frigate had them switched off and served no stream. The config edit alone is a
+    toggle that silently does nothing once the runtime state has ever been set.
+    """
+    try:
+        import paho.mqtt.publish as publish
+        publish.single(f"frigate/{name}/enabled/set", "ON" if on else "OFF",
+                       hostname=CFG.get("mqtt_host", "127.0.0.1"),
+                       port=int(CFG.get("mqtt_port", 1883)))
+    except Exception as e:
+        print(f"[feed] mqtt enable publish failed for {name}: {type(e).__name__}: {e}", flush=True)
+
+
 @app.post("/api/camera/{name}/{mode}")
 def api_camera(name: str, mode: str, request: Request):
     require_control(request)
     ok, msg = set_camera_power(name, mode)
     if not ok:
         raise HTTPException(400, msg)
+    # Config first (so it survives a Frigate config reload), then runtime state (so it takes
+    # effect now and survives a restart). Both are required; neither alone is enough.
+    publish_camera_enabled(name, mode == "powered")
     return {"ok": True, "message": msg}
 
 

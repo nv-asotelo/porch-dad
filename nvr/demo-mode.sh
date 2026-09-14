@@ -58,9 +58,15 @@ off)
   for c in mosquitto ring-mqtt frigate homeassistant; do
     docker start "$c" >/dev/null 2>&1 && printf '  container %-21s started\n' "$c"
   done
+  # KEEP is started too, not just restored-alongside. A reboot between `on` and `off` leaves the
+  # WebUI down if its unit is not enabled, and `on` never stopped it so `off` would never think to
+  # start it. Measured that exact gap: the board rebooted, every enabled unit came back, and
+  # live-vlm-webui did not because it was `disabled`.
+  sudo -n systemctl enable --now "${KEEP[@]}" 2>/dev/null
   sudo -n systemctl start "${DESKTOP[@]}" "${SERVICES[@]}" 2>/dev/null
-  for s in "${SERVICES[@]}" "${DESKTOP[@]}"; do
-    printf '  service  %-22s %s\n' "$s" "$(systemctl is-active "$s")"
+  for s in "${KEEP[@]}" "${SERVICES[@]}" "${DESKTOP[@]}"; do
+    printf '  service  %-22s %-9s (boot: %s)\n' "$s" "$(systemctl is-active "$s")" \
+      "$(systemctl is-enabled "$s" 2>/dev/null)"
   done
   echo "== memory =="; mem
   echo "Frigate takes ~60 s to reconnect every camera."
@@ -68,7 +74,10 @@ off)
 
 status)
   echo "== required for the WebUI =="
-  for s in "${KEEP[@]}"; do printf '  %-22s %s\n' "$s" "$(systemctl is-active "$s")"; done
+  for s in "${KEEP[@]}"; do
+    printf '  %-22s %-9s (boot: %s)\n' "$s" "$(systemctl is-active "$s")" \
+      "$(systemctl is-enabled "$s" 2>/dev/null)"
+  done
   echo "== optional =="
   for s in "${SERVICES[@]}" "${DESKTOP[@]}"; do printf '  %-22s %s\n' "$s" "$(systemctl is-active "$s")"; done
   echo "== containers =="
