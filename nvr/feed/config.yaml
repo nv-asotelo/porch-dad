@@ -9,6 +9,13 @@ mqtt_host: "127.0.0.1"
 mqtt_port: 1883
 
 db_path: "/home/orin/nvr/feed/feed.db"
+
+# Stills for the RSS feed. Frigate's own snapshot.jpg is the highest-scoring frame of the event -
+# its best still - so that is what gets cached here. A copy is kept locally because Frigate prunes
+# events on its own retention schedule (3 days motion / 14 days alerts) while an RSS reader may
+# fetch an item much later; without the copy those items would degrade into broken images.
+snapshot_dir: "/home/orin/nvr/feed/snapshots"
+snapshot_keep_mb: 512
 web_host: "0.0.0.0"
 web_port: 8096
 public_url: "http://<jetson-ip>:8096"
@@ -20,35 +27,64 @@ description_wait_seconds: 40
 # 8 GB, and an OOM kill would take the model down rather than the service you just started.
 min_free_mb_to_start_service: 400
 
+# Required header (X-Porch-Token) for every endpoint that runs sudo. Read-only views stay open.
+# Without this an unauthenticated POST from any LAN host - or any page a LAN browser loads - could
+# stop the NVR, disable a camera, or unload the model.
+# Guards every endpoint that shells out to sudo (engine swap, systemctl, docker, camera power).
+# Left EMPTY on purpose: with no token the control plane refuses every write with 503, which is the
+# right default for a checkout. Generate one per deployment and keep it out of git:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(16))"
+control_token: ""
+
 # Engines, named for where each sits on the accuracy <-> performance axis. All three are INT4
 # W4A16; they differ only in the context/image-token budgets baked in at build time, which is what
 # drives both RAM footprint and how many frames can be fed per caption.
 engines:
-  v1:
-    name: "Balanced"
-    path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4/engines/reasoning"
-    profile: "maxInputLen 1536 · max_image_tokens 1024 · KV 2048 · 3.410 GB RSS"
-    notes: >-
-      The original build. Middle of the road: enough headroom for several frames per caption
-      without the footprint of the wide build.
+  # Named for SPEED, because speed is the only thing that actually differs to the user.
+  # Measured on one identical 23-frame set, scored against a judge-established truth set:
+  # all three engines scored 95.7% (22/23) - the SAME score, failing on the SAME frame.
+  # They share identical INT4 weights and differ only in context budgets, which a single
+  # snapshot never exercises. So there is no accuracy axis to name them on; there is a
+  # 2.3x speed axis. Counter-intuitively the biggest-context build is the fastest, because
+  # it spends the fewest tokens per frame and so does the least prefill work.
   v2:
-    name: "Wide-Context"
+    name: "Fast"
     path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v2/engines/reasoning"
-    profile: "maxInputLen 3072 · max_image_tokens 2048 · KV 3072 · 3.692 GB RSS"
+    profile: "208 ms · 3.692 GB RAM · 170 tokens/frame · 3072 ctx"
     notes: >-
-      Accuracy-leaning in intent, heaviest in practice. Accepts the most frames per request, but
-      measurement showed captions DEGRADE past ~2 frames on this 4B model (6 frames returned
-      "person: 63% Confidence"), so the extra capacity costs 282 MB for little gain.
+      2.3x faster than Slow for the same measured accuracy, so this is the default choice.
+      Costs the most RAM (+297 MB). Its large context also accepts many frames per request,
+      which degrades captions - do not raise the frame count to "use up" the context.
+  v1:
+    name: "Medium"
+    path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4/engines/reasoning"
+    profile: "443 ms · 3.410 GB RAM · 200 tokens/frame · 1536 ctx"
+    notes: >-
+      Middle on latency and RAM. Same measured accuracy as the other two.
   v3:
-    name: "Lean"
+    name: "Slow"
     path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v3/engines/reasoning"
-    profile: "maxInputLen 1024 · max_image_tokens 640 · KV 1024 · 3.395 GB RSS"
+    profile: "482 ms · 3.395 GB RAM · 320 tokens/frame · 1024 ctx"
     notes: >-
-      Performance-leaning and the current default. Sized to the workload that actually produces the
-      best captions - one snapshot, ~250 prompt tokens - using the maxKVCacheCapacity 1024 that
-      Jetson AI Lab recommends for Orin Nano.
+      Slowest, but the lightest on RAM (297 MB less than Fast) - that headroom is its reason
+      to exist, not accuracy. It spends the most tokens per frame (320), which ought to mean
+      a sharper look, but that did not show up as a single extra correct call on this eval.
 
 # These stay on continuous RTSP no matter what; the toggle is locked in the UI.
 always_powered_cameras:
   - front_entryway
   - front_driveway
+
+# Services shown in the command center. Ports are polled continuously so a dead link is visible
+# rather than silently broken. tcp_only entries are not browsable (VNC, MQTT, RTSP).
+links_host: "192.168.6.252"
+links:
+  - {name: "Frigate NVR",        port: 5000,  scheme: "http",  path: "/"}
+  - {name: "Frigate (auth UI)",  port: 8971,  scheme: "https", path: "/"}
+  - {name: "Live VLM WebUI",     port: 8090,  scheme: "https", path: "/"}
+  - {name: "Home Assistant",     port: 8123,  scheme: "http",  path: "/"}
+  - {name: "Cosmos3-Edge API",   port: 8000,  scheme: "http",  path: "/v1/models"}
+  - {name: "ring-mqtt setup",    port: 55123, scheme: "http",  path: "/"}
+  - {name: "MQTT broker",        port: 1883,  tcp_only: true}
+  - {name: "Ring RTSP",          port: 8554,  tcp_only: true}
+  - {name: "VNC",                port: 5900,  tcp_only: true}

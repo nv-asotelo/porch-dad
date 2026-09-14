@@ -43,6 +43,42 @@ logger:
     # into a request - and that count is what overruns the engine's max_input_len.
     frigate.genai: debug
 
+# ---------------------------------------------------------------------------- recording pipeline
+# Ring cameras change resolution mid-session. Measured across 14 consecutive front_entryway
+# segments: 880x494, 1312x736, 1968x1104 and 2624x1472, at H.264 levels 3.2 / 4.0 / 5.0. With
+# `-c:v copy` each 10 s segment faithfully carries whatever the camera happened to be sending, so
+# the recordings directory ends up holding segments with four different SPS/PPS.
+#
+# Playback concatenates those segments into a single HLS stream whose init segment declares ONE
+# SPS/PPS. When the resolution changes mid-stream the browser rejects the packet:
+#     PipelineStatus::PIPELINE_ERROR_DECODE: Failed to send video packet for decoding
+# ffmpeg conceals the same discontinuity and keeps going, which is exactly why the segments look
+# fine from the command line while the browser refuses to play them.
+#
+# Confirmed by the control case already in this deployment: `pinky` is the one camera that never
+# adapts (1280x720 Constrained Baseline on every single segment) and the one camera whose
+# recordings always played back cleanly.
+#
+# This overrides the "recordings use stream copy" note at the top of the file. That note was
+# written when the only known cost of encoding was CPU; the cost was re-measured here and is
+# affordable: libx264 ultrafast at 1280x720 encodes a 7.3 s segment in 0.93 s (0.13x realtime,
+# ~25% of one core per camera), and ffmpeg already decodes the stream to produce the detect
+# output, so the incremental cost is the scale+encode alone. The CPU detector still dominates at
+# ~150%. Hardware encode was re-tested rather than assumed and is genuinely absent:
+# h264_nvenc -> "Cannot load libcuda.so.1", h264_v4l2m2m -> "Could not find a valid device".
+#
+#   fps=15          the source is variable-rate; measured packet gaps ran from 0.2 ms to 0.63 s
+#   scale=1280:720  one resolution for every camera and every segment
+#   profile/level   pinned, so every segment emits a byte-identical SPS
+#   pix_fmt         Ring sends full-range yuvj420p; yuv420p is what browsers expect
+#   g 30            a keyframe every 2 s, so segments always cut on one
+ffmpeg:
+  output_args:
+    record: >-
+      -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1
+      -vf fps=15,scale=1280:720 -c:v libx264 -preset ultrafast -tune zerolatency
+      -profile:v high -level 4.0 -pix_fmt yuv420p -g 30 -crf 28 -an
+
 record:
   enabled: true
   # Frigate 0.18 schema: record.retain{days,mode} was replaced by continuous/motion/alerts/
@@ -295,7 +331,7 @@ cameras:
   office:
     # df_doorbell_clownfish. Probed healthy: h264 480x480 (square doorbell aspect). Detect matches
     # the native geometry, so there is no downscale cost - far cheaper than the 2624x1472 cameras.
-    enabled: false
+    enabled: true
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/ac9fc327c838_live?video
@@ -319,7 +355,7 @@ cameras:
       format: "OFFICE DOORBELL  %a %d %b  %H:%M:%S"
 
   pinky:
-    enabled: false
+    enabled: true
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/cc3bfb1999ad_live?video

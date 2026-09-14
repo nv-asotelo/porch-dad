@@ -21,3 +21,7 @@ onnx/
 
 # Internal authoring scaffolding — never publish
 FACTS.md
+
+# cached event stills served by the RSS feed (runtime data)
+nvr/feed/snapshots/
+*.db

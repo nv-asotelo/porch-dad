@@ -119,9 +119,21 @@ documented example of the Ring input that does not work.
 These are measured facts about this board, not preferences. Changing them has consequences.
 
 **Orin Nano has no hardware video encoder.** NVIDIA states plainly that "the Jetson Orin Nano does
-not have the NVENC engine" and directs users to software libx264. Consequences: Frigate records by
-**stream copy** and never re-encodes, and **birdseye is disabled** because it composites and
-re-encodes. `h264_nvenc` fails on this board with "Invalid argument".
+not have the NVENC engine" and directs users to software libx264. **birdseye stays disabled** for
+that reason - it composites and re-encodes every camera continuously. Re-tested inside the Frigate
+container, both hardware encoders the ffmpeg build advertises fail at runtime:
+
+```
+h264_nvenc    -> Cannot load libcuda.so.1
+h264_v4l2m2m  -> Could not find a valid device
+```
+
+An encoder appearing in `ffmpeg -encoders` is not evidence the silicon exists.
+
+Recording, however, **does** re-encode - see [Recordings that will not play](#recordings-that-will-
+not-play-in-a-browser) below. Stream copy was the original choice, and it turned out to be the cause
+of unplayable recordings; the encode was measured before being accepted rather than assumed
+unaffordable.
 
 **JetPack's bundled ffmpeg is a stripped decode-only build.** `7:8.0.1-nvidia1` has **no `scale`
 filter, no `lavfi` input, and no software encoders** — only NVENC encoders that this board cannot
@@ -466,6 +478,30 @@ other way - sized for one snapshot (~250 prompt tokens) plus 512 generated, with
 `maxKVCacheCapacity 1024` per Jetson AI Lab's own Orin Nano guidance. It is the smallest of the
 three and loses nothing usable.
 
+**All three engines are equally accurate.** The names describe speed, because speed is the only axis
+that separates them. Each engine re-ran the identical 23-frame set, scored by the same classifier
+against the same hand-checked truth set:
+
+| Engine | Alert accuracy | Avg latency | RAM |
+|---|---|---|---|
+| **Fast (v2)** | 95.7% (22/23) | **208 ms** | 3.692 GB |
+| Medium (v1) | 95.7% (22/23) | 443 ms | 3.410 GB |
+| Slow (v3) | 95.7% (22/23) | 482 ms | 3.395 GB |
+
+Identical scores, and all three miss the *same* frame (a small dog at a person's feet) - a
+perception limit of the shared INT4 weights, not an engine difference. The engines differ only in
+context budget, which a single-snapshot workload never exercises.
+
+The latency ordering is the counter-intuitive part: the **largest-context build is the fastest**,
+because it spends the fewest tokens per frame (170 vs 320) and so does the least prefill work.
+Context size and per-frame token spend are set independently, and it is the token spend that drives
+latency. Anyone reasoning "bigger context = slower" or "more tokens = more accurate" gets both
+backwards here.
+
+Caveat worth stating: 23 frames is a small set, and a tie across three engines is exactly what too
+little resolving power looks like. The honest claim is that no accuracy difference is detectable at
+this sample size - not that none exists.
+
 **RAM is dominated by fixed costs**, which is why the tunable limits barely move it: 0.818 GB LLM
 engine + 0.915 GB visual engine + 0.500 GB embeddings = 2.23 GB of the 3.4 GB. Engine limits are
 worth roughly 300 MB in total. The only remaining large lever is INT4 on the vision tower.
@@ -579,3 +615,90 @@ Two rejected alternatives, both measured:
 
 Headlines are also cleaned before they reach the phone: *"Two cars are parked in a driveway, viewed
 through a fisheye lens that distorts the perspective"* becomes *"Two cars are parked in a driveway."*
+
+
+## Recordings that will not play in a browser
+
+Symptom, from Chromium's media pipeline while scrubbing the Frigate recordings timeline:
+
+```
+Failed to play recordings (error 3): PipelineStatus::PIPELINE_ERROR_DECODE:
+Failed to send video packet for decoding:
+{timestamp=114367333 duration=45188 size=28752 is_key_frame=0 encrypted=0}
+```
+
+**Cause: Ring cameras change resolution mid-session, and stream copy preserves that faithfully.**
+Fourteen consecutive `front_entryway` segments held four different resolutions:
+
+| Resolution | H.264 level |
+|---|---|
+| 880x494 | 3.2 |
+| 1312x736 | 4.0 |
+| 1968x1104 | 5.0 |
+| 2624x1472 | 5.0 |
+
+Playback concatenates 10-second segments into one HLS stream whose init segment declares a single
+SPS/PPS. A mid-stream resolution change violates it and the browser rejects the packet.
+
+The control case was already in the deployment: **`pinky` never adapts** (1280x720 Constrained
+Baseline on every segment) and is the one camera whose recordings always played cleanly. Per-camera
+decode-error counts made it plain - the adapting cameras threw 1-5 errors per segment, `pinky` zero.
+
+**Why this hides from the command line:** `ffmpeg -f null -` conceals the discontinuity and reports
+success. The files look fine from a shell and fail in a browser, because ffmpeg's decoder is
+permissive and Chromium's is not. Verifying with ffmpeg alone would have cleared a broken file.
+
+### Two hypotheses that measurement killed
+
+Worth recording, because both sounded right:
+
+1. **"`+discardcorrupt` is punching holes in the GOP."** Plausible - it drops damaged packets, so
+   surviving P-frames reference frames that are gone. Tested by capturing the live stream with and
+   without it: **removing it made things worse** (2/6/0 decode errors vs 0/0/0). It was helping.
+2. **"The timestamps are non-monotonic."** A remux did warn `non monotonically increasing dts`. But
+   probing the packets on disk showed **zero** violations - the warnings came from the remux
+   rounding into a coarser timebase, not from the files. A diagnostic can manufacture the very
+   symptom it is used to look for.
+
+### The fix
+
+Normalize every recorded segment to one set of stream parameters (`ffmpeg.output_args.record`):
+
+```yaml
+ffmpeg:
+  output_args:
+    record: >-
+      -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1
+      -vf fps=15,scale=1280:720 -c:v libx264 -preset ultrafast -tune zerolatency
+      -profile:v high -level 4.0 -pix_fmt yuv420p -g 30 -crf 28 -an
+```
+
+| Flag | Why |
+|---|---|
+| `fps=15` | source is variable-rate; measured packet gaps ran 0.2 ms to 0.63 s |
+| `scale=1280:720` | one resolution for every camera and every segment |
+| `-profile`/`-level` | pinned, so every segment emits a byte-identical SPS |
+| `-pix_fmt yuv420p` | Ring sends full-range `yuvj420p`; browsers expect `yuv420p` |
+| `-g 30` | a keyframe every 2 s, so segments always cut on one |
+
+**Cost, measured before accepting it:** libx264 ultrafast at 1280x720 encodes a 7.3 s segment in
+0.93 s - 0.13x realtime, roughly 25% of one core per camera. ffmpeg already decodes the stream to
+produce the detect output, so the incremental cost is the scale and encode alone. The CPU detector
+still dominates at ~150%. Load average returned to its pre-change level after the restart transient.
+
+Result - every new segment across all four cameras, where before there were four resolutions:
+
+```
+front_entryway   Constrained Baseline,1280,720,yuv420p   10.000s
+front_driveway   Constrained Baseline,1280,720,yuv420p   10.000s
+office           Constrained Baseline,1280,720,yuv420p   10.000s
+pinky            Constrained Baseline,1280,720,yuv420p   10.000s
+```
+
+Durations are now exactly 10.000 s rather than ragged 7.3-13.5 s, because the stream is CFR.
+`-tune zerolatency` disables CABAC and B-frames, so the output lands on Constrained Baseline
+despite `-profile:v high` - which is the most compatible profile, and exactly what `pinky` was
+already producing.
+
+**This does not repair recordings made before the change.** They still hold mixed resolutions and
+will still fail to play. Only segments written after the restart are normalized.
