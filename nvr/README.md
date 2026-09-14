@@ -1016,3 +1016,35 @@ and logged **zero lines in 30 minutes**.
 
 Note `/proc/pressure/memory` does not exist on this image, so `systemd-oomd` is disabled and there
 is no userspace OOM protection — the kernel OOM killer is the only backstop.
+
+
+### What survives a reboot, and the one thing that does not
+
+Verified before a planned restart:
+
+| | |
+|---|---|
+| `MemorySwapMax=0` drop-in | present in `/etc/systemd/system/cosmos3-edge-shim.service.d/` |
+| `vm.swappiness=10` | present in `/etc/sysctl.d/99-porchdad-swap.conf` |
+| shim, WebUI, porch-feed, frigate-notify | all `boot=enabled` |
+| frigate, ring-mqtt, mosquitto, homeassistant | all `restart=unless-stopped` |
+| camera on/off state | persisted by Frigate in `/config/.runtime_state.json` — `front_entryway` ON, `front_driveway` ON, `office` OFF, `pinky` OFF |
+
+**The exception: `gdm` comes back.** It is `boot=static`, pulled in by the default target:
+
+```
+$ systemctl get-default
+graphical.target
+```
+
+So the ~243 MB desktop session that was stopped to make room returns on every boot. On a board
+where the model is now pinned in RAM and cannot swap, that 243 MB is the difference between
+comfortable headroom and an OOM kill. If the Orin is always driven headless — the demo runs from
+another machine's browser — this is the persistent fix:
+
+```bash
+sudo systemctl set-default multi-user.target   # revert: set-default graphical.target
+```
+
+Left unset here rather than changed silently, because it removes the local GUI entirely and that
+should be a deliberate choice, not a side effect of a memory fix.
