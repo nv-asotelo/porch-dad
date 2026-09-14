@@ -38,6 +38,10 @@ birdseye:
 
 logger:
   default: info
+  logs:
+    # Reveals "Sending N images ...", which is the only way to see how many frames GenAI packs
+    # into a request - and that count is what overruns the engine's max_input_len.
+    frigate.genai: debug
 
 record:
   enabled: true
@@ -80,6 +84,9 @@ genai:
     base_url: http://host.docker.internal:8000/v1
     api_key: "none"
     model: cosmos3-edge
+    provider_options:
+      # The engine's hard input ceiling. Frigate was sending 1866 tokens against max_input_len 1536.
+      context_size: 1536
     roles:
       - descriptions
 
@@ -188,7 +195,12 @@ objects:
 
 review:
   genai:
-    enabled: true
+    # Disabled: review summaries pack many thumbnails into one request (measured ~1866 tokens),
+    # which overruns the visual engine's max_image_tokens: 1024 and its max_input_len: 1536. Object
+    # descriptions send a single snapshot (~240 tokens) and fit comfortably, so review GenAI was
+    # starving the feature that actually matters. Re-enable only after rebuilding the engine with a
+    # larger max_image_tokens/--maxInputLen.
+    enabled: false
     alerts: true
     detections: true
     additional_concerns:
@@ -205,10 +217,10 @@ cameras:
   # when processing input", because ring-mqtt's go2rtc advertises two competing audio codecs
   # (default_query: video&audio=aac&audio=opus) and the negotiation breaks the parse.
   #
-  # POWER WARNING: Frigate's continuous detect holds the RTSP stream open permanently. That is fine
-  # for a mains/transformer-powered camera and will flatten a BATTERY camera in hours. Cameras below
-  # marked BATTERY ship disabled on purpose - leave them on the event-driven path (ring_* in
-  # bridge/config.yaml), which needs no live stream and costs them nothing.
+  # POWER NOTE: continuous detect holds each RTSP stream open permanently, which drains battery-
+  # powered Ring cameras. Operator has accepted that tradeoff here. The binding constraint is
+  # instead RESOURCES: with all six streaming, Frigate reached 1.557GiB of its cap and the host fell
+  # to ~1GB free, alongside a model holding ~3.3GB.
   #
   # CPU WARNING: these streams are 2624x1472. Decode is on CPU (Docker here has no nvidia runtime),
   # so each enabled camera is expensive. Enable a few, run `docker stats` and `uptime`, and only
@@ -317,7 +329,7 @@ cameras:
       format: "OFFICE DOORBELL  %a %d %b  %H:%M:%S"
 
   pinky:
-    enabled: false          # cocoa_camera_v2 - likely BATTERY
+    enabled: true          # cocoa_camera_v2 - likely BATTERY
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/cc3bfb1999ad_live?video
@@ -341,7 +353,7 @@ cameras:
       format: "PINKY  %a %d %b  %H:%M:%S"
 
   patio_2nd_floor:
-    enabled: false          # cocoa_camera - likely BATTERY
+    enabled: true          # cocoa_camera - likely BATTERY
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/9c7613a0ec61_live?video
@@ -365,7 +377,7 @@ cameras:
       format: "2ND FLOOR PATIO  %a %d %b  %H:%M:%S"
 
   driveway_2nd_floor:
-    enabled: false          # cocoa_camera - likely BATTERY
+    enabled: true          # cocoa_camera - likely BATTERY
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/649a631f4214_live?video

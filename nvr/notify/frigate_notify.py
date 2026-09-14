@@ -41,10 +41,17 @@ def event_detail(eid: str) -> dict:
 
 
 def wait_for_description(eid: str, timeout: float) -> str | None:
-    """Poll until Frigate attaches the GenAI description, or give up."""
+    """Poll until Frigate attaches the GenAI description, or give up.
+
+    Frigate 0.18 stores the generated text at data.description, NOT at the top-level `description`
+    field (which stays null). Reading only the top-level field makes a perfectly working GenAI
+    pipeline look completely broken - every notification falls back to "Person detected (no
+    description generated)" while the model is in fact producing good output. Check both.
+    """
     deadline = time.time() + timeout
     while time.time() < deadline:
-        d = (event_detail(eid) or {}).get("description")
+        ev = event_detail(eid) or {}
+        d = (ev.get("data") or {}).get("description") or ev.get("description")
         if d:
             return d.strip()
         time.sleep(2.0)

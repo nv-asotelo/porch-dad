@@ -386,3 +386,57 @@ keeps Frigate's payload inside both limits.
 driveway, wearing a black shirt"*. At two: *"Person detected in front driveway, San Diego,
 California"* - a hallucinated location. At four: *"back view."* If descriptions look thin, reduce the
 frame count rather than raising the token budget.
+
+## Getting Cosmos captions into notifications: the two bugs
+
+**1. Frigate stores the description at `data.description`, not `description`.**
+
+The top-level `description` field stays `null` forever. Reading only that makes a fully working
+GenAI pipeline look completely broken - every notification falls back to "Person detected (no
+description generated)" while the model is in fact producing good output. Always check both:
+
+```python
+d = (event.get("data") or {}).get("description") or event.get("description")
+```
+
+**2. Review GenAI starves object GenAI on a small engine.**
+
+Two different subsystems call the model with wildly different payloads:
+
+| Caller | Payload | Tokens | Fits? |
+|---|---|---|---|
+| `objects.genai` (use_snapshot: true) | one snapshot | ~240 | yes |
+| `review.genai` | many thumbnails | ~1866 | **no** |
+
+`review.genai` overruns both `max_input_len: 1536` and `max_image_tokens: 1024`, and its failures
+look identical to object-description failures in the log. Measured headroom at various caps:
+
+| Per-image cap | Images that fit | First failure |
+|---|---|---|
+| 150 | 6 (970 tok) | 8 |
+| 110 | 10 (998 tok) | 12 |
+
+`max_image_tokens: 1024` is baked into the visual engine at build time and cannot be raised from
+config. So `review.genai` is disabled here; re-enable only after rebuilding the visual engine with a
+larger `max_image_tokens` and the LLM with a larger `--maxInputLen`.
+
+Verified working end to end - a real Ring event, captioned locally and pushed to a phone:
+
+> **Pinky** - *The person is a delivery worker, wearing a black t-shirt and dark pants, carrying a
+> black bag. They are opening a glass door to enter a building.*
+
+## Door state: it works when the image carries the information
+
+An earlier conclusion here was too broad. On a well-exposed frame the model reads door state
+correctly and even localises it:
+
+| Image | Probe | Answer | Truth |
+|---|---|---|---|
+| Patio, clear light | "open or closed?" | **OPEN** | OPEN ✓ |
+| Patio, clear light | "which one?" | "the **right** glass door is standing open" | ✓ |
+| Entryway, backlit | "open or closed?" ×4 | CLOSED | OPEN ✗ |
+
+The entryway failures were not a model limitation but an **image** limitation: that doorway is
+backlit with highlights clipped to pure white, and the state is not reliably readable by a human
+either. Vision-based door state is workable on a well-exposed camera. For "open too long" a physical
+contact sensor is still the better instrument, because that requirement is stateful and deterministic.
