@@ -957,3 +957,62 @@ Overnight false alerts **5 → 0**, with all nine real sightings preserved. Re-c
 judged 35-event set from the earlier accuracy work: **still 97.1% overall, 96.9% on the priority
 cameras, 0 false alarms** — no regression, same single known miss (an arriving car whose own
 caption says "parked").
+
+
+## "The Live VLM WebUI is crashing" — it was not crashing
+
+Symptom: the WebUI appeared to die during live streaming. It never did.
+
+```
+Active: active (running) since 12:39:30 PDT; 2h 33min ago
+NRestarts=0          Result=success
+```
+
+Zero restarts, zero errors in its log, zero OOM kills, and it was answering requests at ~265 ms
+throughout. What looked like a crash was a **stall**.
+
+### Cause: the model was being paged out to a disk-backed swapfile
+
+| | |
+|---|---|
+| Free RAM | 90 MB of 7.4 GB |
+| Swap in use | 1120 MB of 2048 MB (a `/swapfile`, i.e. disk) |
+| **Of that, model pages** | **566 MB** |
+| `vm.swappiness` | 60 (the image default) |
+
+Every inference that touched a swapped page had to fault it back from disk. That stalls the
+request long enough for the browser's WebRTC session to give up, and the client reads a dropped
+connection as a dead server.
+
+Model weights are the single worst thing on this box to page out, so:
+
+```ini
+# /etc/systemd/system/cosmos3-edge-shim.service.d/10-no-swap.conf
+[Service]
+MemorySwapMax=0
+```
+
+plus `vm.swappiness=10` and stopping the unused desktop session (gdm, 243 MB — the demo is driven
+from another machine's browser). Result: **swap 1120 → 335 MB, model swap 0, available RAM
+785 → 1008 MB.**
+
+### What was pinned, and what deliberately was not
+
+The same drop-in was applied to `live-vlm-webui` and then **reverted**. Its RSS under sustained
+streaming goes 212 MB idle → 622 MB peak → 544 MB steady. That looked like a leak at first and is
+not one — it grows and then reclaims. Pinning it would cost ~600 MB of hard RAM for frame buffers
+that tolerate paging perfectly well, on a board with ~400 MB spare.
+
+So only the model is pinned. The rule that falls out: **pin what is latency-critical and
+re-read constantly; let large, elastic, latency-tolerant buffers page.**
+
+### The tradeoff this introduces, stated plainly
+
+`MemorySwapMax=0` means the shim can no longer swap under pressure — so if the board genuinely runs
+out of RAM, the shim gets **OOM-killed** rather than degrading slowly. That is the better failure
+mode here (a 2 s restart beats minutes of thrash), but it is a real change in behaviour. Headroom
+is ~800 MB; the obvious reclaim if that tightens is Home Assistant, which is resident at ~318 MB
+and logged **zero lines in 30 minutes**.
+
+Note `/proc/pressure/memory` does not exist on this image, so `systemd-oomd` is disabled and there
+is no userspace OOM protection — the kernel OOM killer is the only backstop.
