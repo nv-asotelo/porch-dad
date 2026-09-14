@@ -464,6 +464,30 @@
 
 <!-- 25 -->
 <section class="slide">
+  <div class="eyebrow">Reproduce it</div>
+  <h2>One branch. One pass.<br>Eight gates.</h2>
+  <div class="two">
+    <div>
+      <p class="lead"><code>oneshot/cosmos3-edge-live-vlm-webui</code> — frozen, tagged
+      <code>oneshot-v1</code>, scoped to Cosmos3-Edge and the WebUI. Point an agent at
+      <code>AGENTS.md</code>; it runs from a freshly flashed board to a serving WebUI.</p>
+      <p class="lead">Every phase has a gate with a stated pass condition, because
+      <b>most failures in this stack are silent</b>.</p>
+    </div>
+    <div class="quote">
+      <b style="color:var(--green)">Why gates, not steps</b><br>
+      An all-zero quantized weight file <b style="color:var(--fg)">exports and builds cleanly</b><br>
+      KV 4096 builds fine, then <b style="color:var(--fg)">OOMs at load</b><br>
+      <code>EDGELLM_PLUGIN_PATH</code> defaults <b style="color:var(--fg)">relative</b><br>
+      The embedding cache makes a benchmark <b style="color:var(--fg)">~2× too fast</b>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:16px">github.com/nv-asotelo/porch-dad → branch
+  <code>oneshot/cosmos3-edge-live-vlm-webui</code></p>
+</section>
+
+<!-- 26 -->
+<section class="slide">
   <div class="eyebrow">Bottom line</div>
   <div class="big">3.38× decode<br>2.32 GB back</div>
   <p class="lead" style="margin-top:26px">Cosmos3-Edge runs comfortably on an 8 GB Orin Nano Super at
@@ -473,7 +497,7 @@
   <b style="color:var(--green)">a resident runtime</b> and <b style="color:var(--green)">MAXN_SUPER</b>.</p>
 </section>
 
-<div class="nav"><span id="cur">1</span> / <span id="tot">25</span></div>
+<div class="nav"><span id="cur">1</span> / <span id="tot">26</span></div>
 <div class="hint">← → or space · F fullscreen</div>
 
 <script>

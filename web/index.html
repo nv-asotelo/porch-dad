@@ -452,6 +452,19 @@ and as a spreadsheet at <code>docs/nvidia-contributors.csv</code>.</p>
   are doing real work and are not NVIDIA's.</p>
 </div>
 
+<div class="note">
+  <h4>Run this yourself: the frozen one-shot branch</h4>
+  <p style="margin:0">Everything above is reproducible in one pass from a freshly flashed board.
+  <a href="https://github.com/nv-asotelo/porch-dad/tree/oneshot/cosmos3-edge-live-vlm-webui"><code>oneshot/cosmos3-edge-live-vlm-webui</code></a> carries an
+  agent-executable runbook — eight phases, each with a gate that has a stated pass condition —
+  scoped to Cosmos3-Edge and the Live VLM WebUI only. Point a coding agent at
+  <code>AGENTS.md</code> and it runs end to end.</p>
+  <p style="margin:8px 0 0">That branch is <strong>frozen</strong> and also tagged
+  <a href="https://github.com/nv-asotelo/porch-dad/tree/oneshot-v1"><code>oneshot-v1</code></a>, so the reference cannot drift as <code>main</code>
+  continues. The gates are the substance: an all-zero quantized weight file exports and builds
+  perfectly cleanly and only surfaces as garbage captions at the very end, so it is gated twice.</p>
+</div>
+
 <h2 id="repos">Repository landscape</h2>
 <p>The guidance a developer needs is real, but scattered across six properties — and the repo named
 "framework" contains none of it.</p>
