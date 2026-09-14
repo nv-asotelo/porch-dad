@@ -67,8 +67,14 @@ logger:
 # ~150%. Hardware encode was re-tested rather than assumed and is genuinely absent:
 # h264_nvenc -> "Cannot load libcuda.so.1", h264_v4l2m2m -> "Could not find a valid device".
 #
-#   fps=15          the source is variable-rate; measured packet gaps ran from 0.2 ms to 0.63 s
-#   scale=1280:720  one resolution for every camera and every segment
+#   fps=5           the source is variable-rate; measured packet gaps ran 0.2 ms to 0.63 s.
+#                   Was 15. Lowered after measuring the real cost: the first estimate (~25% of one
+#                   core per camera) came from re-encoding an ALREADY-NORMALIZED 1280x720 segment,
+#                   but front_entryway actually streams 2624x1472 at 24 fps - 4.3x the pixels. In
+#                   production those two ffmpeg processes sat at 116-124% CPU each, ~5x the
+#                   estimate, and drove load average past 10 on a 6-core board. Detect only
+#                   consumes 4 fps; 5 fps is enough to review an event.
+#   scale=960:540   one resolution for every camera and every segment
 #   profile/level   pinned, so every segment emits a byte-identical SPS
 #   pix_fmt         Ring sends full-range yuvj420p; yuv420p is what browsers expect
 #   g 30            a keyframe every 2 s, so segments always cut on one
@@ -76,8 +82,28 @@ ffmpeg:
   output_args:
     record: >-
       -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1
-      -vf fps=15,scale=1280:720 -c:v libx264 -preset ultrafast -tune zerolatency
-      -profile:v high -level 4.0 -pix_fmt yuv420p -g 30 -crf 28 -an
+      -vf fps=5,scale=960:540 -c:v libx264 -preset ultrafast -tune zerolatency
+      -profile:v high -level 4.0 -pix_fmt yuv420p -g 10 -crf 28 -an
+
+# ---------------------------------------------------------------------------- live view
+# Without a go2rtc stream named after the camera, Frigate 0.18 serves live view via jsmpeg: it
+# takes the 640x360 detect stream, UPSCALES it to 1280x720 and encodes MPEG-1, per viewer, on the
+# CPU. Measured here as four idle mpeg1video processes that wake up the moment a live tile opens -
+# which is exactly the "spikes when I go to live view" symptom.
+#
+# A go2rtc stream whose name matches the camera lets Frigate hand the browser the H.264 stream over
+# WebRTC/MSE with NO server-side transcode. On a board with no NVENC that is the difference between
+# a viewer costing a core and costing nothing.
+go2rtc:
+  streams:
+    front_entryway:
+      - rtsp://ring-mqtt:8554/343ea4e653f3_live?video
+    front_driveway:
+      - rtsp://ring-mqtt:8554/343ea4e422a6_live?video
+    office:
+      - rtsp://ring-mqtt:8554/ac9fc327c838_live?video
+    pinky:
+      - rtsp://ring-mqtt:8554/cc3bfb1999ad_live?video
 
 record:
   enabled: true
@@ -145,8 +171,7 @@ objects:
   track:
     - person
     - car
-    - truck
-    # Wildlife. NOTE: the CPU detector uses a COCO model, which has NO class for deer, raccoon,
+        # Wildlife. NOTE: the CPU detector uses a COCO model, which has NO class for deer, raccoon,
     # coyote or squirrel. Frigate can only trigger on the classes below - a deer often trips
     # "horse"/"cow"/"sheep", and a squirrel may trip "cat" or nothing at all. That is acceptable
     # here: Frigate only needs to fire the event, and Cosmos3-Edge names the actual species.
@@ -172,8 +197,7 @@ objects:
     objects:
       - person
       - car
-      - truck
-      - bird
+            - bird
       - cat
       - dog
       - bear
@@ -271,8 +295,13 @@ cameras:
       height: 360
       fps: 2
     motion:
-      threshold: 40
-      contour_area: 40
+      # Raised from 40/40. Each distinct motion contour becomes a detection region, and CPU
+      # inference costs 94.8 ms per region on this board - so contour_area is the dial that
+      # actually controls detector load. At 40 every leaf and shadow edge spawned its own region
+      # and the detector sat near 110% of a core continuously. 150 ignores that class of motion,
+      # which is also what the alert policy wants: trees in wind are explicitly out of scope.
+      threshold: 50
+      contour_area: 150
     record:
       enabled: true
     snapshots:
@@ -293,10 +322,15 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 4
+      fps: 2
     motion:
-      threshold: 40
-      contour_area: 40
+      # Raised from 40/40. Each distinct motion contour becomes a detection region, and CPU
+      # inference costs 94.8 ms per region on this board - so contour_area is the dial that
+      # actually controls detector load. At 40 every leaf and shadow edge spawned its own region
+      # and the detector sat near 110% of a core continuously. 150 ignores that class of motion,
+      # which is also what the alert policy wants: trees in wind are explicitly out of scope.
+      threshold: 50
+      contour_area: 150
     record:
       enabled: true
     snapshots:
@@ -317,10 +351,15 @@ cameras:
       enabled: true
       width: 640
       height: 360
-      fps: 4
+      fps: 2
     motion:
-      threshold: 40
-      contour_area: 40
+      # Raised from 40/40. Each distinct motion contour becomes a detection region, and CPU
+      # inference costs 94.8 ms per region on this board - so contour_area is the dial that
+      # actually controls detector load. At 40 every leaf and shadow edge spawned its own region
+      # and the detector sat near 110% of a core continuously. 150 ignores that class of motion,
+      # which is also what the alert policy wants: trees in wind are explicitly out of scope.
+      threshold: 50
+      contour_area: 150
     record:
       enabled: true
     snapshots:

@@ -829,3 +829,75 @@ The 13.49 ms/token measured here independently reproduces the campaign's converg
 13.13 ms/token, on a different day and a differently loaded board.
 
 Reproduce with `bench/bench_live_webui.py`; the recorded run is `bench/live-webui-quiesced.json`.
+
+
+## Stabilising CPU: what actually costs what
+
+The board hit **load average 10.23 on 6 cores** with Frigate at **450%**. Measured the floor first,
+then worked down to it.
+
+**Baseline — porch-dad fully loaded, zero camera feeds:** shim, WebUI, Frigate, ring-mqtt, MQTT and
+Home Assistant all running, every camera disabled. **~11% system-wide**, load settling to 2.66.
+That is the floor, and it is what any camera cost is measured against.
+
+| | Peak | After | Baseline |
+|---|---|---|---|
+| Frigate | 450% | **132–163%** | 30% |
+| Load average | 10.23 | **3.32** | 2.66 |
+| System-wide CPU | ~89% busy | **33%** | ~11% |
+
+### The four things that were actually expensive
+
+**1. The record re-encode — my own measurement error.** Normalizing recordings to fix browser
+playback cost far more than estimated. The original figure (~25% of one core per camera) came from
+re-encoding an **already-normalized 1280x720 segment**. In production `front_entryway` streams
+**2624x1472 at 24 fps** — 4.3x the pixels — and those ffmpeg processes sat at **116–124%** each.
+Dropped the record output to `fps=5, scale=960:540`. Detect only consumes 2 fps; 5 fps is plenty to
+review an event.
+
+**2. Live view was transcoding per viewer.** With no `go2rtc:` or `live:` section, Frigate 0.18
+falls back to **jsmpeg**: it takes the 640x360 detect stream, *upscales* it to 1280x720 and encodes
+MPEG-1 on the CPU, per viewer. That is the "CPU spikes when I open live view" symptom exactly.
+Adding a `go2rtc` stream **named after each camera** lets Frigate hand the browser H.264 over
+WebRTC/MSE with no server-side transcode.
+
+**3. Motion sensitivity, not detect fps, drives the detector.** CPU inference costs **94.8 ms per
+region** on this board, so the dial that matters is how many regions motion produces.
+`contour_area: 40` meant every leaf edge and shadow spawned its own region and the detector ran
+near-continuously at **110%**. Raising it to `threshold: 50, contour_area: 150` took the detector to
+**52.6%** — a bigger win than halving detect fps, and it aligns with the alert policy, which already
+declares trees in wind out of scope.
+
+**4. `truck` was in `objects.track` and the model does not support it.** Frigate logged a warning
+per camera on every start. Removed.
+
+### Hardware decode is not available, and the reason is not the obvious one
+
+`h264_cuvid` is compiled into both ffmpeg builds, so this looks reachable. It is not:
+
+```
+container:  Cannot load libcuda.so.1          # libcuda is not mounted in
+host:       Cannot load libnvcuvid.so.1       # not on the linker path
+host + LD_LIBRARY_PATH=/opt/nvidia/l4t-gpu-libs/openrm:
+            CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+```
+
+`libnvcuvid.so.1` **does** exist, under `openrm` — but `openrm` is the discrete-GPU stack. Jetson
+reaches NVDEC through **V4L2**, not the CUVID API: `gst-inspect-1.0` finds `nvv4l2decoder`, and
+`/usr/lib/aarch64-linux-gnu/nvidia/libv4l2_nvcuvidvideocodec.so` is the Tegra path. So an ffmpeg
+pipeline cannot hardware-decode here regardless of how the libraries are wired. A GStreamer
+`nvv4l2decoder` pipeline is the remaining untested route.
+
+Software fallback that was measured but **not deployed**: `-skip_frame nonref` cut a decode+encode
+pass from 0.86 s to 0.38 s (2.3x). It was left out because it drops frames from the record path, and
+recording playback had only just been fixed — not worth risking for a second-order win.
+
+### What is left, and why
+
+The remaining ~130% is two ffmpeg processes decoding **2624x1472@24** and **1968x1104@15**. That
+decode is unavoidable in software: every frame must be decoded to produce even a 2 fps detect
+stream. Ring chooses that resolution and does not expose a substream, so the only real fix is
+hardware decode via GStreamer.
+
+Costs scale directly with what Ring decides to send, so expect this number to move on its own —
+Frigate was observed at 132%, 163% and 217% within ten minutes with no configuration change at all.
