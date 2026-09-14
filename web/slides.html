@@ -359,6 +359,53 @@
 
 <!-- 19 -->
 <section class="slide">
+  <div class="eyebrow">Where every piece came from</div>
+  <h2>Nine NVIDIA projects, one<br>inference path</h2>
+  <table>
+    <tr><th>Layer</th><th>Project</th><th>What it contributed here</th></tr>
+    <tr><td>Front end</td><td><code>NVIDIA-AI-IOT/live-vlm-webui</code></td><td>WebRTC capture + OpenAI-compatible client. <b>156 of 156 commits by one person</b></td></tr>
+    <tr><td>Runtime</td><td><code>NVIDIA/TensorRT-Edge-LLM</code></td><td>Resident <code>LLMRuntime</code>, CUDA graph decode, W4A16 checkpoint contract, runtime-read image token budget</td></tr>
+    <tr><td>Model</td><td><code>nvidia/Cosmos3-Edge</code></td><td>The 4B VLM. Support landed in runtime <b>v0.10.0</b>; the visual patch-layout fix in <b>v0.10.1</b></td></tr>
+    <tr><td>INT4 kernel</td><td><code>NVIDIA/cutlass</code> (cuteDSL)</td><td><code>Int4GroupwiseGemmPluginV2</code> — 169 nodes in the exported ONNX, one per quantized linear</td></tr>
+    <tr><td>Vision attention</td><td><code>libNvInfer_edgellm_plugin.so</code></td><td><code>ViTAttentionPlugin</code></td></tr>
+    <tr><td>Quant format</td><td><code>NVIDIA/TensorRT-Model-Optimizer</code></td><td>Executable spec of the W4A16 on-disk contract — scales matched to <b>3.7e-09</b></td></tr>
+    <tr><td>Engine</td><td><code>NVIDIA/TensorRT</code> 10.16.2.10</td><td>Plugin resolution at build <i>and</i> deserialization time</td></tr>
+    <tr><td>Bindings</td><td><code>NVIDIA/cuda-python</code>, CUDA 13.2</td><td>Runtime CUDA access</td></tr>
+    <tr><td>Platform</td><td>JetPack 7.2.1 / L4T R39.2.1</td><td><code>nvpmodel -m 2</code>, <code>jetson_clocks</code> — GPU 306 → 1020 MHz, EMC 2133 → 3199 MHz</td></tr>
+  </table>
+</section>
+
+<!-- 20 -->
+<section class="slide">
+  <div class="eyebrow">The actual thesis</div>
+  <h2>The pieces all exist.<br>Nobody had converged them.</h2>
+  <div class="two">
+    <div>
+      <p class="lead">Not one optimization in this project required new NVIDIA technology. The
+      resident runtime, the CUDA graph, the INT4 kernel, the format contract, the runtime-tunable
+      image budget, the power modes — <b>all of it already shipped</b>.</p>
+      <p class="lead">What did not exist was the <b>intersection</b>: no published path takes this
+      model, on this board, through these nine projects, to a measured number.</p>
+    </div>
+    <div class="quote">
+      <b style="color:var(--green)">What convergence bought</b><br>
+      13.91 s → <b style="color:var(--fg)">2.07 s</b> cold start<br>
+      43.29 → <b style="color:var(--fg)">13.13 ms/token</b><br>
+      engine 3.135 → <b style="color:var(--fg)">0.818 GB</b><br>
+      <b style="color:var(--fg)">4.8 / 7.4 GB</b> resident on an 8 GB board
+    </div>
+  </div>
+  <div class="quote warn" style="margin-top:18px;font-size:clamp(13px,1.3vw,16px)">
+    <b style="color:var(--warn)">Two things this slide does not claim</b> — the contributor lists
+    behind these projects are <b style="color:var(--fg)">repo-level, not feature-level</b>: cutting a
+    release is not the same as writing the kernel. And the stack is NVIDIA only in its
+    <b style="color:var(--fg)">optimization path</b> — the quantizer itself runs on PyTorch and
+    Hugging Face <code>safetensors</code>, and the WebUI on aiortc, PyAV and OpenCV.
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide">
   <div class="eyebrow">The ecosystem</div>
   <h2>The repo named "framework"<br>has none of this</h2>
   <table>
@@ -371,7 +418,7 @@
   </table>
 </section>
 
-<!-- 20 -->
+<!-- 22 -->
 <section class="slide">
   <div class="eyebrow">The gap</div>
   <h2>Nobody documents<br>the intersection</h2>
@@ -385,7 +432,7 @@
   is exactly what an 8 GB board needs — and exactly what an unexecuted community checkpoint was trying to fill.</p>
 </section>
 
-<!-- 21 -->
+<!-- 23 -->
 <section class="slide">
   <div class="eyebrow">Recommendations</div>
   <h2>Make cosmos-framework the index,<br>not a second copy</h2>
@@ -401,7 +448,7 @@
   A thin accurate index beats a thick copy that drifts.</p>
 </section>
 
-<!-- 22 -->
+<!-- 24 -->
 <section class="slide">
   <div class="eyebrow">Caveats</div>
   <h2>What this does not claim</h2>
@@ -415,7 +462,7 @@
   </ul>
 </section>
 
-<!-- 23 -->
+<!-- 25 -->
 <section class="slide">
   <div class="eyebrow">Bottom line</div>
   <div class="big">3.38× decode<br>2.32 GB back</div>
@@ -426,7 +473,7 @@
   <b style="color:var(--green)">a resident runtime</b> and <b style="color:var(--green)">MAXN_SUPER</b>.</p>
 </section>
 
-<div class="nav"><span id="cur">1</span> / <span id="tot">23</span></div>
+<div class="nav"><span id="cur">1</span> / <span id="tot">25</span></div>
 <div class="hint">← → or space · F fullscreen</div>
 
 <script>

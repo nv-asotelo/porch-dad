@@ -74,7 +74,7 @@
       <a href="#results">Results</a><a href="#live">Live demo</a><a href="#method">Methodology</a>
       <a href="#engine">Engine improvements</a><a href="#rounds">Rounds</a>
       <a href="#int4">INT4</a><a href="#tradeoff">Quality tradeoff</a><a href="#negative">Negative results</a>
-      <a href="#repos">Repo landscape</a><a href="#recs">Recommendations</a><a href="#caveats">Caveats</a>
+      <a href="#stack">The NVIDIA stack</a><a href="#repos">Repo landscape</a><a href="#recs">Recommendations</a><a href="#caveats">Caveats</a>
     </div>
   </div>
 </header>
@@ -402,6 +402,55 @@ Currently deployed at 320, original preserved at <code>config.json.512.bak</code
 </tbody></table>
 <p>The first row is the most actionable: a documented environment variable that exports cleanly and then fails
 at build time with an error naming the wrong cause.</p>
+
+<h2 id="stack">Every optimization piece was already NVIDIA's</h2>
+
+<p>Not one optimization in this project required new NVIDIA technology. The resident runtime, the
+CUDA-graph decode, the INT4 matmul kernel, the on-disk quantization format contract, the
+runtime-tunable image-token budget, the power modes — <strong>all of it already shipped</strong>.
+What did not exist was the <strong>intersection</strong>: no published path takes this model, on
+this board, through these projects, to a measured number.</p>
+
+<table>
+  <thead><tr><th>Layer</th><th>Project</th><th>What it contributed here</th></tr></thead>
+  <tbody>
+    <tr><td>Front end</td><td><a href="https://github.com/NVIDIA-AI-IOT/live-vlm-webui"><code>NVIDIA-AI-IOT/live-vlm-webui</code></a></td>
+        <td>WebRTC capture plus an OpenAI-compatible client, which is why it dropped onto the shim with no glue. <strong>156 of 156 commits by a single author.</strong></td></tr>
+    <tr><td>Runtime</td><td><a href="https://github.com/NVIDIA/TensorRT-Edge-LLM"><code>NVIDIA/TensorRT-Edge-LLM</code></a></td>
+        <td>Resident <code>LLMRuntime</code>, <code>capture_decoding_cuda_graph()</code>, the W4A16 checkpoint contract, and <code>max_image_tokens_per_image</code> read at runtime</td></tr>
+    <tr><td>Model</td><td><a href="https://huggingface.co/nvidia/Cosmos3-Edge"><code>nvidia/Cosmos3-Edge</code></a></td>
+        <td>The 4B VLM. Support landed in runtime <strong>v0.10.0</strong>; the Cosmos3 Reasoner visual patch-layout fix in <strong>v0.10.1</strong>, which is what this deployment runs</td></tr>
+    <tr><td>INT4 kernel</td><td><a href="https://github.com/NVIDIA/cutlass"><code>NVIDIA/cutlass</code></a> (cuteDSL)</td>
+        <td><code>Int4GroupwiseGemmPluginV2</code> — <strong>169</strong> nodes in the exported ONNX, one per quantized linear. This is the mechanism behind the decode win</td></tr>
+    <tr><td>Vision attention</td><td><code>libNvInfer_edgellm_plugin.so</code></td>
+        <td><code>ViTAttentionPlugin</code>, resolved by TensorRT at both build and deserialization time</td></tr>
+    <tr><td>Quant format</td><td><a href="https://github.com/NVIDIA/TensorRT-Model-Optimizer"><code>NVIDIA/TensorRT-Model-Optimizer</code></a></td>
+        <td>An executable spec of the W4A16 on-disk contract (<code>INT4_BLOCKWISE_WEIGHT_ONLY_CFG</code>); the hand-written quantizer's scales matched it to <strong>3.7e-09</strong></td></tr>
+    <tr><td>Engine</td><td><a href="https://github.com/NVIDIA/TensorRT"><code>NVIDIA/TensorRT</code></a> 10.16.2.10</td>
+        <td>The inference engine the plugins are built into</td></tr>
+    <tr><td>Bindings</td><td><a href="https://github.com/NVIDIA/cuda-python"><code>NVIDIA/cuda-python</code></a>, CUDA 13.2</td>
+        <td>Runtime CUDA access</td></tr>
+    <tr><td>Platform</td><td>JetPack 7.2.1 / L4T R39.2.1</td>
+        <td><code>nvpmodel -m 2</code> (MAXN_SUPER) and <code>jetson_clocks</code> — GPU 306 → 1020 MHz, EMC 2133 → 3199 MHz</td></tr>
+  </tbody>
+</table>
+
+<p>Contributor names for each of these, with handles and links, are in
+<a href="https://github.com/nv-asotelo/porch-dad/blob/main/ACKNOWLEDGEMENTS.md">ACKNOWLEDGEMENTS.md</a>
+and as a spreadsheet at <code>docs/nvidia-contributors.csv</code>.</p>
+
+<div class="note warn">
+  <h4>Two things this table does not claim</h4>
+  <p style="margin:0"><strong>The contributor lists behind these projects are repo-level, not
+  feature-level.</strong> <code>NVIDIA/TensorRT-Edge-LLM</code> in particular publishes squashed
+  release drops — 26 commits for the whole project — so its history records who <em>cut a release</em>,
+  not who wrote a feature. Being top contributor to CUTLASS is not evidence of having written
+  <code>Int4GroupwiseGemmPluginV2</code>.</p>
+  <p style="margin:8px 0 0"><strong>The stack is NVIDIA in its optimization path, not end to
+  end.</strong> The quantizer in this repo runs on PyTorch and Hugging Face
+  <code>safetensors</code>; the WebUI depends on aiortc, PyAV, OpenCV and the OpenAI client. Those
+  are doing real work and are not NVIDIA's.</p>
+</div>
 
 <h2 id="repos">Repository landscape</h2>
 <p>The guidance a developer needs is real, but scattered across six properties — and the repo named

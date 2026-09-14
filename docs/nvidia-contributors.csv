@@ -1,0 +1,31 @@
+Name,GitHub handle,Project,Repo URL,Layer in the Cosmos3-Edge + WebUI stack,Commits to that repo,Likely contact for,Attribution confidence
+Chitoku YATO,tokk-nv,Live VLM WebUI,https://github.com/NVIDIA-AI-IOT/live-vlm-webui,Front end (WebRTC capture + OpenAI-compatible client),156,The entire WebUI - sole author of all 156 commits,HIGH - sole contributor; safe to credit individually
+Luxiao Zheng,nvluxiaoz,TensorRT-Edge-LLM,https://github.com/NVIDIA/TensorRT-Edge-LLM,Inference runtime,18,Cut v0.10.1 (PR #196) which fixed the Cosmos3 Reasoner visual patch layout,MEDIUM - release authorship only; repo uses squashed release drops
+Ever Wong,ever-wong,TensorRT-Edge-LLM,https://github.com/NVIDIA/TensorRT-Edge-LLM,Inference runtime,2,Cut v0.10.0 (PR #171) which ADDED Cosmos3-Edge multimodal reasoning support,MEDIUM - release authorship only
+Xingkai Zhou,nvxingkaiz,TensorRT-Edge-LLM,https://github.com/NVIDIA/TensorRT-Edge-LLM,Inference runtime,2,Cut v0.7.0 and v0.7.1 releases,MEDIUM - release authorship only
+,jhalabi-nv,TensorRT-Edge-LLM,https://github.com/NVIDIA/TensorRT-Edge-LLM,Inference runtime,2,Cut v0.9.0 and v0.9.1 releases,LOW - no published name; commit metadata shows jhalabi@nvidia.com
+,JCalafato,TensorRT-Edge-LLM,https://github.com/NVIDIA/TensorRT-Edge-LLM,Inference runtime,1,Cut v0.8.0 release,LOW - no published name; commit metadata shows jcalafato@nvidia.com
+Po-Wei (Vincent),poweiw,TensorRT-Edge-LLM,https://github.com/NVIDIA/TensorRT-Edge-LLM,Inference runtime,1,,LOW - no surname published
+Haicheng Wu,hwu36,CUTLASS / cuteDSL,https://github.com/NVIDIA/cutlass,INT4 W4A16 matmul kernel (Int4GroupwiseGemmPluginV2),131,CUTLASS generally - NOT confirmed as author of the INT4 groupwise GEMM specifically,LOW - repo-level only; verify feature ownership in Glean
+Andrew Kerr,kerrmudgeon,CUTLASS / cuteDSL,https://github.com/NVIDIA/cutlass,INT4 W4A16 matmul kernel,69,CUTLASS generally,LOW - repo-level only
+,Junkai-Wu,CUTLASS / cuteDSL,https://github.com/NVIDIA/cutlass,INT4 W4A16 matmul kernel,39,,LOW - no published name; repo-level only
+Aniket Shivam,ANIKET-SHIVAM,CUTLASS / cuteDSL,https://github.com/NVIDIA/cutlass,INT4 W4A16 matmul kernel,22,CUTLASS generally,LOW - repo-level only
+Yujia Zhai,yzhaiustc,CUTLASS / cuteDSL,https://github.com/NVIDIA/cutlass,INT4 W4A16 matmul kernel,18,CUTLASS generally,LOW - repo-level only
+Keval Morabia,kevalmorabia97,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle (INT4_BLOCKWISE_WEIGHT_ONLY_CFG),292,modelopt generally; top contributor by a wide margin,MEDIUM - repo-level; modelopt was used as a format reference only
+Chenjie Luo,cjluo-nv,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle,101,modelopt generally,LOW - repo-level only
+Ajinkya Rasane,ajrasane,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle,55,modelopt generally,LOW - repo-level only
+Chenhan D. Yu,ChenhanYu,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle,53,modelopt generally,LOW - repo-level only
+,h-guo18,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle,50,,LOW - no published name
+Zhiyu,Edwardf0t1,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle,49,,LOW - first name only published
+Gwena Cunha,gcunhase,TensorRT Model Optimizer,https://github.com/NVIDIA/TensorRT-Model-Optimizer,Quantization format oracle,44,modelopt generally,LOW - repo-level only
+Rajeev Rao,rajeevsrao,TensorRT,https://github.com/NVIDIA/TensorRT,Inference engine (10.16.2.10),198,TensorRT open-source components,LOW - repo-level; nothing I used is confirmed to be theirs
+Kevin Chen,kevinch-nv,TensorRT,https://github.com/NVIDIA/TensorRT,Inference engine,74,TensorRT open-source components; ONNX parser,LOW - repo-level only
+Shuyue Lan,shuyuelan,TensorRT,https://github.com/NVIDIA/TensorRT,Inference engine,29,,LOW - repo-level only
+Xiaodong (Vincent) Huang,ttyio,TensorRT,https://github.com/NVIDIA/TensorRT,Inference engine,25,,LOW - repo-level only
+Leo Fang,leofang,cuda-python,https://github.com/NVIDIA/cuda-python,CUDA bindings used by the runtime,580,cuda-python generally; top contributor,LOW - transitive dependency only
+Keenan Simpson,keenan-simpson,cuda-python,https://github.com/NVIDIA/cuda-python,CUDA bindings,356,cuda-python generally,LOW - transitive dependency only
+Michael Droettboom,mdboom,cuda-python,https://github.com/NVIDIA/cuda-python,CUDA bindings,229,cuda-python generally,LOW - transitive dependency only
+Ralf W. Grosse-Kunstleve,rwgk,cuda-python,https://github.com/NVIDIA/cuda-python,CUDA bindings,224,cuda-python generally,LOW - transitive dependency only
+NVIDIA Cosmos team (no individual attribution published),,Cosmos3-Edge,https://huggingface.co/nvidia/Cosmos3-Edge,The 4B VLM itself,,The model - credit the team as a unit,N/A - HuggingFace model card publishes no per-contributor history
+NVIDIA Jetson platform (no public repo),,JetPack 7.2.1 / L4T R39.2.1,,"Power modes and clocks: nvpmodel -m 2 (MAXN_SUPER), jetson_clocks, tegrastats",,Platform software,N/A - binary distribution; no commit history to attribute
+NVIDIA (no public repo),,cuDNN / nvidia-ml-py,,Libraries in the runtime path,,,N/A - no public repo
