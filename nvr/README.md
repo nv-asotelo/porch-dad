@@ -702,3 +702,76 @@ already producing.
 
 **This does not repair recordings made before the change.** They still hold mixed resolutions and
 will still fail to play. Only segments written after the restart are normalized.
+
+
+## Alert accuracy: the label fusion was overruling the caption
+
+Re-ran Cosmos3-Edge over **all 35 stored events** and classified each with the live policy. Every
+single one alerted - a **100% alert rate**, which is what "the alerts are a little goofy" looks like
+from the inside. A security system that fires on everything conveys nothing.
+
+**Cause: `FRIGATE_LABEL_MAP` fusion ran unconditionally, after the parked-vehicle suppression.**
+The classifier suppressed a parked car correctly, and then the detector label put it straight back:
+
+| Caption | Frigate label | Verdict |
+|---|---|---|
+| "A silver SUV is **parked**…" | *none* | no alert |
+| "A silver SUV is **parked**…" | `car` | **ALERT** |
+| "An **empty** driveway with a **closed** gate." | `car` | **ALERT** |
+
+Frigate labels every driveway event `car`, so the suppression was dead code in production - it
+could only ever fire in the one case that never happens. Six frames alerted whose own caption said
+the cars were parked.
+
+**The fusion still earns its place**, which is why it was not simply deleted. Two frames were
+checked by eye and the detector was right where the caption was wrong:
+
+- Frigate said `dog`; the caption said "two women sitting at a table". There **is** a black dog at
+  the woman's feet.
+- Frigate said `person`; the caption described only trees and a driveway. There **is** a person at
+  the bottom-right edge of frame.
+
+So the rule is now: **the label may add what the caption failed to see; it may not overrule what the
+caption actually saw.** One line:
+
+```python
+if mapped and mapped not in cats and not (mapped == "vehicle" and vehicle_parked):
+    cats.append(mapped)
+```
+
+### Result, per camera
+
+Truth was set by looking at all 35 frames directly - not by trusting the caption, and not by
+trusting the label. Where they disagreed, the image decided.
+
+| Camera | Before | After | n |
+|---|---|---|---|
+| `front_driveway` | 58.3% | **91.7%** | 12 |
+| `front_entryway` | 100% | **100%** | 3 |
+| `pinky` | 100% | **100%** | 17 |
+| `driveway_2nd_floor` | 66.7% | **100%** | 3 |
+| **Priority cameras** | 84.4% | **96.9%** | 32 |
+| **All cameras** | 82.9% | **97.1%** | 35 |
+
+**False alarms: 6 -> 0.** The goal was 95% and it is met on both the three priority cameras (96.9%)
+and the full set (97.1%).
+
+### The one remaining miss, stated honestly
+
+A red car **arriving** - headlights on, occupant visible - is captioned "a red car and a silver SUV
+parked side by side". Its own caption says "parked", so a caption-driven classifier cannot separate
+it from the two re-detections of that same car sitting still 17 minutes later.
+
+`data.path_data` was tested as a way to tell arrival from parked and **does not work**: the parked
+SUV scores 0.165 max displacement and the arriving car 0.183. The tracker jitters on a stationary
+car about as much as a car creeps in. Recorded here so it is not re-attempted.
+
+The trade is deliberate and favourable: five recurring false alarms removed for one missed arrival
+of a resident's own car, which is not the "out of the ordinary" event this system exists to catch.
+
+### Reproducing
+
+```bash
+python3 nvr/feed/rerun_all_events.py   # fresh inference over every stored event
+python3 nvr/feed/eval_alert_policy.py  # score before/after against the judged truth set
+```

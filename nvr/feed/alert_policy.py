@@ -83,7 +83,9 @@ def classify(description: str, frigate_label: str | None = None) -> dict:
     # car, so firing on every mention of it would alert on the background on every single event -
     # measured: 3 false alarms in 23 frames. Scope is "movement of ... vehicles", so a parked car
     # is background unless Frigate itself raised a vehicle event (fused below).
-    if VEHICLE.search(d) and not PARKED_VEHICLE.search(d):
+    vehicle_seen = bool(VEHICLE.search(d))
+    vehicle_parked = vehicle_seen and bool(PARKED_VEHICLE.search(d))
+    if vehicle_seen and not vehicle_parked:
         cats.append("vehicle")
     if GATE_OPEN.search(d):
         cats.append("gate-open")
@@ -92,9 +94,21 @@ def classify(description: str, frigate_label: str | None = None) -> dict:
     if LIGHT_ON.search(d):
         cats.append("lights")
 
-    # Detector label wins on presence; the caption can only add to it.
+    # Detector label wins on presence; the caption can only add to it. It ADDS, and only adds -
+    # it must never resurrect a category the caption explicitly ruled out.
+    #
+    # This was measured, not theorised. Fusing the label unconditionally made the parked-vehicle
+    # rule above dead code in production: Frigate labels every driveway event "car", so the label
+    # re-added "vehicle" immediately after the caption suppressed it. Over 35 stored events the
+    # result was a 100% alert rate - every single event fired, including six frames whose own
+    # caption said the cars were parked, and one reading "An empty driveway with a closed gate."
+    #
+    # The fusion still earns its place for the other direction: on one frame Frigate labelled a dog
+    # the caption missed entirely, and on another it caught a person at the edge of frame. Both
+    # were confirmed by eye. So the label may add what the caption failed to see; it may not
+    # overrule what the caption actually saw.
     mapped = FRIGATE_LABEL_MAP.get((frigate_label or "").lower())
-    if mapped and mapped not in cats:
+    if mapped and mapped not in cats and not (mapped == "vehicle" and vehicle_parked):
         cats.append(mapped)
 
     moving = bool(MOTION.search(d)) and ({"person", "animal"} & set(cats))
