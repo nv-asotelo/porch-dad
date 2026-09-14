@@ -1,0 +1,54 @@
+# porch-feed: engine comparison feed for Cosmos3-Edge on Jetson Orin Nano.
+
+frigate_url: "http://127.0.0.1:5000"
+cosmos3_url: "http://127.0.0.1:8000"
+frigate_config_path: "/home/orin/nvr/frigate/config/config.yml"
+engine_symlink: "/opt/tensorrt-edgellm/models/default"
+
+mqtt_host: "127.0.0.1"
+mqtt_port: 1883
+
+db_path: "/home/orin/nvr/feed/feed.db"
+web_host: "0.0.0.0"
+web_port: 8096
+public_url: "http://<jetson-ip>:8096"
+
+# Frigate writes the GenAI description asynchronously after the event ends.
+description_wait_seconds: 40
+
+# Refuse to start another heavy service below this much free memory. The model holds ~3.3 GB of
+# 8 GB, and an OOM kill would take the model down rather than the service you just started.
+min_free_mb_to_start_service: 400
+
+# Engines, named for where each sits on the accuracy <-> performance axis. All three are INT4
+# W4A16; they differ only in the context/image-token budgets baked in at build time, which is what
+# drives both RAM footprint and how many frames can be fed per caption.
+engines:
+  v1:
+    name: "Balanced"
+    path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4/engines/reasoning"
+    profile: "maxInputLen 1536 · max_image_tokens 1024 · KV 2048 · 3.410 GB RSS"
+    notes: >-
+      The original build. Middle of the road: enough headroom for several frames per caption
+      without the footprint of the wide build.
+  v2:
+    name: "Wide-Context"
+    path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v2/engines/reasoning"
+    profile: "maxInputLen 3072 · max_image_tokens 2048 · KV 3072 · 3.692 GB RSS"
+    notes: >-
+      Accuracy-leaning in intent, heaviest in practice. Accepts the most frames per request, but
+      measurement showed captions DEGRADE past ~2 frames on this 4B model (6 frames returned
+      "person: 63% Confidence"), so the extra capacity costs 282 MB for little gain.
+  v3:
+    name: "Lean"
+    path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v3/engines/reasoning"
+    profile: "maxInputLen 1024 · max_image_tokens 640 · KV 1024 · 3.395 GB RSS"
+    notes: >-
+      Performance-leaning and the current default. Sized to the workload that actually produces the
+      best captions - one snapshot, ~250 prompt tokens - using the maxKVCacheCapacity 1024 that
+      Jetson AI Lab recommends for Orin Nano.
+
+# These stay on continuous RTSP no matter what; the toggle is locked in the UI.
+always_powered_cameras:
+  - front_entryway
+  - front_driveway

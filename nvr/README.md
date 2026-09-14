@@ -522,3 +522,60 @@ Two rules follow. **Naming a role primes it** - mention delivery workers and the
 And **prohibitions destabilise this model**: "do not guess" produced a false negative, the same
 failure class as "never state what is absent" collapsing to "No, no, no." Prefer positive
 constraints throughout.
+
+## Alert quality: 87% -> 95.7%, judged against the frames
+
+Alerts were noisy: phantom delivery workers, a black cat that did not exist, the model narrating
+itself ("I am Pinky, a delivery assistant"). 23 captioned events from front_driveway,
+front_entryway and pinky were re-run and judged by reading each actual frame.
+
+### Three defects, all caused by the prompt
+
+| Defect | Cause | Evidence |
+|---|---|---|
+| Roleplay | `Look at home camera '{camera}'` made the name become content | *"I am Pinky, a delivery assistant"*, *"a security guard, pinky-shaped"* |
+| Overlay read as scene | `snapshots.bounding_box: true` burns boxes and `car: 84%` onto the image | *"a green bounding box around the vehicle"*, *"a 70% detected license plate"* |
+| Category manufacturing | the prompt enumerated the alert categories | see below |
+
+The third is the important one. **Every category named in the prompt came back as an observation
+whether or not it was present:**
+
+| Prompt listed | Model produced | Reality |
+|---|---|---|
+| "delivery and service workers" | "delivery worker" on 9 frames | one resident |
+| "a gate standing open" | "a gate that is standing open" | gate closed |
+| "a person or animal and what it is doing" | "A person is walking through a gated area" | empty driveway |
+
+So the prompt written to *narrow* alerting was **generating** false alerts in every listed category.
+
+### The fix: the model describes, code decides
+
+The prompt now enumerates nothing and names no camera:
+
+```
+Describe only what is visible in this image, in one short sentence.
+```
+
+Every alert category lives in `nvr/feed/alert_policy.py`. Two refinements mattered:
+
+- **Fuse Frigate's detector label.** It is a trained object model and beat the VLM on presence - it
+  labelled one event `dog` that the caption missed entirely.
+- **Suppress parked vehicles.** These driveways always contain a parked car, so firing on every
+  mention of it alerted on the background in 3 of 23 frames. Scope is *movement* of vehicles, so a
+  parked car is background unless Frigate itself raised a vehicle event.
+
+### Result
+
+**95.7% (22/23) alert accuracy, with zero false alarms.** The single miss is a small dog at a
+person's feet in a wide-angle frame; the person was still alerted, so the event was not dropped.
+
+Two rejected alternatives, both measured:
+
+- *"What is happening in this image?"* fixed the camera-narration failures but scored **worse
+  overall** - it invented a car crash and brought the cat hallucination back. Tuning on the failing
+  subset regressed the whole set.
+- Enumerating the scope per-camera (gate only on driveway cameras) still produced false gate-open
+  reports, because naming the category is what triggers it.
+
+Headlines are also cleaned before they reach the phone: *"Two cars are parked in a driveway, viewed
+through a fisheye lens that distorts the perspective"* becomes *"Two cars are parked in a driveway."*

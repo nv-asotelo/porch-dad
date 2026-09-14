@@ -65,7 +65,8 @@ snapshots:
   # overlay never appears on snapshots - which are exactly what gets attached to phone
   # notifications, so this is the one that matters.
   timestamp: true
-  bounding_box: true
+  # Boxes were read back as scene content by the VLM; the clock never was.
+  bounding_box: false
   retain:
     default: 14
 
@@ -153,45 +154,24 @@ objects:
     #    CLOSED 5/5 even on a camera with no gate in frame, so a global gate instruction
     #    only produces false readings. Gate handling lives on front_driveway only.
     prompt: >-
-      Look at home camera '{camera}' and describe only what is visible, in one or two short
-      sentences: people (what they are doing, wearing and carrying), animals (name the species
-      as specifically as you can), vehicles, and whether exterior lamps are lit. Report visible
-      smoke, fire or flames first if present. Ignore sunlight, shadows, weather and moving
-      foliage.
+      Describe only what is visible in this image, in one short sentence.
     object_prompts:
       person: >-
-        Look at home camera '{camera}'. In one or two short sentences describe the person: what
-        they are doing, what they are wearing, and what they are carrying. Describe only what is
-        visible. Say so explicitly if they are loitering, covering their face, climbing a fence
-        or window, or forcing a door. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       bird: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       cat: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       dog: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       bear: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       horse: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       cow: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
       sheep: >-
-        Look at home camera '{camera}'. Name the animal's species as specifically as you can
-        (deer, raccoon, coyote, squirrel, skunk, fox, bird, cat, dog) and say what it is doing,
-        in one short sentence. Report smoke or fire first if present.
+        Describe only what is visible in this image, in one short sentence.
 
 review:
   genai:
@@ -315,7 +295,7 @@ cameras:
   office:
     # df_doorbell_clownfish. Probed healthy: h264 480x480 (square doorbell aspect). Detect matches
     # the native geometry, so there is no downscale cost - far cheaper than the 2624x1472 cameras.
-    enabled: true
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/ac9fc327c838_live?video
@@ -339,7 +319,7 @@ cameras:
       format: "OFFICE DOORBELL  %a %d %b  %H:%M:%S"
 
   pinky:
-    enabled: true          # cocoa_camera_v2 - likely BATTERY
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/cc3bfb1999ad_live?video
@@ -363,7 +343,7 @@ cameras:
       format: "PINKY  %a %d %b  %H:%M:%S"
 
   patio_2nd_floor:
-    enabled: true          # cocoa_camera - likely BATTERY
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/9c7613a0ec61_live?video
@@ -387,7 +367,7 @@ cameras:
       format: "2ND FLOOR PATIO  %a %d %b  %H:%M:%S"
 
   driveway_2nd_floor:
-    enabled: true          # cocoa_camera - likely BATTERY
+    enabled: false
     ffmpeg:
       inputs:
         - path: rtsp://ring-mqtt:8554/649a631f4214_live?video

@@ -11,12 +11,16 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 from pathlib import Path
 
 import requests
 import yaml
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)).replace("/notify", "/feed"))
+from alert_policy import classify, summarize  # noqa: E402
 
 CFG = yaml.safe_load(Path(os.environ.get("FRIGATE_NOTIFY_CONFIG",
                                          "/home/orin/nvr/notify/config.yaml")).read_text())
@@ -135,10 +139,20 @@ def handle(after: dict) -> None:
     _last[cam] = now
 
     desc = wait_for_description(eid, DESC_WAIT)
-    body = desc or f"{label.title()} detected (no description generated)."
-    alert = is_alert(body)
+
+    # The VLM only describes; the alert decision is made here. Scope is deliberately narrow:
+    # living things, moving vehicles, an open gate, a package, a lighting change. Everything else
+    # the model narrates - walls, ceilings, archways, lens distortion - is not worth a notification.
+    verdict = classify(desc or "", label)
+    if desc and not verdict["alert"]:
+        print(f"[notify] {eid} suppressed (nothing in scope): {desc[:70]}", flush=True)
+        return
+
+    body = verdict["headline"] if desc else f"{label.title()} detected (no description generated)."
+    alert = is_alert(body) or bool({"gate-open", "package"} & set(verdict["categories"]))
     pretty = cam.replace("_", " ").title()
-    title = f"{'ALERT - ' if alert else ''}{pretty}"
+    cats = summarize(verdict["categories"])
+    title = f"{'ALERT - ' if alert else ''}{pretty} · {cats}"
     url = f"{CFG.get('frigate_public_url', FRIGATE).rstrip('/')}/events?event_id={eid}"
 
     try:

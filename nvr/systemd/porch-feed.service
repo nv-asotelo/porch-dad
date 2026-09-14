@@ -1,0 +1,17 @@
+[Unit]
+Description=porch-feed: Cosmos3-Edge engine comparison feed (RSS + control plane)
+After=network-online.target docker.service cosmos3-edge-shim.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orin
+Environment=PORCH_FEED_CONFIG=/home/orin/nvr/feed/config.yaml
+ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/python /home/orin/nvr/feed/porch_feed.py
+Restart=on-failure
+RestartSec=5
+# Hard cap. This box runs a 3.3GB model in 8GB; a runaway feed service must die before the model.
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target
