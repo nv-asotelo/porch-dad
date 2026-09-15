@@ -70,6 +70,15 @@ engines:
       to exist, not accuracy. It spends the most tokens per frame (320), which ought to mean
       a sharper look, but that did not show up as a single extra correct call on this eval.
 
+# Live camera preview for the Reachy Mini push source.
+#
+# The image is proxied through this service rather than embedded straight from the WebUI: the WebUI
+# serves HTTPS with a self-signed certificate, and a browser on this (plain HTTP) page will refuse
+# to render an image from an untrusted origin unless the user has separately accepted that cert.
+# Fetching it server-side and re-serving it same-origin sidesteps that entirely.
+reachy_webui_url: "https://127.0.0.1:8090"
+reachy_session: "reachy"
+
 # These stay on continuous RTSP no matter what; the toggle is locked in the UI.
 always_powered_cameras:
   - front_entryway
@@ -145,8 +154,11 @@ services:
 # Services shown in the command center. Ports are polled continuously so a dead link is visible
 # rather than silently broken. tcp_only entries are not browsable (VNC, MQTT, RTSP).
 links_host: "192.168.6.252"
+# The Live VLM WebUI entry carries ?session=reachy. url_path is shown and linked but is not used
+# for the health probe: probing "/" keeps the check cheap and independent of any one session.
 links:
   - {name: "Command center",     port: 8096,  scheme: "http",  path: "/"}
+  - {name: "Reachy Mini feed",   port: 8090,  scheme: "https", path: "/", url_path: "/?session=reachy"}
   - {name: "porch-dad feed",     port: 8095,  scheme: "http",  path: "/"}
   - {name: "Frigate NVR",        port: 5000,  scheme: "http",  path: "/"}
   - {name: "Frigate (auth UI)",  port: 8971,  scheme: "https", path: "/"}

@@ -60,6 +60,8 @@ MIN_FREE_MB = int(CFG.get("min_free_mb_to_start_service", 400))
 CONTROL_TOKEN = str(CFG.get("control_token") or "").strip()
 LINKS = CFG.get("links") or []
 LINKS_HOST = CFG.get("links_host") or "127.0.0.1"
+REACHY_WEBUI = str(CFG.get("reachy_webui_url") or "").rstrip("/")
+REACHY_SESSION = str(CFG.get("reachy_session") or "reachy")
 
 _lock = threading.Lock()
 _cfg_lock = threading.Lock()   # serialises read-modify-write of the Frigate YAML
@@ -192,7 +194,9 @@ def _probe(link: dict) -> dict:
             up = r.status_code < 500
         except requests.RequestException:
             up = False
-        url = f"{scheme}://{host}:{port}"
+        # The probe hits `path`; the link shown to the user is `url_path`, which may carry query
+        # parameters that would make the health check session-specific.
+        url = f"{scheme}://{host}:{port}{link.get('url_path', '')}"
     return {"name": link["name"], "port": port, "url": url, "up": up,
             "browsable": not link.get("tcp_only", False)}
 
@@ -921,6 +925,50 @@ def api_links():
         return JSONResponse(_link_state)
 
 
+@app.get("/reachy/latest.jpg")
+def reachy_latest():
+    """Proxy the newest frame pushed from the Reachy Mini.
+
+    Server-side rather than an <img> pointed straight at the WebUI: that origin is HTTPS with a
+    self-signed certificate, and a browser on this plain-HTTP page will not render an image from an
+    untrusted origin. Fetching here and re-serving same-origin avoids asking the user to accept a
+    certificate just to see a thumbnail.
+    """
+    if not REACHY_WEBUI:
+        raise HTTPException(404, "reachy_webui_url is not configured")
+    try:
+        r = requests.get(f"{REACHY_WEBUI}/api/push/latest.jpg",
+                         params={"session_id": REACHY_SESSION}, timeout=5, verify=False)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Live VLM WebUI unreachable: {e}")
+    if r.status_code != 200 or not r.content:
+        raise HTTPException(404, "no frame available yet")
+    return Response(r.content, media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reachy")
+def api_reachy():
+    """Whether the Reachy Mini push source is currently delivering frames."""
+    out = {"configured": bool(REACHY_WEBUI), "session": REACHY_SESSION,
+           "connected": False, "fps": None, "frames": 0, "resolution": None,
+           "link": f"{REACHY_WEBUI}/?session={REACHY_SESSION}" if REACHY_WEBUI else None}
+    if not REACHY_WEBUI:
+        return out
+    try:
+        r = requests.get(f"{REACHY_WEBUI}/api/push/status", timeout=4, verify=False)
+        for st in (r.json().get("streams") or []):
+            if st.get("session_id") == REACHY_SESSION:
+                out.update(connected=bool(st.get("connected")), fps=st.get("fps"),
+                           frames=st.get("frames_received", 0),
+                           resolution=(f"{st.get('width')}\u00d7{st.get('height')}"
+                                       if st.get("width") else None))
+                break
+    except (requests.RequestException, ValueError):
+        pass
+    return out
+
+
 @app.get("/healthz")
 def healthz():
     with closing(db()) as c:
@@ -1024,6 +1072,19 @@ button.mini{padding:3px 9px;font-size:11.5px}
   <p class="hint">Every service with its port, polled every 20&nbsp;s — links stay clickable even
      when a service is down (🟢 responding, ⚪ not responding). Dashed entries are not browsable
      web UIs (MQTT, RTSP, VNC).</p>
+
+  <h2>Reachy Mini camera</h2>
+  <div class="card" id="reachyCard">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <span id="reachyState" class="hint">checking…</span>
+      <a id="reachyLink" class="chip" href="#" target="_blank" rel="noreferrer">Open in Live VLM WebUI</a>
+    </div>
+    <img id="reachyImg" class="still" alt="Reachy Mini camera" style="display:none">
+    <p class="hint" id="reachyHint" style="display:none">
+      No frames on this session. The push client feeds it — see
+      <code>examples/push_reachy_mini.py</code> in the live-vlm-webui fork.
+    </p>
+  </div>
 
   <h2>Cosmos3-Edge engine</h2>
   <div class="callout">
@@ -1145,6 +1206,27 @@ async function load(){
                  title="${l.up?'open':'not responding — link still shown'} ${esc(l.url)}">${dot} ${esc(l.name)}
               <span class="hint">${esc(l.url)}</span></a>`;
     }).join('') : '<span class="hint">probing…</span>';
+  }catch(e){}
+
+  try{
+    const rc = await (await fetch('/api/reachy',{cache:'no-store'})).json();
+    const img = document.getElementById('reachyImg');
+    const st  = document.getElementById('reachyState');
+    const hint= document.getElementById('reachyHint');
+    document.getElementById('reachyLink').href = rc.link || '#';
+    if(rc.connected){
+      st.textContent = `● live · ${rc.resolution||'—'} · ${rc.fps||'—'} fps · ${rc.frames} frames`;
+      st.style.color = 'var(--g)';
+      img.style.display = 'block'; hint.style.display = 'none';
+      // Only fetch the still while frames are actually arriving; otherwise this proxies a 404
+      // every second for no reason.
+      img.src = `/reachy/latest.jpg?t=${Date.now()}`;
+    } else {
+      st.textContent = rc.configured ? '○ no frames on session "'+rc.session+'"' : '○ not configured';
+      st.style.color = 'var(--mut)';
+      img.style.display = 'none'; img.removeAttribute('src');
+      hint.style.display = 'block';
+    }
   }catch(e){}
 
   const cmp = await (await fetch('/api/compare',{cache:'no-store'})).json();

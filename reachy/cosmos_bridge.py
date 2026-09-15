@@ -40,13 +40,16 @@ USER_PROMPT = CFG["user_prompt"]
 
 
 def encode_frame(frame) -> bytes:
-    """frame is (height, width, 3) uint8 RGB, per the Reachy Mini SDK's mini.media.get_frame()."""
+    """frame is (height, width, 3) uint8 BGR, per MediaManager.get_frame().
+
+    BGR, not RGB: that is what the SDK documents and what cv2.imencode expects, so no colour
+    conversion belongs here. Converting swaps red and blue and tints the whole feed.
+    """
     h, w = frame.shape[:2]
     if w > FRAME_WIDTH:
         new_h = int(h * FRAME_WIDTH / w)
         frame = cv2.resize(frame, (FRAME_WIDTH, new_h), interpolation=cv2.INTER_AREA)
-    bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-    ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
     if not ok:
         raise RuntimeError("JPEG encode failed")
     return buf.tobytes()
