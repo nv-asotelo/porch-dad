@@ -1,0 +1,23 @@
+[Unit]
+Description=Live VLM WebUI (nv-asotelo fork: push + stream-URL sources) via cosmos3-edge-shim
+After=network.target cosmos3-edge-shim.service
+Wants=cosmos3-edge-shim.service
+# Both units bind 8090. Conflicts= makes systemd stop the other one rather than letting the
+# second to start fail with "address already in use".
+Conflicts=live-vlm-webui.service
+
+[Service]
+Type=simple
+User=orin
+WorkingDirectory=/home/orin/live-vlm-webui-fork
+# Run the fork from its source checkout. PYTHONPATH precedes site-packages, so the upstream
+# live-vlm-webui package installed in the venv is left untouched and rolling back is just
+# `systemctl stop live-vlm-webui-fork && systemctl start live-vlm-webui`.
+Environment=PYTHONPATH=/home/orin/live-vlm-webui-fork/src
+Environment=PATH=/home/orin/TensorRT-Edge-LLM/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/python -m live_vlm_webui.server --host 0.0.0.0 --port 8090 --model nvidia/Cosmos3-Edge --api-base http://localhost:8000/v1 --api-key EMPTY
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -75,10 +75,79 @@ always_powered_cameras:
   - front_entryway
   - front_driveway
 
+# Every controllable process, and the port that proves whether it is really up.
+#
+# `port` is the point of this list. systemd reporting "active" only means the unit has not exited -
+# it says nothing about whether the thing is serving, and the shim in particular is "active" for
+# several seconds while it deserializes engines and cannot answer a request. Likewise after a stop,
+# an unbound port is what proves the process actually let go rather than lingering as a zombie
+# holding memory. Every control action is verified against the port, not against systemd's opinion.
+#
+# `heavy_mb` is the memory a process is expected to hand back when stopped. It is used to sanity
+# check that a stop actually reclaimed RAM on an 8 GB board, where the whole reason to stop
+# something is to get its memory back.
+services:
+  - key: shim
+    label: "Cosmos3-Edge API"
+    kind: systemd
+    unit: cosmos3-edge-shim.service
+    port: 8000
+    heavy_mb: 3300
+    note: "Holds the INT4 engine. Stopping it frees the most memory and takes every caption offline."
+  - key: vlm
+    label: "Live VLM WebUI"
+    kind: systemd
+    unit: live-vlm-webui-fork.service
+    port: 8090
+    heavy_mb: 200
+    note: "nv-asotelo fork: adds push + stream-URL capture sources."
+  - key: bridge
+    label: "porch-dad feed"
+    kind: systemd
+    unit: porch-dad.service
+    port: 8095
+  - key: notify
+    label: "Phone notifications"
+    kind: systemd
+    unit: frigate-notify.service
+    port: null          # no listener; systemd state is the only signal available
+  - key: frigate
+    label: "Frigate NVR"
+    kind: docker
+    name: frigate
+    port: 5000
+    heavy_mb: 900
+  - key: ring
+    label: "ring-mqtt"
+    kind: docker
+    name: ring-mqtt
+    port: 55123
+  - key: mqtt
+    label: "MQTT broker"
+    kind: docker
+    name: mosquitto
+    port: 1883
+  - key: hass
+    label: "Home Assistant"
+    kind: docker
+    name: homeassistant
+    port: 8123
+    heavy_mb: 400
+  # Listed last because it is this page. Stopping it removes the only way to start it again from a
+  # browser, so the UI demands confirmation and the action is deferred (see _deferred_self_action).
+  - key: feed
+    label: "porch-feed (this page)"
+    kind: systemd
+    unit: porch-feed.service
+    port: 8096
+    self: true
+
 # Services shown in the command center. Ports are polled continuously so a dead link is visible
 # rather than silently broken. tcp_only entries are not browsable (VNC, MQTT, RTSP).
 links_host: "192.168.6.252"
 links:
+  - {name: "Command center",     port: 8096,  scheme: "http",  path: "/"}
+  - {name: "porch-dad feed",     port: 8095,  scheme: "http",  path: "/"}
   - {name: "Frigate NVR",        port: 5000,  scheme: "http",  path: "/"}
   - {name: "Frigate (auth UI)",  port: 8971,  scheme: "https", path: "/"}
   - {name: "Live VLM WebUI",     port: 8090,  scheme: "https", path: "/"}

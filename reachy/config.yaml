@@ -1,0 +1,25 @@
+# reachy/cosmos_bridge.py configuration.
+#
+# frame_width mirrors nvr/bridge/config.yaml's reasoning: the visual engine's per-image token
+# cap (recommended 320 for live camera work — see deploy/05-serve-and-webui.md §5) is what should
+# drive resolution, not the camera's native size. Reachy Mini's camera frame is resized to this
+# width (aspect preserved) before JPEG-encoding and sending to the shim.
+
+cosmos3_url: "http://127.0.0.1:8000"   # shim's own host if cosmos_bridge.py runs on the Jetson,
+                                        # otherwise "http://<jetson-ip>:8000"
+
+frame_width: 640          # ~300 image tokens at the 320-token-per-image cap, matches nvr/bridge
+interval_seconds: 2.0      # seconds between captures; the shim is single-flight (deploy/05 §2.4)
+max_tokens: 256
+temperature: 0.0           # greedy decode: deterministic, matches the quality spot-checks in README
+
+# connection_mode is passed straight to ReachyMini(); "localhost_only" for a robot on USB/same
+# host as this script, "network" for a robot reachable over Wi-Fi, or omit/null to auto-detect.
+connection_mode: null
+
+system_prompt: |
+  You are the vision system of a small desktop robot. Describe what the camera currently sees in
+  one or two short sentences. Note people, objects, and any motion or notable change. If the view
+  is empty or unchanged, say so briefly.
+
+user_prompt: "What do you see right now?"

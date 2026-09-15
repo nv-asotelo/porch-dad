@@ -98,6 +98,9 @@ the community checkpoint was unvalidated. See [docs/optimizations.md](docs/optim
 | [`deploy/03-install-trt-edge-llm.md`](deploy/03-install-trt-edge-llm.md) | Building/installing TensorRT-Edge-LLM 0.10.1 and its plugin library |
 | [`deploy/04-quantize-and-build-engines.md`](deploy/04-quantize-and-build-engines.md) | INT4 quantization, ONNX export, on-device engine build |
 | [`deploy/05-serve-and-webui.md`](deploy/05-serve-and-webui.md) | Running the shim + Live VLM WebUI under systemd |
+| [`deploy/06-reachy-mini-sdk.md`](deploy/06-reachy-mini-sdk.md) | Pointing a [Reachy Mini](https://huggingface.co/docs/reachy_mini) robot's camera at the shim, via Live VLM WebUI and then natively |
+| [`reachy/cosmos_bridge.py`](reachy/cosmos_bridge.py) | Native Reachy Mini camera → Cosmos3-Edge bridge (no browser) |
+| [`reachy/release_camera_for_webui.py`](reachy/release_camera_for_webui.py) | Frees Reachy Mini's camera so a browser/Live VLM WebUI can open it directly |
 | [`scripts/rtn_int4_quantize.py`](scripts/rtn_int4_quantize.py) | The quantizer: weight-only INT4 RTN with MSE-optimal clipping, emits the ModelOpt W4A16 on-disk format |
 | [`scripts/collect_perf.py`](scripts/collect_perf.py) | Fits `elapsed = fixed + marginal × gen_tok` over shim journal logs |
 | [`scripts/compare_perf.py`](scripts/compare_perf.py) | Matched-`gen_tok` A/B between two time windows |

@@ -7,9 +7,16 @@ browsable page and an RSS 2.0 feed so different engine builds can be compared on
 
 Control plane (all guarded, all reversible):
     * switch the active Cosmos3-Edge engine (v1 / v2 / v3)
-    * start/stop Live VLM WebUI and Frigate
+    * on / off / restart for every process in the stack, systemd unit or docker container alike
     * per-camera power mode: "powered" keeps Frigate's continuous RTSP stream open, "saver" disables
       it so battery Ring cameras are not drained (events still arrive via ring-mqtt motion)
+
+Every control action is verified against the service's PORT rather than against the supervisor's
+exit code. `systemctl is-active` reporting "active" only means the unit has not exited: the shim is
+"active" for several seconds while it deserializes engines and cannot answer a request, and a unit
+that has exited can still leave something holding its port. The port is the honest signal, and
+after a stop it is also the evidence that the process really let go of its memory - so stops report
+the megabytes actually reclaimed, which on an 8 GB board is the entire reason to stop anything.
 
 Memory discipline matters here: the model holds ~3.3 GB of 8 GB. This service samples /proc and
 sysfs directly rather than spawning tegrastats per sample, keeps only a bounded in-memory window,
@@ -44,6 +51,7 @@ SNAP_KEEP_MB = float(CFG.get("snapshot_keep_mb", 512))
 ENGINES: dict = CFG["engines"]
 ENGINE_LINK = CFG["engine_symlink"]
 DESC_WAIT = float(CFG.get("description_wait_seconds", 40))
+DESC_POLL = float(CFG.get("description_poll_seconds", 0.5))
 ALWAYS_POWERED = set(CFG.get("always_powered_cameras") or [])
 FRIGATE_CONFIG = CFG["frigate_config_path"]
 MIN_FREE_MB = int(CFG.get("min_free_mb_to_start_service", 400))
@@ -342,11 +350,8 @@ def _switch_engine(eid: str) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------- service control
-SERVICES = {
-    "vlm":     {"kind": "systemd", "unit": "live-vlm-webui.service", "label": "Live VLM WebUI"},
-    "frigate": {"kind": "docker",  "name": "frigate",                "label": "Frigate NVR"},
-    "notify":  {"kind": "systemd", "unit": "frigate-notify.service", "label": "Phone notifications"},
-}
+SERVICES = {s["key"]: s for s in (CFG.get("services") or [])}
+ACTIONS = ("start", "stop", "restart")
 
 
 def free_mb() -> int:
@@ -358,7 +363,24 @@ def free_mb() -> int:
     return info.get("MemAvailable", 0) // 1024
 
 
-def service_state(key: str) -> str:
+def port_open(port: int | None, timeout: float = 1.0) -> bool | None:
+    """Is anything accepting connections on this port right now?
+
+    None when the service has no port to probe, which is a different answer from False and must
+    not be rendered as "down".
+    """
+    if not port:
+        return None
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def unit_state(key: str) -> str:
+    """What systemd or docker claims. Not proof that the service is serving - see port_open()."""
     s = SERVICES[key]
     if s["kind"] == "systemd":
         ok, out = run(["systemctl", "is-active", s["unit"]], timeout=15)
@@ -367,20 +389,133 @@ def service_state(key: str) -> str:
     return out.strip() if ok else "absent"
 
 
+def service_status(key: str) -> dict:
+    """Combined view: what the supervisor claims, and what the port actually shows.
+
+    The two disagree in exactly the cases worth surfacing: `starting` while the shim spends seconds
+    deserializing engines before it can answer, and `stuck` when a unit has exited but something is
+    still holding its port - which on an 8 GB board usually means the memory has not come back yet.
+    """
+    s = SERVICES[key]
+    state = unit_state(key)
+    running = state in ("active", "running")
+    listening = port_open(s.get("port"))
+
+    if listening is None:
+        health = "up" if running else "down"          # no port to check; supervisor is all we have
+    elif running and listening:
+        health = "up"
+    elif running and not listening:
+        health = "starting"
+    elif not running and listening:
+        health = "stuck"
+    else:
+        health = "down"
+
+    return {
+        "key": key,
+        "label": s.get("label", key),
+        "kind": s["kind"],
+        "unit": s.get("unit") or s.get("name"),
+        "port": s.get("port"),
+        "state": state,
+        "running": running,
+        "listening": listening,
+        "health": health,
+        "self": bool(s.get("self")),
+        "note": s.get("note", ""),
+        "heavy_mb": s.get("heavy_mb"),
+    }
+
+
+def _await_port(port: int | None, want_open: bool, timeout: float = 25.0) -> bool:
+    """Wait until the port reaches the expected state. True if it got there."""
+    if not port:
+        time.sleep(1.0)     # nothing to observe; give the supervisor a moment to settle
+        return True
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if port_open(port) is want_open:
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _deferred_self_action(unit: str, action: str) -> tuple[bool, str]:
+    """Act on porch-feed itself, after this request has already been answered.
+
+    Running `systemctl stop porch-feed` in-process kills uvicorn mid-request, so the browser sees a
+    connection reset instead of a result. Scheduling it as a transient unit lets the response land
+    first.
+    """
+    ok, msg = run([
+        "sudo", "-n", "systemd-run", "--on-active=2",
+        f"--unit=porch-feed-{action}-{int(time.time())}",
+        "systemctl", action, unit,
+    ])
+    if not ok:
+        return False, msg
+    verb = "stopping" if action == "stop" else f"{action}ing"
+    return True, (f"{verb} porch-feed in 2s — this page will go offline"
+                  + ("; start it again over SSH." if action == "stop" else "; reload in ~10s."))
+
+
 def set_service(key: str, action: str) -> tuple[bool, str]:
-    if key not in SERVICES or action not in ("start", "stop"):
+    """Run a control action and then *verify* it, rather than trusting the exit code.
+
+    Verification is the whole point: it confirms the port reached the expected state, and reports
+    how much memory actually came back. On an 8 GB board a "successful" stop that frees nothing is
+    a failure worth seeing.
+    """
+    if key not in SERVICES or action not in ACTIONS:
         return False, "bad request"
     s = SERVICES[key]
+
     # Guard: the model needs ~3.3GB of 8GB. Starting another heavy service on a nearly-full box is
     # how you OOM-kill the model, so refuse rather than let the kernel decide what dies.
-    if action == "start":
+    if action in ("start", "restart"):
         fm = free_mb()
         if fm < MIN_FREE_MB:
             return False, (f"refused: only {fm} MB free, need {MIN_FREE_MB} MB. "
                            f"Stop another service first.")
+
+    if s.get("self"):
+        return _deferred_self_action(s["unit"], action)
+
+    before = free_mb()
     if s["kind"] == "systemd":
-        return run(["sudo", "-n", "systemctl", action, s["unit"]])
-    return run(["sudo", "-n", "docker", action, s["name"]])
+        ok, msg = run(["sudo", "-n", "systemctl", action, s["unit"]])
+    else:
+        ok, msg = run(["sudo", "-n", "docker", action, s["name"]])
+    if not ok:
+        return False, msg or f"{action} failed"
+
+    want_open = action != "stop"
+    reached = _await_port(s.get("port"), want_open)
+    after = free_mb()
+    delta = after - before
+
+    label = s.get("label", key)
+    port = s.get("port")
+
+    if action == "stop":
+        if not reached:
+            return False, (f"{label}: {s['kind']} reported stopped, but port {port} is still "
+                           f"accepting connections — something is still holding it. "
+                           f"Memory is at {after} MB free.")
+        freed = f"reclaimed {delta} MB" if delta > 0 else "no memory reclaimed"
+        expect = s.get("heavy_mb")
+        warn = ""
+        if expect and delta < expect * 0.5:
+            warn = (f" — expected about {expect} MB back; the kernel may still be releasing "
+                    f"page cache, re-check the memory readout in a few seconds")
+        return True, f"{label} stopped, port {port or '—'} closed, {freed} ({after} MB free){warn}"
+
+    if not reached:
+        return False, (f"{label}: {action} issued but port {port} never started listening. "
+                       f"Check `journalctl -u {s.get('unit') or s.get('name')}`.")
+    cost = f"used {-delta} MB" if delta < 0 else f"memory unchanged ({delta:+d} MB)"
+    return True, f"{label} {action}ed, port {port or '—'} listening, {cost} ({after} MB free)"
 
 
 # --------------------------------------------------------------------------- camera power
@@ -494,7 +629,10 @@ def handle_event(after: dict) -> None:
             if d:
                 desc = d.strip()
                 break
-            time.sleep(2.0)
+            # Poll interval bounds the resolution of latency_ms. At 2 s every measurement landed
+            # on a 2 s boundary, which is far coarser than the difference between engines this
+            # feed exists to detect.
+            time.sleep(DESC_POLL)
     if not desc:
         return  # nothing to compare; the notifier already surfaces un-described events
 
@@ -572,10 +710,11 @@ def require_control(request: Request) -> None:
 
 @app.get("/api/entries")
 def api_entries(limit: int = 100, engine: str | None = None):
-    q = "SELECT * FROM entries"
+    # Reservation rows (engine_id='pending', no description) are bookkeeping, not captions.
+    q = "SELECT * FROM entries WHERE engine_id <> 'pending' AND description IS NOT NULL"
     args: list = []
     if engine and engine != "all":
-        q += " WHERE engine_id=?"
+        q += " AND engine_id=?"
         args.append(engine)
     q += " ORDER BY ts DESC LIMIT ?"
     args.append(limit)
@@ -591,7 +730,7 @@ def api_status():
                         "notes": v.get("notes", ""),
                         "built": os.path.isfile(os.path.join(v["path"], "llm.engine"))}
                     for k, v in ENGINES.items()},
-        "services": {k: {"label": v["label"], "state": service_state(k)} for k, v in SERVICES.items()},
+        "services": {k: service_status(k) for k in SERVICES},
         "cameras": camera_power(),
         "memory": {"free_mb": free_mb(), "used_pct": round(_mem_pct(), 1),
                    "min_free_to_start_mb": MIN_FREE_MB},
@@ -616,8 +755,16 @@ def api_service(key: str, action: str, request: Request):
     ok, msg = set_service(key, action)
     if not ok:
         raise HTTPException(400, msg or "failed")
-    verb = "started" if action == "start" else "stopped"
-    return {"ok": True, "message": msg or f"{SERVICES[key]['label']} {verb}"}
+    return {"ok": True, "message": msg, "service": service_status(key),
+            "memory": {"free_mb": free_mb()}}
+
+
+@app.get("/api/service/{key}")
+def api_service_status(key: str):
+    """Poll one service without running anything privileged."""
+    if key not in SERVICES:
+        raise HTTPException(404, "no such service")
+    return {"service": service_status(key), "memory": {"free_mb": free_mb()}}
 
 
 def publish_camera_enabled(name: str, on: bool) -> None:
@@ -655,16 +802,41 @@ def api_camera(name: str, mode: str, request: Request):
 
 @app.get("/api/compare")
 def api_compare():
-    """Per-engine aggregates - the point of the whole exercise."""
+    """Per-engine aggregates - the point of the whole exercise.
+
+    Two filters, both load-bearing:
+
+    `engine_id <> 'pending'` drops the reservation rows written by handle_event() to claim an
+    event id. A row stays `pending` forever when Frigate never publishes a description, and those
+    rows carry no engine, no description and no metrics - averaged in, they appeared as a nameless
+    fourth engine with a 0 ms latency, i.e. the fastest thing on the page.
+
+    `description IS NOT NULL` is belt and braces for the same class of half-written row.
+
+    The engine NAME is resolved from config rather than read back from the row. Names are a
+    labelling decision that changes (v1 was shipped as "Balanced", it is "Medium" now), and a
+    stored name means the same engine shows up under two different labels depending on when its
+    captions happened to be recorded.
+    """
     with closing(db()) as c:
         rows = c.execute("""
             SELECT engine_id, engine_name, COUNT(*) n,
                    AVG(latency_ms) lat, AVG(peak_cpu) cpu, AVG(peak_mem) mem, AVG(peak_gpu) gpu,
                    SUM(peak_cpu IS NOT NULL) measured,
                    AVG(LENGTH(description)) desc_len
-            FROM entries GROUP BY engine_id ORDER BY engine_id""").fetchall()
-    return JSONResponse([{k: (round(v, 1) if isinstance(v, float) else v)
-                          for k, v in dict(r).items()} for r in rows])
+            FROM entries
+            WHERE engine_id <> 'pending' AND description IS NOT NULL
+            GROUP BY engine_id ORDER BY engine_id""").fetchall()
+
+    out = []
+    for r in rows:
+        d = {k: (round(v, 1) if isinstance(v, float) else v) for k, v in dict(r).items()}
+        cfg = ENGINES.get(d["engine_id"])
+        if cfg:
+            d["engine_name"] = cfg["name"]
+        d["engine_name"] = d.get("engine_name") or d["engine_id"]
+        out.append(d)
+    return JSONResponse(out)
 
 
 @app.get("/rss")
@@ -690,7 +862,8 @@ def rss(limit: int = 50, engine: str | None = None):
                  f'style="max-width:100%;height:auto"/></p>' if have_img else "")
                 + f"<p>{r['description']}</p>"
                 + f"<p><b>Engine:</b> {r['engine_name']} ({r['engine_id']})<br/>"
-                  f"<b>Latency:</b> {r['latency_ms']} ms<br/>"
+                  f"<b>Event latency (Frigate pipeline, not inference):</b> "
+                  f"{r['latency_ms']} ms<br/>"
                   f"<b>Peak CPU:</b> {r['peak_cpu']}%<br/>"
                   f"<b>Peak unified memory (VRAM):</b> {r['peak_mem']}%<br/>"
                   f"<b>Peak GPU:</b> {r['peak_gpu']}%</p>")
@@ -762,8 +935,16 @@ def index():
 
 INDEX_HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>porch dad command center</title>
+<!-- Added to the iOS home screen this runs standalone (no Safari chrome), which is the intended
+     way to reach the control plane from a phone. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="porch dad">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d0c">
 <style>
 :root{--bg:#0b0d0c;--card:#161a15;--line:#2a2f28;--fg:#e8ece7;--mut:#9aa396;--g:#76b900;
       --r:#ff5c5c;--y:#ffb020;--b:#4aa3ff}
@@ -810,6 +991,20 @@ a.chip:hover{border-color:var(--g);background:rgba(118,185,0,.10)}
 .callout{background:rgba(74,163,255,.09);border:1px solid rgba(74,163,255,.35);border-left:3px solid var(--b);
          border-radius:9px;padding:10px 13px;margin:0 0 10px;font-size:13px;line-height:1.5}
 .callout b{color:var(--b)}
+button:disabled{opacity:.45;cursor:default}
+button:disabled:hover{border-color:var(--line)}
+button.off{background:rgba(255,92,92,.14);border-color:var(--r);color:var(--r)}
+.svc{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+     background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.svc-id{min-width:0;flex:1}
+.svc-name{font-size:14.5px}
+.svc .hint{margin:2px 0 0;word-break:break-word}
+.selfurl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);
+         border:1px solid var(--line);border-left:3px solid var(--g);border-radius:10px;
+         padding:9px 12px;margin-bottom:10px;font-size:13px}
+.selfurl a{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;word-break:break-all}
+.selfurl>span:first-child{color:var(--mut);text-transform:uppercase;font-size:11px;letter-spacing:.06em}
+button.mini{padding:3px 9px;font-size:11.5px}
 </style></head><body>
 <header><div class="wrap"><div class="row" style="justify-content:space-between">
   <h1>porch dad <span>command center</span></h1>
@@ -818,10 +1013,17 @@ a.chip:hover{border-color:var(--g);background:rgba(118,185,0,.10)}
 <div class="wrap">
   <div id="msg" class="msg"></div>
 
-  <h2>Services</h2>
+  <h2>Open a service</h2>
+  <div class="selfurl">
+    <span>This page</span>
+    <a id="selfurl" href="/">…</a>
+    <button class="mini" onclick="copySelf()">copy</button>
+    <span class="hint">Add to Home Screen on iOS to run it as an app.</span>
+  </div>
   <div class="row" id="links"></div>
-  <p class="hint">Polled every 20&nbsp;s — every link stays clickable even when a service is down
-     (🟢 responding, ⚪ not responding). Dashed entries are not browsable web UIs.</p>
+  <p class="hint">Every service with its port, polled every 20&nbsp;s — links stay clickable even
+     when a service is down (🟢 responding, ⚪ not responding). Dashed entries are not browsable
+     web UIs (MQTT, RTSP, VNC).</p>
 
   <h2>Cosmos3-Edge engine</h2>
   <div class="callout">
@@ -836,8 +1038,11 @@ a.chip:hover{border-color:var(--g);background:rgba(118,185,0,.10)}
   <p class="hint" id="enginehint"></p>
 
   <h2>Service power</h2>
-  <div class="row" id="services"></div>
-  <p class="hint">Starting a service is refused when free memory is low — the model needs ~3.3&nbsp;GB of 8&nbsp;GB.</p>
+  <div id="services"></div>
+  <p class="hint">Every action is verified against the <b>port</b>, not against systemd — a unit can
+     report <i>active</i> while the shim is still loading engines and cannot answer. Stops report
+     how much RAM actually came back; starting is refused when free memory is low, because the
+     model needs ~3.3&nbsp;GB of 8&nbsp;GB and an OOM kill would take the model down.</p>
 
   <h2>Camera power</h2>
   <div class="row" id="cameras"></div>
@@ -845,9 +1050,18 @@ a.chip:hover{border-color:var(--g);background:rgba(118,185,0,.10)}
      <b>Saver</b> disables the stream; motion events still arrive via ring-mqtt at no battery cost.</p>
 
   <h2>Comparison</h2>
-  <table id="cmp"><thead><tr><th>Engine</th><th>Captions</th><th>Measured</th><th>Avg latency</th>
+  <table id="cmp"><thead><tr><th>Engine</th><th>Captions</th><th>Measured</th>
+    <th>Avg event latency</th>
     <th>Avg peak CPU</th><th>Avg peak VRAM</th><th>Avg peak GPU</th><th>Avg length</th></tr></thead>
     <tbody></tbody></table>
+  <p class="hint"><b>Read the latency column carefully.</b> It is the whole Frigate pipeline —
+     event end, clip finalise, Frigate's own GenAI call, then this service noticing the description
+     — so it runs to seconds and is <i>not</i> the model's inference time. It is dominated by
+     Frigate, not by the engine, and <b>cannot be used to rank engines</b>. The per-inference
+     figures are the ones on the engine buttons above (recorded from a dedicated eval), and the
+     live per-request number is the shim's own <code>[perf] elapsed_ms</code> line in
+     <code>journalctl -u cosmos3-edge-shim</code>. The columns that <i>do</i> compare engines
+     meaningfully here are peak CPU / VRAM / GPU and caption length.</p>
 
   <h2>Feed <span id="filter" class="hint"></span></h2>
   <div class="row" id="filters"></div>
@@ -860,6 +1074,17 @@ const esc = s => (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'
 function say(t, ok){ const m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(ok?'ok':'err');
   setTimeout(()=>{m.className='msg'},6000); }
 let TOKEN='';
+// The address to hand to iOS "Add to Home Screen". Taken from the browser's own location so it is
+// always the reachable one -- on this box 0.0.0.0 in config is not a thing a phone can open.
+function showSelfUrl(){
+  const u = window.location.origin + '/';
+  const a = document.getElementById('selfurl');
+  a.textContent = u; a.href = u;
+}
+async function copySelf(){
+  try{ await navigator.clipboard.writeText(window.location.origin + '/'); say('Address copied', true); }
+  catch(e){ say('Copy failed - long-press the link instead', false); }
+}
 async function post(url){
   try{ const r=await fetch(url,{method:'POST',headers:{'X-Porch-Token':TOKEN}});
        const j=await r.json().catch(()=>({}));
@@ -881,10 +1106,28 @@ async function load(){
   document.getElementById('enginehint').textContent =
     ae ? `${st.active_engine.name} — ${ae.profile}. ${ae.notes}` : '';
 
-  document.getElementById('services').innerHTML = Object.entries(st.services).map(([k,s])=>{
-    const on = s.state==='active'||s.state==='running';
-    return `<button class="${on?'on':''}" onclick="post('/api/service/${k}/${on?'stop':'start'}')">
-      ${esc(s.label)}: ${on?'ON':'OFF'}</button>`;}).join('');
+  document.getElementById('services').innerHTML = Object.values(st.services).map(s=>{
+    // health: up | starting | stuck | down. `starting` and `stuck` are the cases where systemd and
+    // the port disagree, which is exactly what the port poll exists to surface.
+    const dot = {up:'🟢', starting:'🟡', stuck:'🟠', down:'⚪'}[s.health] || '⚪';
+    const portTxt = s.port
+      ? `:${s.port} ${s.listening ? 'listening' : 'closed'}`
+      : 'no port to poll';
+    const confirm = s.self
+      ? `if(!window.confirm('This stops the page you are using. You will need SSH to start it again. Continue?'))return;`
+      : '';
+    return `<div class="svc">
+      <div class="svc-id">
+        <div class="svc-name">${dot} ${esc(s.label)}</div>
+        <div class="hint">${esc(s.unit||'')} · ${s.state} · ${portTxt}${s.note?' · '+esc(s.note):''}</div>
+      </div>
+      <div class="row">
+        <button class="${s.running?'on':''}" ${s.running?'disabled':''}
+                onclick="post('/api/service/${s.key}/start')">ON</button>
+        <button class="${!s.running?'off':'warn'}" ${!s.running?'disabled':''}
+                onclick="${confirm}post('/api/service/${s.key}/stop')">OFF</button>
+        <button onclick="${confirm}post('/api/service/${s.key}/restart')">RESTART</button>
+      </div></div>`;}).join('');
 
   document.getElementById('cameras').innerHTML = Object.entries(st.cameras).map(([n,c])=>{
     const on = c.mode==='powered';
@@ -907,8 +1150,8 @@ async function load(){
   const cmp = await (await fetch('/api/compare',{cache:'no-store'})).json();
   document.querySelector('#cmp tbody').innerHTML = cmp.length ? cmp.map(r=>
     `<tr><td><span class="tag e-${r.engine_id}">${esc(r.engine_name)}</span></td><td>${r.n}</td><td>${r.measured||0}</td>
-     <td>${Math.round(r.lat)} ms</td><td>${r.cpu??'—'}${r.cpu!=null?'%':''}</td><td>${r.mem??'—'}${r.mem!=null?'%':''}</td><td>${r.gpu??'—'}${r.gpu!=null?'%':''}</td>
-     <td>${Math.round(r.desc_len)} ch</td></tr>`).join('')
+     <td>${r.lat!=null?Math.round(r.lat)+' ms':'—'}</td><td>${r.cpu??'—'}${r.cpu!=null?'%':''}</td><td>${r.mem??'—'}${r.mem!=null?'%':''}</td><td>${r.gpu??'—'}${r.gpu!=null?'%':''}</td>
+     <td>${r.desc_len!=null?Math.round(r.desc_len)+' ch':'—'}</td></tr>`).join('')
     : `<tr><td colspan="8" class="hint">No captions recorded yet.</td></tr>`;
 
   const ids = ['all', ...Object.keys(st.engines)];
@@ -925,12 +1168,12 @@ async function load(){
             onerror="this.remove()"/>
        <p class="desc">${esc(e.description)}</p>
        <div class="meta"><span>${esc(e.camera)} · ${esc(e.label)}</span>
-         <span>${e.latency_ms} ms</span><span>CPU ${e.peak_cpu??'—'}${e.peak_cpu!=null?'%':''}</span>
+         <span title="end-to-end Frigate pipeline, not model inference time">${e.latency_ms} ms e2e</span><span>CPU ${e.peak_cpu??'—'}${e.peak_cpu!=null?'%':''}</span>
          <span>VRAM ${e.peak_mem??'—'}${e.peak_mem!=null?'%':''}</span><span>GPU ${e.peak_gpu??'—'}${e.peak_gpu!=null?'%':''}</span></div>
      </div>`).join('')
     : `<p class="hint">No captions yet for this filter. Trigger motion on a camera.</p>`;
 }
-load(); setInterval(load, 10000);
+showSelfUrl(); load(); setInterval(load, 10000);
 </script></body></html>"""
 
 

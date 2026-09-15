@@ -1,0 +1,4 @@
+reachy-mini
+opencv-python-headless
+requests
+pyyaml
