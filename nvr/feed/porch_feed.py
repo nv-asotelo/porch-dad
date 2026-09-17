@@ -47,6 +47,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from reachy import (ANTENNA_LIMIT_RAD, ANTENNA_PARK_DEG, LIMITS_M, LIMITS_RAD, MOTOR_MODES,
                     Reachy as ReachyClient)
+from scout import Scout as ScoutClient
 
 CFG = yaml.safe_load(Path(os.environ.get("PORCH_FEED_CONFIG",
                                          "/home/orin/nvr/feed/config.yaml")).read_text())
@@ -79,6 +80,8 @@ REACHY_WEBUI = str(CFG.get("reachy_webui_url") or "").rstrip("/")
 REACHY_CAM = str(CFG.get("reachy_camera_url") or "").rstrip("/")
 REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
 _reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
+SCOUT_BRIDGE = str(CFG.get("scout_bridge_url") or "").rstrip("/")
+_scout = ScoutClient(SCOUT_BRIDGE) if SCOUT_BRIDGE else None
 # Anomaly watch: the microphone triggers the eye.
 #
 # Continuous captioning of the robot's view would mean a ~650 ms VLM call every few seconds,
@@ -1230,6 +1233,51 @@ async def api_reachy_target(request: Request):
     return _reachy_result(ok, msg)
 
 
+@app.get("/api/scout/state")
+def api_scout_state():
+    """Bridge health. Read-only, so no token: the panel needs it to render at all."""
+    if not _scout:
+        return {"enabled": False}
+    return _scout.state()
+
+
+@app.get("/scout/latest.jpg")
+def scout_latest():
+    """Proxy the bridge's still so the browser only ever talks to this origin."""
+    if not SCOUT_BRIDGE:
+        raise HTTPException(404, "scout_bridge_url is not configured")
+    try:
+        r = requests.get(f"{SCOUT_BRIDGE}/still.jpg", timeout=6)
+        if r.status_code != 200 or not r.content:
+            raise HTTPException(503, "no frame")
+        return Response(content=r.content, media_type="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
+    except requests.RequestException as e:
+        raise HTTPException(503, f"bridge unreachable: {e}")
+
+
+@app.post("/api/scout/drive")
+async def api_scout_drive(request: Request):
+    """Bounded motion. +y is FORWARD on this robot, +x strafes - see scout.drive()."""
+    require_control(request)
+    if not _scout:
+        raise HTTPException(503, "scout_bridge_url is not configured")
+    try:
+        b = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        b = {}
+    return _reachy_result(*_scout.drive(x=b.get("x", 0.0), y=b.get("y", 0.0),
+                                        yaw=b.get("yaw", 0.0), duration=b.get("duration", 0.6)))
+
+
+@app.post("/api/scout/stop")
+def api_scout_stop(request: Request):
+    require_control(request)
+    if not _scout:
+        raise HTTPException(503, "scout_bridge_url is not configured")
+    return _reachy_result(*_scout.stop())
+
+
 @app.get("/api/reachy/apps")
 def api_reachy_apps():
     """Installed robot apps, which one is running, and which starts at boot."""
@@ -1428,6 +1476,30 @@ button.mini{padding:3px 9px;font-size:11.5px}
      when a service is down (🟢 responding, ⚪ not responding). Dashed entries are not browsable
      web UIs (MQTT, RTSP, VNC).</p>
 
+  <h2>Moorebot Scout</h2>
+  <div class="card" id="scoutCard" style="display:none">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <span id="scoutState" class="hint">checking…</span>
+    </div>
+    <img id="scoutImg" class="still" alt="Scout camera" style="display:none">
+    <p class="hint" id="scoutHint" style="display:none"></p>
+    <!-- +y is FORWARD and +x strafes on this robot, which is not the ROS convention. Verified by
+         driving it: a +0.10 y command moved the camera bodily toward the scene. The arrows are
+         laid out the way they read to a person; the axis mapping is done here, once. -->
+    <div class="row" style="margin-top:10px">
+      <button onclick="scoutDrive(0,0.12,0)"   title="forward (+linear.y)">▲ Forward</button>
+      <button onclick="scoutDrive(0,-0.12,0)"  title="back">▼ Back</button>
+      <button onclick="scoutDrive(-0.12,0,0)"  title="strafe left (-linear.x)">◀ Strafe</button>
+      <button onclick="scoutDrive(0.12,0,0)"   title="strafe right (+linear.x)">Strafe ▶</button>
+      <button onclick="scoutDrive(0,0,0.6)"    title="rotate left (+angular.z)">⟲</button>
+      <button onclick="scoutDrive(0,0,-0.6)"   title="rotate right">⟳</button>
+      <button class="warn" onclick="post('/api/scout/stop')">Stop</button>
+    </div>
+    <p class="hint">Each press drives for 0.6&nbsp;s and then stops on its own — the robot's own
+       MotorNode zeroes velocity when commands stop arriving, so there is nothing latched on.
+       Hold a direction by pressing repeatedly.</p>
+  </div>
+
   <h2>Reachy Mini</h2>
   <div class="card" id="reachyCard">
     <div class="row" style="justify-content:space-between;align-items:center">
@@ -1551,6 +1623,10 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </details>
   </div>
 
+  <h2>Feed <span id="filter" class="hint"></span></h2>
+  <div class="row" id="filters"></div>
+  <div id="feed" style="margin-top:10px"></div>
+
   <h2>Cosmos3-Edge engine</h2>
   <div class="callout">
     <b>All three engines are equally accurate — 95.7% (22/23).</b>
@@ -1593,9 +1669,6 @@ button.mini{padding:3px 9px;font-size:11.5px}
      <code>journalctl -u cosmos3-edge-shim</code>. The columns that <i>do</i> compare engines
      meaningfully here are peak CPU / VRAM / GPU and caption length.</p>
 
-  <h2>Feed <span id="filter" class="hint"></span></h2>
-  <div class="row" id="filters"></div>
-  <div id="feed" style="margin-top:10px"></div>
 </div>
 <script>
 let FILTER='all';
@@ -1716,6 +1789,55 @@ function syncCtl(rs){
   const px=document.getElementById('padXY'), pp=document.getElementById('padPY');
   if(px&&px._paint) px._paint();
   if(pp&&pp._paint) pp._paint();
+}
+
+// ---------------------------------------------------------------- Moorebot Scout
+// +y is FORWARD and +x strafes on this robot - not the ROS convention. The mapping lives here so
+// the buttons can be labelled the way a person thinks about them.
+function scoutDrive(x, y, yaw){
+  return postJSON('/api/scout/drive', {x:x, y:y, yaw:yaw, duration:0.6});
+}
+
+async function postJSON(url, body){
+  try{
+    const r = await fetch(url, {method:'POST',
+      headers:{'Content-Type':'application/json','X-Porch-Token': await tokenReady()},
+      body: JSON.stringify(body)});
+    const j = await r.json().catch(()=>({}));
+    say(j.message || j.detail || (r.ok?'done':'failed'), r.ok);
+  }catch(e){ say(String(e), false); }
+}
+
+async function refreshScout(){
+  const card = document.getElementById('scoutCard');
+  if(!card) return;
+  try{
+    const s = await (await fetch('/api/scout/state',{cache:'no-store'})).json();
+    if(!s.enabled){ card.style.display='none'; return; }
+    card.style.display='block';
+    const img  = document.getElementById('scoutImg');
+    const hint = document.getElementById('scoutHint');
+    const st   = document.getElementById('scoutState');
+
+    if(s.live){
+      st.textContent = `● live · ${s.frames} frames` + (s.driving ? ' · driving' : '');
+      img.src = `/scout/latest.jpg?t=${Date.now()}`;
+      img.style.display='block'; hint.style.display='none';
+    } else {
+      img.style.display='none'; hint.style.display='block';
+      // Distinguish the three ways this goes quiet, because they need different fixes.
+      if(!s.reachable){
+        st.textContent = '○ bridge not running';
+        hint.innerHTML = 'Start it with <code>docker compose --profile scout up -d scout-bridge</code> in <code>/home/orin/nvr</code>.';
+      } else if(!s.ros_connected){
+        st.textContent = '○ bridge up, robot not reachable';
+        hint.textContent = s.error || 'The bridge cannot reach the robot’s ROS master.';
+      } else {
+        st.textContent = '○ connected, no frames';
+        hint.textContent = s.blocked_by ? `Camera held by ${s.blocked_by}.` : (s.error || 'No frames yet.');
+      }
+    }
+  }catch(e){ /* leave the card as it was */ }
 }
 
 // Installed robot apps. Rendered as one button each rather than a dropdown so the running one can
@@ -1929,7 +2051,10 @@ async function load(){
      </div>`).join('')
     : `<p class="hint">No captions yet for this filter. Trigger motion on a camera.</p>`;
 }
+// The Scout refreshes on its own timer: its camera is worth seeing at a higher rate than the
+// 10 s whole-page poll, and it must keep updating even when the robot sections are hidden.
 showSelfUrl(); initCtl(); load(); setInterval(load, 10000);
+refreshScout(); setInterval(refreshScout, 3000);
 </script></body></html>"""
 
 

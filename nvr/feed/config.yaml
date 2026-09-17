@@ -70,6 +70,11 @@ engines:
       to exist, not accuracy. It spends the most tokens per frame (320), which ought to mean
       a sharper look, but that did not show up as a single extra correct call on this eval.
 
+# Moorebot Scout, via scout-bridge on this box (nvr/scout/). Empty disables the card entirely.
+# The bridge is behind the `scout` compose profile, so this shows as unreachable until it is
+# started - which is the honest state rather than a hidden feature.
+scout_bridge_url: "http://172.17.0.1:8098"
+
 # Live camera preview for the Reachy Mini.
 #
 # Source is reachy-mjpeg-bridge.service on this box, which pulls the robot's WebRTC stream with
