@@ -31,6 +31,7 @@ import logging
 import os
 import threading
 import time
+from collections import deque
 
 from aiohttp import web
 
@@ -58,17 +59,27 @@ TOF_STALE_S = 3.0
 # current firmware, with jpg being the already-encoded preview, but the documentation conflict is
 # unresolved and the robot was not available to settle it.
 #
-# This matters more than a topic name usually would: the whole reason this bridge is cheap is that
-# jpg frames need no transcode. If a firmware turns out to publish only h264, MJPEG passthrough
-# cannot work at all and this would need an encoder - a different design with a different RAM
-# budget, not a one-line change. So rather than fail with an empty picture, startup checks what the
-# robot actually publishes and says so.
+# Settled on hardware: the firmware publishes BOTH, so neither source was wrong.
+#   /CoreNode/jpg    6.7 fps   756 kB/s   1920x1080 JPEG, type=1
+#   /CoreNode/h264  23.8 fps   196 kB/s   Annex-B, type=0
+#
+# Both are subscribed. They are used for different jobs and the difference is measured, not
+# aesthetic. Serving JPEG to Frigate means go2rtc must ENCODE h264, which cost 33.8% of a CPU on
+# this board (no NVENC, so libx264 in software) and pushed detector inference from 100 ms to
+# 178 ms, making every other camera drop frames. Passing the robot's own h264 through means go2rtc
+# only remuxes. The jpg topic stays because stills are still wanted: the command centre's camera
+# card and the Cosmos description both need a single frame, and pulling one from h264 would mean
+# decoding - exactly the cost being avoided.
 H264_TOPIC = "/CoreNode/h264"
 
-# roller_eye/frame multiplexes codecs on one topic and tags each with `type`. Only JPEG is useful
-# here; the same topic name also carries H.264 on some firmware, which would look like garbage
-# bytes if passed through as if it were a still.
+# roller_eye/frame multiplexes codecs on one topic and tags each with `type`.
+FRAME_TYPE_H264 = 0
 FRAME_TYPE_JPG = 1
+
+# How much recent h264 to keep so a client that connects mid-stream has something to start on.
+# A decoder cannot begin at an arbitrary NAL: it needs the parameter sets and then an IDR. Those
+# are cached separately and replayed to every new client, which is what makes joining work at all.
+H264_RING = 512
 
 # Restart the subscription after this long with a byte-identical frame. Learned from the Reachy
 # bridge: a stalled stream keeps the frame counter climbing and keeps returning HTTP 200 while
@@ -103,6 +114,16 @@ class Bridge:
         # Latest rangefinder reading and when it arrived. None means nothing within its 2 m range.
         self._tof_m: float | None = None
         self._tof_at = 0.0
+        # h264 passthrough. `_h264_ring` holds recent access units keyed by a monotonic sequence
+        # so each client can track its own position without a per-client queue; `_h264_params`
+        # holds the most recent SPS+PPS and `_h264_idr` the most recent keyframe, which together
+        # are what a joining decoder needs before anything else will decode.
+        self._h264_ring: deque = deque(maxlen=H264_RING)
+        self._h264_seq = 0
+        self._h264_params = b""
+        self._h264_idr: bytes = b""
+        self._h264_frames = 0
+        self._h264_at = 0.0
 
     # ---------------------------------------------------------------------- ROS
     def start_ros(self, master_uri: str) -> None:
@@ -138,6 +159,8 @@ class Bridge:
             self._pub = rospy.Publisher(CMD_VEL_TOPIC, Twist, queue_size=1)
             self._sub = rospy.Subscriber(CAMERA_TOPIC, RollerFrame, self._on_frame, queue_size=1)
             rospy.Subscriber(TOF_TOPIC, Range, self._on_tof, queue_size=1)
+            # Separate subscription, same message type: h264 for Frigate, jpg for stills.
+            rospy.Subscriber(H264_TOPIC, RollerFrame, self._on_h264, queue_size=4)
             self._ros_ready = True
             self._ros_error = self._check_camera_topic(rospy)
             _LOG.info("subscribed to %s, publishing %s", CAMERA_TOPIC, CMD_VEL_TOPIC)
@@ -199,6 +222,42 @@ class Bridge:
                 self._last_digest = None
             except Exception as e:
                 _LOG.error("resubscribe failed: %s", e)
+
+    @staticmethod
+    def _nal_types(buf: bytes) -> set[int]:
+        """NAL unit types present in an Annex-B buffer.
+
+        Only the type nibble is read - this never parses or rewrites the bitstream, because the
+        whole point is to hand the robot's bytes to ffmpeg untouched.
+        """
+        types, i, n = set(), 0, len(buf)
+        while True:
+            j = buf.find(b"\x00\x00\x01", i)
+            if j < 0 or j + 3 >= n:
+                break
+            types.add(buf[j + 3] & 0x1F)
+            i = j + 3
+        return types
+
+    def _on_h264(self, msg) -> None:
+        """Buffer an h264 access unit for passthrough. No decode, no re-encode, no parsing."""
+        if getattr(msg, "type", FRAME_TYPE_H264) != FRAME_TYPE_H264:
+            return
+        data = bytes(msg.data)
+        if not data:
+            return
+        kinds = self._nal_types(data)
+        with self._lock:
+            # 7 = SPS, 8 = PPS. Cache whenever they appear; they rarely change but a client that
+            # connects later has no other way to get them.
+            if 7 in kinds or 8 in kinds:
+                self._h264_params = data if (5 not in kinds) else self._h264_params or data
+            if 5 in kinds:                      # 5 = IDR, the only safe place to start decoding
+                self._h264_idr = data
+            self._h264_seq += 1
+            self._h264_ring.append((self._h264_seq, data))
+            self._h264_frames += 1
+            self._h264_at = time.monotonic()
 
     def _on_tof(self, msg) -> None:
         """Keep the newest range reading.
@@ -319,6 +378,45 @@ class Bridge:
             pass
         return resp
 
+    async def h264(self, request: web.Request) -> web.StreamResponse:
+        """The robot's own h264, byte for byte, as a raw Annex-B elementary stream.
+
+        ffmpeg reads this with `-f h264 -i http://...`, and go2rtc with `#video=copy` then only
+        remuxes it - no encode. That is the entire point: encoding this 1920x1080 stream in
+        software cost 33.8% of a CPU and made every other Frigate camera drop frames.
+
+        A new client is sent the cached parameter sets and the most recent IDR before anything
+        else. Without that a decoder sits on undecodable inter frames until the next keyframe,
+        which on this robot is about a second - long enough to look broken.
+        """
+        resp = web.StreamResponse(
+            status=200,
+            headers={"Content-Type": "video/h264", "Cache-Control": "no-store"},
+        )
+        await resp.prepare(request)
+
+        with self._lock:
+            params, idr, cursor = self._h264_params, self._h264_idr, self._h264_seq
+        try:
+            if params:
+                await resp.write(params)
+            if idr and idr != params:
+                await resp.write(idr)
+            while True:
+                with self._lock:
+                    pending = [(s, d) for s, d in self._h264_ring if s > cursor]
+                if pending:
+                    for s, d in pending:
+                        await resp.write(d)
+                        cursor = s
+                else:
+                    # Poll rather than signal: the producer is a ROS callback on another thread,
+                    # and a short sleep is simpler and safer than waking the loop from it.
+                    await asyncio.sleep(0.02)
+        except (ConnectionResetError, asyncio.CancelledError):
+            pass
+        return resp
+
     async def still(self, request: web.Request) -> web.Response:
         with self._lock:
             frame = self.latest
@@ -348,6 +446,9 @@ class Bridge:
             "tof_m": (round(tof_m, 3) if tof_m is not None else None),
             "tof_age_s": tof_age,
             "tof_fresh": bool(tof_age is not None and tof_age < TOF_STALE_S),
+            "h264_frames": self._h264_frames,
+            "h264_ready": bool(self._h264_idr),
+            "h264_age_s": (round(time.monotonic() - self._h264_at, 1) if self._h264_at else None),
         })
 
     async def http_drive(self, request: web.Request) -> web.Response:
@@ -386,6 +487,7 @@ async def main() -> None:
 
     app = web.Application()
     app.router.add_get("/mjpeg", bridge.mjpeg)
+    app.router.add_get("/h264", bridge.h264)
     app.router.add_get("/still.jpg", bridge.still)
     app.router.add_get("/healthz", bridge.health)
     app.router.add_post("/drive", bridge.http_drive)
