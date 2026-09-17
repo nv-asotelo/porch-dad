@@ -159,6 +159,16 @@ services:
     name: homeassistant
     port: 8123
     heavy_mb: 400
+  # Off unless deliberately started - it lives behind the `scout` compose profile, so it does not
+  # come up with the rest of the NVR. Measured at 37 MB with frames flowing, which is why it is
+  # worth having at all on this board.
+  - key: scout
+    label: "Moorebot Scout bridge"
+    kind: docker
+    name: scout-bridge
+    port: 8098
+    heavy_mb: 40
+    note: "ROS1 camera -> MJPEG for Frigate, plus the drive relay. Needs a Scout on the LAN."
   # Listed last because it is this page. Stopping it removes the only way to start it again from a
   # browser, so the UI demands confirmation and the action is deferred (see _deferred_self_action).
   - key: feed
@@ -182,6 +192,9 @@ links:
   - {name: "Live VLM WebUI",     port: 8090,  scheme: "https", path: "/"}
   - {name: "Home Assistant",     port: 8123,  scheme: "http",  path: "/"}
   - {name: "Cosmos3-Edge API",   port: 8000,  scheme: "http",  path: "/v1/models"}
+  # Health rather than /mjpeg: probing the stream would open a video connection on every poll.
+  # Shows as down until the scout profile is started, which is the honest state.
+  - {name: "Scout bridge",       port: 8098,  scheme: "http",  path: "/healthz"}
   - {name: "ring-mqtt setup",    port: 55123, scheme: "http",  path: "/"}
   - {name: "MQTT broker",        port: 1883,  tcp_only: true}
   - {name: "Ring RTSP",          port: 8554,  tcp_only: true}

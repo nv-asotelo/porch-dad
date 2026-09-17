@@ -101,6 +101,12 @@ go2rtc:
     # Idle until something consumes it; the camera below is what turns the work on.
     reachy_mini:
       - "ffmpeg:http://host.docker.internal:8099/mjpeg#video=h264"
+    # Moorebot Scout. Same arrangement as the Reachy above: a helper on this box turns a
+    # transport ffmpeg cannot open (here a ROS1 topic) into MJPEG. The robot sends frames it has
+    # already JPEG-encoded, so the bridge only copies bytes and go2rtc does the h264 encode.
+    # Idle until something consumes it; the camera below is what turns the work on.
+    scout:
+      - "ffmpeg:http://host.docker.internal:8098/mjpeg#video=h264"
     front_entryway:
       - rtsp://ring-mqtt:8554/343ea4e653f3_live?video
     front_driveway:
@@ -258,6 +264,25 @@ review:
       - exterior lights switching on or off unexpectedly
 
 cameras:
+  scout:
+    # OFF by default, like reachy_mini - and additionally because the bridge that feeds it is
+    # itself behind a compose profile, so enabling this without starting scout-bridge gives a
+    # camera that can never connect. Detect only, no recording, person tracking, 2 fps.
+    enabled: false
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/scout
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 2
+    objects:
+      track:
+        - person
   reachy_mini:
     # OFF by default - toggle from the porch-dad command centre (Camera power), which flips this
     # flag over MQTT with no restart. While on it costs ~1 core of detection plus an h264

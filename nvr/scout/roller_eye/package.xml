@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!--
+  Messages-only catkin package for the Moorebot Scout.
+
+  This is NOT robot firmware and nothing here runs on the robot. It exists solely so rospy on the
+  Jetson can deserialise the frames the robot publishes: ROS1 resolves a topic's type by name and
+  then imports the generated Python class, so without this package a subscriber to /CoreNode/jpg
+  fails with "Cannot load message class ... Are your messages built?".
+
+  msg/frame.msg is copied BYTE FOR BYTE from Pilot-Labs-Dev/Scout-open-source (MIT, see LICENSE).
+  Do not reformat it, not even whitespace: ROS hashes the definition text into an MD5 that both
+  ends compare, and a publisher whose hash differs is refused. Editing this file to make it
+  "tidier" would silently break the camera.
+
+  Only frame.msg is vendored. Motion uses stock geometry_msgs/Twist, so none of the vendor's other
+  .msg/.srv definitions are needed for what this deployment does.
+-->
+<package format="2">
+  <name>roller_eye</name>
+  <version>0.0.1</version>
+  <description>Moorebot Scout message definitions needed to subscribe to its camera topic.</description>
+  <!-- catkin validates this against a real address format; example.com is the reserved domain. -->
+  <maintainer email="porch-dad@example.com">porch-dad</maintainer>
+  <license>MIT</license>
+  <url type="website">https://github.com/Pilot-Labs-Dev/Scout-open-source</url>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+</package>
