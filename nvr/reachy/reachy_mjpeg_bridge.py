@@ -35,6 +35,12 @@ _LOG = logging.getLogger("reachy-mjpeg")
 # Restart the session after this long with a byte-identical frame.
 STALE_AFTER = 12.0
 
+# Retry pacing. A failing acquire backs off to MAX_BACKOFF_S rather than hammering, and when
+# the failure is 'an app owns the camera' the bridge stops trying altogether and just polls
+# the lock, because that state ends when a human stops the app, not sooner.
+MAX_BACKOFF_S = 30.0
+BLOCKED_POLL_S = 15.0
+
 # Pollen's stream client ships inside the HA custom component and has no HA imports.
 HA_COMPONENTS = Path("/home/orin/nvr/reachy")
 sys.path.insert(0, str(HA_COMPONENTS))
@@ -63,6 +69,9 @@ class Bridge:
         self._last_digest: str | None = None
         self._digest_since = 0.0
         self._restarts = 0
+        self._backoff = 3.0
+        # Name of the robot app currently holding the camera, if that is why we have no frames.
+        self._blocked_by: str | None = None
 
     async def start(self) -> None:
         self.session = aiohttp.ClientSession()
@@ -100,18 +109,61 @@ class Bridge:
                 else:
                     await asyncio.sleep(0.5)
             except Exception as e:
-                _LOG.warning("stream error (%s), re-acquiring", e)
-                try:
-                    await self.client.release()
-                except Exception:
-                    pass
-                await asyncio.sleep(3)
-                try:
-                    await self.client.acquire()
-                except Exception as e2:
-                    _LOG.error("re-acquire failed: %s", e2)
-                    await asyncio.sleep(5)
+                # Find out WHY before retrying. The robot's camera has exactly one consumer: the
+                # daemon hands the robot lock to one app at a time, and an on-robot app using
+                # robot.media.get_frame owns the camera completely. Retrying into that is not just
+                # futile, it is harmful - each attempt opens a fresh WebRTC session, and a loop of
+                # them starves the other things that want the stream. Measured: with a conversation
+                # app running this retried every 13 s, 310 times, and the robot's own desktop app
+                # could not get a stream until the loop was stopped.
+                holder = await self._app_holding_camera()
+                if holder:
+                    if self._blocked_by != holder:
+                        _LOG.warning("camera is held by the app %r - going dormant until it stops",
+                                     holder)
+                    self._blocked_by = holder
+                    await self._release_quietly()
+                    await asyncio.sleep(BLOCKED_POLL_S)
+                    continue
+
+                self._blocked_by = None
+                self._backoff = min(MAX_BACKOFF_S, max(3.0, self._backoff * 2))
+                _LOG.warning("stream error (%s), restarting session in %.0fs", e, self._backoff)
+                await asyncio.sleep(self._backoff)
+                # A FRESH client, not release()+acquire() on this one. Re-acquiring an existing
+                # client brings the signalling connection back - the socket to :8443 shows
+                # ESTABLISHED - while the media track stays dead, so every subsequent read times
+                # out waiting for a frame that will never come. That is what kept this loop
+                # spinning for hours: it looked like it was reconnecting and it never was.
+                await self._restart()
             await asyncio.sleep(self.interval)
+
+    async def _release_quietly(self) -> None:
+        try:
+            await self.client.release()
+        except Exception:
+            pass
+
+    async def _app_holding_camera(self) -> str | None:
+        """Name of the robot app holding the lock, if any.
+
+        Asked over plain REST rather than inferred from the stream failure, because "no frames"
+        and "someone else owns the camera" look identical from the WebRTC side and only one of
+        them is worth retrying.
+        """
+        try:
+            async with self.session.get(
+                f"http://{self.host}:8000/api/daemon/robot-app-lock-status",
+                timeout=aiohttp.ClientTimeout(total=4),
+            ) as r:
+                if r.status != 200:
+                    return None
+                data = await r.json()
+        except Exception:
+            return None
+        if (data or {}).get("state") == "local_app":
+            return (data.get("holder_name") or "an app")
+        return None
 
     async def _restart(self) -> None:
         """Tear the session down and build a new one. Release alone is not enough: the client
@@ -170,6 +222,9 @@ class Bridge:
             "stale_s": stale,
             "restarts": self._restarts,
             "live": bool(self.latest is not None and (stale is None or stale < STALE_AFTER)),
+            # Distinguishes "broken" from "deliberately dormant because an app owns the
+            # camera", which otherwise look the same from outside.
+            "blocked_by": self._blocked_by,
         })
 
 
