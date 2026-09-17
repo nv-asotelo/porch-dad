@@ -49,15 +49,18 @@ which is why it talks to the robot directly.
 * **SSH works with the stock user:** `ssh linaro@192.168.7.6`, password `linaro`. This is a
   publicly documented default, not a secret, and a defunct vendor will not be changing it. It is
   the durable local back door.
-* **`root/plt` does NOT work** on this firmware, and **`sudo` is deliberately crippled** — the
-  setuid bit is stripped from `/usr/bin/sudo` (`sudo: must be owned by uid 0 and have the setuid
-  bit set`), so `linaro` cannot escalate. Remote root is therefore not available via documented
-  credentials.
-* **Key-based login could not be installed:** `/home/linaro` and `/home/linaro/.ssh` are both
-  `root:root`, so `linaro` cannot write an `authorized_keys`. Password auth is the access method.
-* Getting root would need the UART serial console (physical) or an exploit of a root-owned ROS
-  node — neither attempted. Root is only needed for a full block-level `dd` image or for the
-  boot-script surgery below, and neither is necessary for the robot to keep working.
+* **`root/plt` does NOT work**, and **`sudo` is deliberately crippled** — the setuid bit is
+  stripped from `/usr/bin/sudo`, so `linaro` cannot escalate on its own.
+* **Root IS available** through the phone app's "elevated rights" feature, which sets a root SSH
+  password. With that one-time root window, a **durable SSH key** (the Jetson's
+  `~/.ssh/scout_ed25519`) was installed into both `/root/.ssh/authorized_keys` and
+  `/home/linaro/.ssh/authorized_keys` (whose directory was root-owned and had to be chowned to
+  `linaro` first). **Passwordless key login now works for both accounts and no longer depends on
+  any password** — this is the permanent back door, and it survives a password change or the app
+  revoking its grant. The root password itself is deliberately **not recorded here**; the key
+  supersedes it.
+* `linaro` was added to the **`audio` group** (`usermod -aG audio linaro`) so audio capture and
+  playback work unprivileged — see the audio section below.
 
 ## Preservation backup
 
@@ -77,6 +80,26 @@ A read-only backup was streamed off the robot to the Jetson (nothing written to 
 This is **not committed to this repo** — it is Moorebot's firmware, not ours, and stays on the
 Jetson only. It exists so the local ROS stack can be understood or reconstructed if the device is
 ever wiped or replaced.
+
+## Audio (two-way, local)
+
+The Scout has a mic and speaker but exposes **no ROS audio and no RTSP audio** — its audio path is
+the closed cloud P2P stack. Local audio is nonetheless possible through ALSA now that `linaro` has
+audio-group access, and the codec is **not** held exclusively by the cloud stack (verified: nothing
+in `fuser /dev/snd/*`, and a capture succeeded while the vendor services ran).
+
+Card 0 is the Rockchip rk809 codec with two devices:
+
+| ALSA device | Role | Working params (measured) |
+|---|---|---|
+| `hw:0,1` | microphone (PDM voice) | `S16_LE`, **2 channels** (mono is rejected), 16 kHz — captured a live signal at peak 28006/32767 |
+| `hw:0,0` | speaker (i2s hifi) | `S16_LE`, 2 channels, 8–96 kHz |
+
+So the local audio path is: `ssh linaro@scout` (key auth) → `arecord -D hw:0,1 -f S16_LE -c 2 -r 16000`
+for the mic, and pipe PCM to `aplay -D hw:0,0` for the speaker, relayed to the browser by porch-dad
+over a WebSocket. Both capture channels carry the same voice; downmix to mono for transport.
+Half-duplex push-to-talk is the honest design — there is no on-robot echo cancellation, so a live
+mic and live speaker would feed back.
 
 ## What was deliberately NOT done, and why
 
