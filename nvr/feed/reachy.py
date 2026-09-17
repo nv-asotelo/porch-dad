@@ -140,6 +140,14 @@ class Reachy:
             out["app"] = None
         out["move_running"] = bool(self._get("/api/move/running") or [])
 
+        # Who actually holds the robot. The daemon grants the lock to one app at a time, and
+        # whoever holds it owns the camera and the microphone - which is why the camera card goes
+        # dark while a conversation app runs. Worth stating plainly rather than leaving someone to
+        # work it out from a black preview.
+        lock = self._get("/api/daemon/robot-app-lock-status") or {}
+        out["lock_state"] = lock.get("state")
+        out["lock_holder"] = lock.get("holder_name")
+
         loop = backend.get("control_loop_stats") or {}
         out["control_hz"] = round(float(loop.get("mean_control_loop_frequency") or 0.0), 1)
         out["control_errors"] = loop.get("nb_error")

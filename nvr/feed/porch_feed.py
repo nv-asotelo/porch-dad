@@ -1439,17 +1439,41 @@ button.mini{padding:3px 9px;font-size:11.5px}
       No frames. This reads <code>reachy-mjpeg-bridge.service</code> on this box, which pulls the
       robot's WebRTC stream directly — it does <b>not</b> need the Live VLM WebUI running.
     </p>
+    <!-- The Cosmos caption belongs with the picture it describes, not buried in the controls. -->
+    <div id="reachyAlert" class="ralert"></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="rq('/api/reachy/check')">Look &amp; describe</button>
+    </div>
+    <p class="hint" id="reachyWatchHint"></p>
   </div>
 
   <div class="card" id="reachyCtl" style="display:none">
-    <div id="reachyAlert" class="ralert"></div>
     <div class="hint" id="reachyStatus2">checking…</div>
-    <div class="row" style="margin-top:8px">
+    <!-- What currently owns the robot. The daemon gives one app the lock at a time and that app
+         takes the camera and microphone with it, so this is the line that explains a dark preview
+         and a deaf anomaly watcher. -->
+    <div class="hint" id="reachyBusy"></div>
+
+    <div class="sec">▷ Apps <span class="hint" id="reachyAppNow" style="text-transform:none;letter-spacing:0">—</span></div>
+    <div class="row" id="reachyApps"></div>
+    <p class="hint">One app at a time; starting one stops the other. A conversation app takes the
+       microphone and camera, so the anomaly watcher goes quiet while it runs.</p>
+
+    <div class="row" style="margin-top:10px">
       <button onclick="rq('/api/reachy/action/wake')">Wake</button>
       <button onclick="rq('/api/reachy/action/sleep')">Sleep</button>
+    </div>
+
+    <!-- Pose, motor modes and volumes are occasional; collapsed so they stop dominating the page.
+         Native <details> rather than a scripted toggle, so it survives the 10 s refresh without
+         any state to keep. -->
+    <details id="reachyPose" style="margin-top:12px">
+      <summary style="cursor:pointer;color:var(--mut);font-size:12px;text-transform:uppercase;
+                      letter-spacing:.08em">Pose, motors &amp; volume</summary>
+
+    <div class="row" style="margin-top:10px">
       <button onclick="rq('/api/reachy/action/center')">Centre</button>
       <button onclick="rq('/api/reachy/action/look-at-voice')">Look at voice</button>
-      <button onclick="rq('/api/reachy/check')">Look &amp; describe</button>
     </div>
     <div class="row" style="margin-top:8px">
       <span class="hint">Motors</span>
@@ -1457,10 +1481,6 @@ button.mini{padding:3px 9px;font-size:11.5px}
       <button onclick="rq('/api/reachy/motors/gravity_compensation')">Soft</button>
       <button onclick="rq('/api/reachy/motors/disabled')">Limp</button>
     </div>
-    <div class="sec">▷ Apps <span class="hint" id="reachyAppNow" style="text-transform:none;letter-spacing:0">—</span></div>
-    <div class="row" id="reachyApps"></div>
-    <p class="hint">The robot runs one app at a time; starting one stops the other. A conversation
-       app takes the microphone and speaker, so the anomaly watcher's ear goes with it.</p>
 
     <div class="sec">⌇⌇ Antennas</div>
     <div class="ctlrow">
@@ -1522,7 +1542,7 @@ button.mini{padding:3px 9px;font-size:11.5px}
              oninput="document.getElementById('spkVal').textContent=this.value+'%'"
              onchange="rq('/api/reachy/volume/speaker/'+this.value)">
     </div>
-    <p class="hint" id="reachyWatchHint"></p>
+    </details>
   </div>
 
   <h2>Cosmos3-Edge engine</h2>
@@ -1838,6 +1858,20 @@ async function load(){
         + `yaw ${p.yaw??'—'}° pitch ${p.pitch??'—'}° body ${rs.body_yaw_deg??'—'}°`
         + (rs.speech_detected?' · 🔊 hearing speech':'')
         + (rs.doa_deg!=null?` · voice at ${rs.doa_deg}°`:'');
+
+      // What is using the robot right now. control_hz is the honest load signal: the 50 Hz loop is
+      // the highest-priority work on the robot's CM4, so it sags when something is eating the CPU.
+      // Measured on this robot: ~46 Hz idle, ~49 with a thin conversation app, ~31 with a heavy one.
+      const busy = document.getElementById('reachyBusy');
+      const hz = rs.control_hz;
+      const bits = [];
+      if(rs.lock_holder) bits.push(`🔒 ${rs.lock_holder} holds the robot — it owns the camera and mic`);
+      else bits.push('🔓 no app holding the robot');
+      if(hz!=null) bits.push(`control loop ${hz} Hz${hz<40?' (loaded)':''}`);
+      if(rs.control_errors) bits.push(`${rs.control_errors} loop errors`);
+      if(rs.move_running) bits.push('a move is playing');
+      busy.textContent = bits.join(' · ');
+      busy.style.color = (hz!=null && hz<35) ? 'var(--y)' : '';
       const setv=(id,v,lbl)=>{const e=document.getElementById(id);
         if(e&&document.activeElement!==e&&v!=null){e.value=v;document.getElementById(lbl).textContent=v+'%';}};
       setv('micVol', rs.mic_volume, 'micVal');
