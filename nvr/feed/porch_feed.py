@@ -36,11 +36,15 @@ from email.utils import formatdate
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import alert_policy
+import base64
 import requests
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+from reachy import MOTOR_MODES, Reachy as ReachyClient
 
 CFG = yaml.safe_load(Path(os.environ.get("PORCH_FEED_CONFIG",
                                          "/home/orin/nvr/feed/config.yaml")).read_text())
@@ -58,9 +62,34 @@ MIN_FREE_MB = int(CFG.get("min_free_mb_to_start_service", 400))
 # Shared secret for the mutating endpoints. Read-only views stay open so the feed is easy to read
 # on a phone; anything that runs sudo requires this.
 CONTROL_TOKEN = str(CFG.get("control_token") or "").strip()
+# Records why a service is in the state it is in. Written whenever the control plane starts or
+# stops something, so "off" can be distinguished from "off on purpose".
+#
+# This exists because automation (and assistants) kept restarting services a human had
+# deliberately stopped, reading a clean shutdown as a fault. A clean `systemctl stop` and a crash
+# look almost identical in the journal after the fact; the difference is intent, and intent has to
+# be recorded at the moment of the action or it is gone.
+INTENT_PATH = Path(CFG.get("service_intent_path")
+                   or str(Path(DB_PATH).parent / "service_intent.json"))
 LINKS = CFG.get("links") or []
 LINKS_HOST = CFG.get("links_host") or "127.0.0.1"
 REACHY_WEBUI = str(CFG.get("reachy_webui_url") or "").rstrip("/")
+REACHY_CAM = str(CFG.get("reachy_camera_url") or "").rstrip("/")
+REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
+_reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
+# Anomaly watch: the microphone triggers the eye.
+#
+# Continuous captioning of the robot's view would mean a ~650 ms VLM call every few seconds,
+# competing with the NVR for a GPU that already holds a 3.6 GB model. Instead the cheap signal
+# gates the expensive one: poll direction-of-arrival (a tiny JSON GET, no decode, no GPU) and only
+# spend an inference when the robot actually hears something, rate-limited by a cooldown.
+REACHY_WATCH = bool(CFG.get("reachy_watch_enabled", True))
+REACHY_WATCH_COOLDOWN = float(CFG.get("reachy_watch_cooldown", 60))
+# Which alert_policy categories count as an anomaly for the robot's indoor view. See the filter in
+# reachy_look_and_describe() for why this is narrower than the exterior policy.
+REACHY_ALERT_CATEGORIES = set(CFG.get("reachy_alert_categories") or ["person", "animal"])
+_reachy_alert: dict = {"at": None, "description": None, "categories": [], "headline": None,
+                       "trigger": None, "checked": 0, "last_check": 0.0}
 REACHY_SESSION = str(CFG.get("reachy_session") or "reachy")
 
 _lock = threading.Lock()
@@ -199,6 +228,77 @@ def _probe(link: dict) -> dict:
         url = f"{scheme}://{host}:{port}{link.get('url_path', '')}"
     return {"name": link["name"], "port": port, "url": url, "up": up,
             "browsable": not link.get("tcp_only", False)}
+
+
+def reachy_look_and_describe(trigger: str) -> dict:
+    """One frame, one VLM call, classified by the existing alert policy.
+
+    Deliberately reuses alert_policy rather than asking the model to judge: the prompt enumerates
+    nothing, because this 4B model reports back whatever the prompt lists.
+    """
+    global _reachy_alert
+    if not REACHY_CAM:
+        return {"error": "no camera bridge configured"}
+    try:
+        img = requests.get(f"{REACHY_CAM}/still.jpg", timeout=6)
+        if img.status_code != 200 or not img.content:
+            return {"error": "no frame available"}
+        b64 = base64.b64encode(img.content).decode()
+        payload = {
+            "model": "cosmos3-edge",
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b64}},
+                {"type": "text", "text": alert_policy.DESCRIBE_PROMPT},
+            ]}],
+            "max_tokens": 128,
+            "temperature": 0.0,
+        }
+        r = requests.post(f"{CFG['cosmos3_url'].rstrip('/')}/v1/chat/completions",
+                          json=payload, timeout=120)
+        r.raise_for_status()
+        desc = r.json()["choices"][0]["message"]["content"].strip()
+    except (requests.RequestException, KeyError, ValueError) as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+    verdict = alert_policy.classify(desc)          # a dict, not a list
+    cats = verdict.get("categories") or []
+
+    # Narrow the policy for an indoor robot. alert_policy is written for exterior security, where a
+    # package on the ground or a vehicle is meaningful; pointed at a desk it fires on cardboard.
+    # Indoors the anomaly worth surfacing is a living thing that should not be there, so only
+    # those categories count. Everything else is still recorded, just not raised as an alert.
+    cats = [c for c in cats if c in REACHY_ALERT_CATEGORIES]
+
+    _reachy_alert = {
+        "at": time.time(),
+        "description": desc,
+        "categories": cats,
+        "alert": bool(cats),
+        "all_categories": verdict.get("categories") or [],
+        "headline": verdict.get("headline") or desc,
+        "trigger": trigger,
+        "checked": _reachy_alert.get("checked", 0) + 1,
+        "last_check": time.time(),
+    }
+    if cats:
+        print(f"[feed] reachy anomaly ({trigger}) {cats}: {desc[:110]}", flush=True)
+    return _reachy_alert
+
+
+def reachy_watcher() -> None:
+    """Poll the robot's ear; spend an inference only when it hears something."""
+    if not (REACHY_WATCH and _reachy and REACHY_CAM):
+        return
+    while True:
+        try:
+            doa = _reachy._get("/api/state/doa") or {}
+            if doa.get("speech_detected"):
+                since = time.time() - (_reachy_alert.get("last_check") or 0)
+                if since >= REACHY_WATCH_COOLDOWN:
+                    reachy_look_and_describe("speech")
+        except Exception as e:
+            print(f"[feed] reachy watcher: {e}", flush=True)
+        time.sleep(3)
 
 
 def link_poller() -> None:
@@ -358,6 +458,30 @@ SERVICES = {s["key"]: s for s in (CFG.get("services") or [])}
 ACTIONS = ("start", "stop", "restart")
 
 
+def load_intent() -> dict:
+    try:
+        return json.loads(INTENT_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def record_intent(key: str, action: str, actor: str = "user", note: str = "") -> None:
+    """Remember that someone deliberately put this service into this state."""
+    data = load_intent()
+    data[key] = {
+        "desired": "stopped" if action == "stop" else "running",
+        "action": action,
+        "by": actor,
+        "at": time.time(),
+        "note": note,
+    }
+    try:
+        INTENT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        INTENT_PATH.write_text(json.dumps(data, indent=2))
+    except OSError as e:
+        print(f"[feed] could not record intent for {key}: {e}", flush=True)
+
+
 def free_mb() -> int:
     info = {}
     with open("/proc/meminfo") as f:
@@ -416,9 +540,20 @@ def service_status(key: str) -> dict:
     else:
         health = "down"
 
+    intent = load_intent().get(key) or {}
     return {
         "key": key,
         "label": s.get("label", key),
+        # `intent` answers "was this meant to be off?" - check it before starting anything.
+        "intent": intent.get("desired"),
+        "intent_by": intent.get("by"),
+        "intent_at": intent.get("at"),
+        "intent_note": intent.get("note"),
+        # True when something is running that a human deliberately stopped, or vice versa.
+        "contradicts_intent": bool(
+            intent.get("desired")
+            and ((intent["desired"] == "stopped") == (state in ("active", "running")))
+        ),
         "kind": s["kind"],
         "unit": s.get("unit") or s.get("name"),
         "port": s.get("port"),
@@ -482,6 +617,9 @@ def set_service(key: str, action: str) -> tuple[bool, str]:
         if fm < MIN_FREE_MB:
             return False, (f"refused: only {fm} MB free, need {MIN_FREE_MB} MB. "
                            f"Stop another service first.")
+
+    # Record intent before acting, so a stop that half-succeeds is still known to be deliberate.
+    record_intent(key, action, actor="user")
 
     if s.get("self"):
         return _deferred_self_action(s["unit"], action)
@@ -934,13 +1072,12 @@ def reachy_latest():
     untrusted origin. Fetching here and re-serving same-origin avoids asking the user to accept a
     certificate just to see a thumbnail.
     """
-    if not REACHY_WEBUI:
-        raise HTTPException(404, "reachy_webui_url is not configured")
+    if not REACHY_CAM:
+        raise HTTPException(404, "reachy_camera_url is not configured")
     try:
-        r = requests.get(f"{REACHY_WEBUI}/api/push/latest.jpg",
-                         params={"session_id": REACHY_SESSION}, timeout=5, verify=False)
+        r = requests.get(f"{REACHY_CAM}/still.jpg", timeout=5)
     except requests.RequestException as e:
-        raise HTTPException(502, f"Live VLM WebUI unreachable: {e}")
+        raise HTTPException(502, f"camera bridge unreachable: {e}")
     if r.status_code != 200 or not r.content:
         raise HTTPException(404, "no frame available yet")
     return Response(r.content, media_type="image/jpeg",
@@ -950,23 +1087,101 @@ def reachy_latest():
 @app.get("/api/reachy")
 def api_reachy():
     """Whether the Reachy Mini push source is currently delivering frames."""
-    out = {"configured": bool(REACHY_WEBUI), "session": REACHY_SESSION,
+    # The link is built from links_host, not from reachy_webui_url. The latter is a loopback
+    # address so this service can fetch frames locally; handing that to a browser on another
+    # machine points it at its own localhost.
+    port = REACHY_WEBUI.rsplit(":", 1)[-1] if ":" in REACHY_WEBUI else "8090"
+    scheme = "https" if REACHY_WEBUI.startswith("https") else "http"
+    out = {"configured": bool(REACHY_CAM), "session": REACHY_SESSION,
            "connected": False, "fps": None, "frames": 0, "resolution": None,
-           "link": f"{REACHY_WEBUI}/?session={REACHY_SESSION}" if REACHY_WEBUI else None}
-    if not REACHY_WEBUI:
+           "source": "reachy-mjpeg-bridge",
+           "link": (f"{scheme}://{LINKS_HOST}:{port}/?session={REACHY_SESSION}"
+                    if REACHY_WEBUI else None)}
+    if not REACHY_CAM:
         return out
     try:
-        r = requests.get(f"{REACHY_WEBUI}/api/push/status", timeout=4, verify=False)
-        for st in (r.json().get("streams") or []):
-            if st.get("session_id") == REACHY_SESSION:
-                out.update(connected=bool(st.get("connected")), fps=st.get("fps"),
-                           frames=st.get("frames_received", 0),
-                           resolution=(f"{st.get('width')}\u00d7{st.get('height')}"
-                                       if st.get("width") else None))
-                break
+        r = requests.get(f"{REACHY_CAM}/healthz", timeout=4)
+        d = r.json()
+        # The bridge reports a running frame count; "has_frame" is what makes the preview useful.
+        out.update(connected=bool(d.get("has_frame")), frames=d.get("frames", 0))
     except (requests.RequestException, ValueError):
         pass
     return out
+
+
+@app.get("/api/reachy/state")
+def api_reachy_state():
+    """Full robot state for the control panel. Degrades rather than erroring when it is off."""
+    if not _reachy:
+        return {"enabled": False}
+    st = _reachy.state()
+    st["enabled"] = True
+    return JSONResponse(st)
+
+
+@app.post("/api/reachy/action/{name}")
+def api_reachy_action(name: str, request: Request):
+    """One-shot buttons. Guarded like every other control that touches hardware."""
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    actions = {
+        "wake": _reachy.wake,
+        "sleep": _reachy.sleep,
+        "center": _reachy.center,
+        "look-at-voice": _reachy.look_at_voice,
+    }
+    fn = actions.get(name)
+    if not fn:
+        raise HTTPException(404, f"unknown action {name}")
+    ok, msg = fn()
+    return _reachy_result(ok, msg)
+
+
+@app.post("/api/reachy/motors/{mode}")
+def api_reachy_motors(mode: str, request: Request):
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    return _reachy_result(*_reachy.set_motor_mode(mode))
+
+
+@app.post("/api/reachy/volume/{which}/{value}")
+def api_reachy_volume(which: str, value: int, request: Request):
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    if which not in ("speaker", "mic"):
+        raise HTTPException(400, "which must be speaker or mic")
+    return _reachy_result(*_reachy.set_volume(which, value))
+
+
+@app.post("/api/reachy/look/{axis}/{deg}")
+def api_reachy_look_axis(axis: str, deg: float, request: Request):
+    """Nudge one axis. Positive pitch tilts DOWN - the robot's own convention, kept honest here."""
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    if axis not in ("pitch", "yaw", "roll", "body_yaw"):
+        raise HTTPException(400, "axis must be pitch, yaw, roll or body_yaw")
+    return _reachy_result(*_reachy.look(**{axis: deg}))
+
+
+@app.get("/api/reachy/alert")
+def api_reachy_alert():
+    """Most recent anomaly check: what it saw, and whether the policy called it an alert."""
+    return JSONResponse({**_reachy_alert, "watching": bool(REACHY_WATCH and _reachy and REACHY_CAM),
+                         "cooldown_s": REACHY_WATCH_COOLDOWN})
+
+
+@app.post("/api/reachy/check")
+def api_reachy_check(request: Request):
+    """Look now, on demand. Costs one VLM call."""
+    require_control(request)
+    res = reachy_look_and_describe("manual")
+    if res.get("error"):
+        raise HTTPException(502, res["error"])
+    return res
 
 
 @app.get("/healthz")
@@ -1046,6 +1261,14 @@ button.off{background:rgba(255,92,92,.14);border-color:var(--r);color:var(--r)}
      background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
 .svc-id{min-width:0;flex:1}
 .svc-name{font-size:14.5px}
+.svc.held{border-left:3px solid var(--y)}
+.intent{margin-top:4px;font-size:12px;color:var(--y)}
+.intent.off b{color:var(--r)}
+.ralert{display:none;border-radius:9px;padding:9px 12px;margin-bottom:8px;font-size:13px}
+.ralert.hit{display:block;background:rgba(255,92,92,.13);border:1px solid var(--r);color:var(--r)}
+.ralert.clear{display:block;background:rgba(118,185,0,.10);border:1px solid var(--line);color:var(--mut)}
+.vol{margin-top:10px}
+.vol label{display:block;margin-top:6px;font-size:12px;color:var(--mut)}
 .svc .hint{margin:2px 0 0;word-break:break-word}
 .selfurl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);
          border:1px solid var(--line);border-left:3px solid var(--g);border-radius:10px;
@@ -1073,7 +1296,7 @@ button.mini{padding:3px 9px;font-size:11.5px}
      when a service is down (🟢 responding, ⚪ not responding). Dashed entries are not browsable
      web UIs (MQTT, RTSP, VNC).</p>
 
-  <h2>Reachy Mini camera</h2>
+  <h2>Reachy Mini</h2>
   <div class="card" id="reachyCard">
     <div class="row" style="justify-content:space-between;align-items:center">
       <span id="reachyState" class="hint">checking…</span>
@@ -1081,9 +1304,47 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </div>
     <img id="reachyImg" class="still" alt="Reachy Mini camera" style="display:none">
     <p class="hint" id="reachyHint" style="display:none">
-      No frames on this session. The push client feeds it — see
-      <code>examples/push_reachy_mini.py</code> in the live-vlm-webui fork.
+      No frames. This reads <code>reachy-mjpeg-bridge.service</code> on this box, which pulls the
+      robot's WebRTC stream directly — it does <b>not</b> need the Live VLM WebUI running.
     </p>
+  </div>
+
+  <div class="card" id="reachyCtl" style="display:none">
+    <div id="reachyAlert" class="ralert"></div>
+    <div class="hint" id="reachyStatus2">checking…</div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="rq('/api/reachy/action/wake')">Wake</button>
+      <button onclick="rq('/api/reachy/action/sleep')">Sleep</button>
+      <button onclick="rq('/api/reachy/action/center')">Centre</button>
+      <button onclick="rq('/api/reachy/action/look-at-voice')">Look at voice</button>
+      <button onclick="rq('/api/reachy/check')">Look &amp; describe</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <span class="hint">Motors</span>
+      <button onclick="rq('/api/reachy/motors/enabled')">Stiff</button>
+      <button onclick="rq('/api/reachy/motors/gravity_compensation')">Soft</button>
+      <button onclick="rq('/api/reachy/motors/disabled')">Limp</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <span class="hint">Pose</span>
+      <button onclick="rq('/api/reachy/look/pitch/-12')" title="pitch is positive downward">Look up</button>
+      <button onclick="rq('/api/reachy/look/pitch/12')">Look down</button>
+      <button onclick="rq('/api/reachy/look/yaw/25')">Left</button>
+      <button onclick="rq('/api/reachy/look/yaw/-25')">Right</button>
+      <button onclick="rq('/api/reachy/look/body_yaw/40')">Body ⟲</button>
+      <button onclick="rq('/api/reachy/look/body_yaw/-40')">Body ⟳</button>
+    </div>
+    <div class="vol">
+      <label>Microphone <span id="micVal" class="hint"></span></label>
+      <input type="range" id="micVol" min="0" max="100" step="5"
+             oninput="document.getElementById('micVal').textContent=this.value+'%'"
+             onchange="rq('/api/reachy/volume/mic/'+this.value)">
+      <label>Speaker <span id="spkVal" class="hint"></span></label>
+      <input type="range" id="spkVol" min="0" max="100" step="5"
+             oninput="document.getElementById('spkVal').textContent=this.value+'%'"
+             onchange="rq('/api/reachy/volume/speaker/'+this.value)">
+    </div>
+    <p class="hint" id="reachyWatchHint"></p>
   </div>
 
   <h2>Cosmos3-Edge engine</h2>
@@ -1100,6 +1361,10 @@ button.mini{padding:3px 9px;font-size:11.5px}
 
   <h2>Service power</h2>
   <div id="services"></div>
+  <p class="hint"><b>Services stopped on purpose stay stopped.</b> Turning one off here records
+     who did it and when; the card then shows a "stopped by user" badge, turning it back on asks
+     for confirmation, and <code>/api/status</code> exposes the same flag so automation can check
+     before restarting something deliberately shut down.</p>
   <p class="hint">Every action is verified against the <b>port</b>, not against systemd — a unit can
      report <i>active</i> while the shim is still loading engines and cannot answer. Stops report
      how much RAM actually came back; starting is refused when free memory is low, because the
@@ -1146,6 +1411,7 @@ async function copySelf(){
   try{ await navigator.clipboard.writeText(window.location.origin + '/'); say('Address copied', true); }
   catch(e){ say('Copy failed - long-press the link instead', false); }
 }
+async function rq(url){ return post(url); }
 async function post(url){
   try{ const r=await fetch(url,{method:'POST',headers:{'X-Porch-Token':TOKEN}});
        const j=await r.json().catch(()=>({}));
@@ -1177,14 +1443,26 @@ async function load(){
     const confirm = s.self
       ? `if(!window.confirm('This stops the page you are using. You will need SSH to start it again. Continue?'))return;`
       : '';
-    return `<div class="svc">
+    // "Stopped by you" is the important state to surface: it is the one that must not be
+    // quietly undone by anybody - human or automation - without asking first.
+    const when = s.intent_at ? new Date(s.intent_at*1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    let intentBadge = '';
+    if (s.intent === 'stopped') {
+      intentBadge = `<div class="intent off">⏸ stopped by ${esc(s.intent_by||'user')} · ${when}`
+                  + (s.contradicts_intent ? ' — <b>but it is running again</b>' : '')
+                  + `${s.intent_note ? ' · '+esc(s.intent_note) : ''}</div>`;
+    } else if (s.intent === 'running' && s.contradicts_intent) {
+      intentBadge = `<div class="intent off">▶ started by ${esc(s.intent_by||'user')} · ${when} — <b>but it is down</b></div>`;
+    }
+    return `<div class="svc${s.intent==='stopped'?' held':''}">
       <div class="svc-id">
         <div class="svc-name">${dot} ${esc(s.label)}</div>
         <div class="hint">${esc(s.unit||'')} · ${s.state} · ${portTxt}${s.note?' · '+esc(s.note):''}</div>
+        ${intentBadge}
       </div>
       <div class="row">
         <button class="${s.running?'on':''}" ${s.running?'disabled':''}
-                onclick="post('/api/service/${s.key}/start')">ON</button>
+                onclick="${s.intent==='stopped'?`if(!window.confirm('${esc(s.label)} was stopped on purpose. Turn it back on?'))return;`:''}post('/api/service/${s.key}/start')">ON</button>
         <button class="${!s.running?'off':'warn'}" ${!s.running?'disabled':''}
                 onclick="${confirm}post('/api/service/${s.key}/stop')">OFF</button>
         <button onclick="${confirm}post('/api/service/${s.key}/restart')">RESTART</button>
@@ -1215,18 +1493,51 @@ async function load(){
     const hint= document.getElementById('reachyHint');
     document.getElementById('reachyLink').href = rc.link || '#';
     if(rc.connected){
-      st.textContent = `● live · ${rc.resolution||'—'} · ${rc.fps||'—'} fps · ${rc.frames} frames`;
+      st.textContent = `● live · ${rc.frames} frames · via ${rc.source||'bridge'}`;
       st.style.color = 'var(--g)';
       img.style.display = 'block'; hint.style.display = 'none';
       // Only fetch the still while frames are actually arriving; otherwise this proxies a 404
       // every second for no reason.
       img.src = `/reachy/latest.jpg?t=${Date.now()}`;
     } else {
-      st.textContent = rc.configured ? '○ no frames on session "'+rc.session+'"' : '○ not configured';
+      st.textContent = rc.configured ? '○ no frames yet — is reachy-mjpeg-bridge.service running?'
+                                     : '○ not configured';
       st.style.color = 'var(--mut)';
       img.style.display = 'none'; img.removeAttribute('src');
       hint.style.display = 'block';
     }
+  }catch(e){}
+
+  try{
+    const rs = await (await fetch('/api/reachy/state',{cache:'no-store'})).json();
+    const box = document.getElementById('reachyCtl');
+    if(rs.enabled && rs.reachable){
+      box.style.display='block';
+      const p = rs.pose_deg||{};
+      document.getElementById('reachyStatus2').textContent =
+        `${rs.awake?'● awake':'○ asleep'} · motors ${rs.motor_mode||'?'} · `
+        + `yaw ${p.yaw??'—'}° pitch ${p.pitch??'—'}° body ${rs.body_yaw_deg??'—'}°`
+        + (rs.speech_detected?' · 🔊 hearing speech':'')
+        + (rs.doa_deg!=null?` · voice at ${rs.doa_deg}°`:'');
+      const setv=(id,v,lbl)=>{const e=document.getElementById(id);
+        if(e&&document.activeElement!==e&&v!=null){e.value=v;document.getElementById(lbl).textContent=v+'%';}};
+      setv('micVol', rs.mic_volume, 'micVal');
+      setv('spkVol', rs.speaker_volume, 'spkVal');
+    } else { box.style.display = rs.enabled ? 'block' : 'none';
+             if(rs.enabled) document.getElementById('reachyStatus2').textContent='robot unreachable'; }
+
+    const al = await (await fetch('/api/reachy/alert',{cache:'no-store'})).json();
+    const el = document.getElementById('reachyAlert');
+    if(al.at){
+      const when = new Date(al.at*1000).toLocaleTimeString();
+      const hit = !!al.alert;
+      el.className = 'ralert ' + (hit?'hit':'clear');
+      el.innerHTML = (hit?'⚠️ <b>'+esc(al.headline||'anomaly')+'</b><br>':'')
+                   + esc(al.description||'') + ` <span class="hint">(${esc(al.trigger||'')} · ${when})</span>`;
+    } else { el.className='ralert'; }
+    document.getElementById('reachyWatchHint').textContent = al.watching
+      ? `Watching: a VLM look is spent only when the robot hears speech, at most once per ${al.cooldown_s}s. ${al.checked||0} checks so far.`
+      : 'Anomaly watch is off.';
   }catch(e){}
 
   const cmp = await (await fetch('/api/compare',{cache:'no-store'})).json();
@@ -1263,6 +1574,7 @@ def main() -> None:
     init_db()
     threading.Thread(target=mqtt_loop, daemon=True).start()
     threading.Thread(target=link_poller, daemon=True).start()
+    threading.Thread(target=reachy_watcher, daemon=True).start()
     print(f"[feed] engine={active_engine()['id']} port={CFG.get('web_port', 8096)}", flush=True)
     uvicorn.run(app, host=CFG.get("web_host", "0.0.0.0"),
                 port=int(CFG.get("web_port", 8096)), log_level="warning")

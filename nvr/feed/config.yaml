@@ -70,12 +70,25 @@ engines:
       to exist, not accuracy. It spends the most tokens per frame (320), which ought to mean
       a sharper look, but that did not show up as a single extra correct call on this eval.
 
-# Live camera preview for the Reachy Mini push source.
+# Live camera preview for the Reachy Mini.
 #
-# The image is proxied through this service rather than embedded straight from the WebUI: the WebUI
-# serves HTTPS with a self-signed certificate, and a browser on this (plain HTTP) page will refuse
-# to render an image from an untrusted origin unless the user has separately accepted that cert.
-# Fetching it server-side and re-serving it same-origin sidesteps that entirely.
+# Source is reachy-mjpeg-bridge.service on this box, which pulls the robot's WebRTC stream with
+# aiortc and re-serves stills. Deliberately NOT the Live VLM WebUI: that is a Cosmos-optimisation
+# tool, not part of the NVR, and is routinely switched off to save load - which used to take this
+# preview down with it. The bridge binds the docker gateway so containers can reach it too.
+#
+# Still proxied through this service rather than embedded directly, so the browser only ever talks
+# to one origin.
+reachy_camera_url: "http://172.17.0.1:8099"
+reachy_daemon_url: "http://192.168.6.162:8000"
+# Anomaly watch. The cheap signal (direction-of-arrival, a tiny JSON poll) gates the expensive one
+# (a VLM look), so the robot's view costs nothing until it actually hears something.
+reachy_watch_enabled: true
+reachy_watch_cooldown: 60
+# alert_policy is written for exterior security, where a package or vehicle matters. Pointed at an
+# indoor desk it fires on cardboard boxes, so only living things count as an anomaly here.
+reachy_alert_categories: [person, animal]
+# Only used to build the "open in" link; the preview no longer depends on it being up.
 reachy_webui_url: "https://127.0.0.1:8090"
 reachy_session: "reachy"
 
