@@ -25,3 +25,6 @@ FACTS.md
 # cached event stills served by the RSS feed (runtime data)
 nvr/feed/snapshots/
 *.db
+
+# Local Claude Code tooling permissions; machine-specific, not project config.
+.claude/settings.local.json

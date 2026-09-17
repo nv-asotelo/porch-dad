@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python3 -c ' *)",
-      "Bash(cp /tmp/ram_test/deployed_fork.service systemd/live-vlm-webui-fork.service)"
-    ]
-  }
-}
