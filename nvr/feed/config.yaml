@@ -88,6 +88,10 @@ reachy_watch_cooldown: 60
 # alert_policy is written for exterior security, where a package or vehicle matters. Pointed at an
 # indoor desk it fires on cardboard boxes, so only living things count as an anomaly here.
 reachy_alert_categories: [person, animal]
+# A look is also spent when Frigate detects one of these. Empty camera list = any camera; the
+# shared cooldown keeps a busy camera from turning this into continuous inference.
+reachy_trigger_labels: [person, dog, cat]
+reachy_trigger_cameras: []
 # Only used to build the "open in" link; the preview no longer depends on it being up.
 reachy_webui_url: "https://127.0.0.1:8090"
 reachy_session: "reachy"

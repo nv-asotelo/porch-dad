@@ -1,0 +1,20 @@
+[Unit]
+Description=Reachy Mini camera -> MJPEG bridge (for Frigate)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=orin
+WorkingDirectory=/home/orin/nvr/reachy
+# Binds the docker bridge gateway (172.17.0.1), not 0.0.0.0: Frigate runs in a bridged
+# Nothing outside the Jetson needs it, and the robot camera should not be exposed on the LAN.
+ExecStart=/home/orin/reachy_env/bin/python /home/orin/nvr/reachy/reachy_mjpeg_bridge.py \
+  --robot-host 192.168.6.162 --listen 172.17.0.1 --listen-port 8099 --fps 5
+Restart=on-failure
+RestartSec=5
+# Small, but this board runs a 3.6 GB model; cap it so a leak cannot threaten that.
+MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target

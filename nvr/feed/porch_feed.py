@@ -88,6 +88,10 @@ REACHY_WATCH_COOLDOWN = float(CFG.get("reachy_watch_cooldown", 60))
 # Which alert_policy categories count as an anomaly for the robot's indoor view. See the filter in
 # reachy_look_and_describe() for why this is narrower than the exterior policy.
 REACHY_ALERT_CATEGORIES = set(CFG.get("reachy_alert_categories") or ["person", "animal"])
+# Frigate labels that also trigger a look. Empty camera list means any camera.
+REACHY_TRIGGER_LABELS = {str(x).lower() for x in
+                         (CFG.get("reachy_trigger_labels") or ["person", "dog", "cat"])}
+REACHY_TRIGGER_CAMERAS = {str(x) for x in (CFG.get("reachy_trigger_cameras") or [])}
 _reachy_alert: dict = {"at": None, "description": None, "categories": [], "headline": None,
                        "trigger": None, "checked": 0, "last_check": 0.0}
 REACHY_SESSION = str(CFG.get("reachy_session") or "reachy")
@@ -815,9 +819,29 @@ def mqtt_loop() -> None:
             data = json.loads(msg.payload.decode())
         except Exception:
             return
+        after = data.get("after") or {}
+
+        # Detection trigger for the robot's anomaly check. Frigate fires "new" as soon as it has a
+        # tracked object, which is the moment worth looking - waiting for "end" would describe a
+        # scene after whatever caused it has gone. The same cooldown as the speech trigger applies,
+        # so a busy camera cannot turn this into continuous inference.
+        if data.get("type") in ("new", "update"):
+            label = (after.get("label") or "").lower()
+            cam = after.get("camera") or ""
+            if label in REACHY_TRIGGER_LABELS and (
+                not REACHY_TRIGGER_CAMERAS or cam in REACHY_TRIGGER_CAMERAS
+            ):
+                since = time.time() - (_reachy_alert.get("last_check") or 0)
+                if since >= REACHY_WATCH_COOLDOWN:
+                    threading.Thread(
+                        target=reachy_look_and_describe,
+                        args=(f"{label}@{cam}",),
+                        daemon=True,
+                    ).start()
+
         if data.get("type") != "end":
             return
-        threading.Thread(target=handle_event, args=(data.get("after") or {},), daemon=True).start()
+        threading.Thread(target=handle_event, args=(after,), daemon=True).start()
 
     c = mqtt.Client()
     c.on_connect, c.on_message = on_connect, on_message
@@ -1171,7 +1195,10 @@ def api_reachy_look_axis(axis: str, deg: float, request: Request):
 def api_reachy_alert():
     """Most recent anomaly check: what it saw, and whether the policy called it an alert."""
     return JSONResponse({**_reachy_alert, "watching": bool(REACHY_WATCH and _reachy and REACHY_CAM),
-                         "cooldown_s": REACHY_WATCH_COOLDOWN})
+                         "cooldown_s": REACHY_WATCH_COOLDOWN,
+                         "triggers": {"speech": True,
+                                      "labels": sorted(REACHY_TRIGGER_LABELS),
+                                      "cameras": sorted(REACHY_TRIGGER_CAMERAS) or ["any"]}})
 
 
 @app.post("/api/reachy/check")
@@ -1536,7 +1563,9 @@ async function load(){
                    + esc(al.description||'') + ` <span class="hint">(${esc(al.trigger||'')} · ${when})</span>`;
     } else { el.className='ralert'; }
     document.getElementById('reachyWatchHint').textContent = al.watching
-      ? `Watching: a VLM look is spent only when the robot hears speech, at most once per ${al.cooldown_s}s. ${al.checked||0} checks so far.`
+      ? `Watching: a look is spent when the robot hears speech, or Frigate detects `
+        + `${(al.triggers&&al.triggers.labels||[]).join('/')} on ${(al.triggers&&al.triggers.cameras||['any']).join(', ')}. `
+        + `At most once per ${al.cooldown_s}s — ${al.checked||0} checks so far.`
       : 'Anomaly watch is off.';
   }catch(e){}
 
