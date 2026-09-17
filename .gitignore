@@ -28,3 +28,6 @@ nvr/feed/snapshots/
 
 # Local Claude Code tooling permissions; machine-specific, not project config.
 .claude/settings.local.json
+
+# Python wheels: these land here from ad-hoc pip download runs and are not part of the repo.
+*.whl
