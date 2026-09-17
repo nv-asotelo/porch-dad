@@ -307,6 +307,42 @@ class Reachy:
         ok, msg = self._post("/api/move/goto", payload)
         return ok, ("centred" if ok else msg)
 
+    # ------------------------------------------------------------------ apps
+    #
+    # The robot runs ONE app at a time, and the daemon owns their lifecycle - installing from a
+    # Hugging Face Space into a venv on the robot, starting, stopping. This is how a conversation
+    # app gets switched on without SSHing into the robot, so the command centre exposes it.
+    #
+    # Only installed apps are listed. The daemon will also happily list the ~470 published Spaces,
+    # which is a catalogue to browse, not a control surface, and putting it on this page would bury
+    # the dozen apps that are actually here.
+    def apps(self) -> dict:
+        installed = self._get("/api/apps/list-available/installed") or []
+        current = self._get("/api/apps/current-app-status")
+        startup = (self._get("/api/apps/startup-app") or {}).get("startup_app")
+        running = None
+        if isinstance(current, dict):
+            running = current.get("name")
+        return {
+            "installed": [{"name": a.get("name"),
+                           "url": ((a.get("extra") or {}).get("custom_app_url") or "").replace(
+                               "0.0.0.0", self.base.split("//")[-1].split(":")[0])}
+                          for a in installed if a.get("name")],
+            "running": running,
+            "startup": startup,
+        }
+
+    def start_app(self, name: str):
+        """Start an installed app. The daemon stops whatever was running first."""
+        if not name or "/" in name:
+            return False, "bad app name"
+        ok, msg = self._post(f"/api/apps/start-app/{name}")
+        return ok, (f"starting {name}" if ok else msg)
+
+    def stop_app(self):
+        ok, msg = self._post("/api/apps/stop-current-app")
+        return ok, ("stopped" if ok else msg)
+
     def look_at_voice(self):
         """Turn the head toward the last detected speaker.
 

@@ -1230,6 +1230,30 @@ async def api_reachy_target(request: Request):
     return _reachy_result(ok, msg)
 
 
+@app.get("/api/reachy/apps")
+def api_reachy_apps():
+    """Installed robot apps, which one is running, and which starts at boot."""
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    return _reachy.apps()
+
+
+@app.post("/api/reachy/apps/start/{name}")
+def api_reachy_app_start(name: str, request: Request):
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    return _reachy_result(*_reachy.start_app(name))
+
+
+@app.post("/api/reachy/apps/stop")
+def api_reachy_app_stop(request: Request):
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    return _reachy_result(*_reachy.stop_app())
+
+
 @app.get("/api/reachy/limits")
 def api_reachy_limits():
     """Ranges for the control panel, so the sliders cannot ask for something unreachable.
@@ -1433,6 +1457,11 @@ button.mini{padding:3px 9px;font-size:11.5px}
       <button onclick="rq('/api/reachy/motors/gravity_compensation')">Soft</button>
       <button onclick="rq('/api/reachy/motors/disabled')">Limp</button>
     </div>
+    <div class="sec">▷ Apps <span class="hint" id="reachyAppNow" style="text-transform:none;letter-spacing:0">—</span></div>
+    <div class="row" id="reachyApps"></div>
+    <p class="hint">The robot runs one app at a time; starting one stops the other. A conversation
+       app takes the microphone and speaker, so the anomaly watcher's ear goes with it.</p>
+
     <div class="sec">⌇⌇ Antennas</div>
     <div class="ctlrow">
       <div class="ctl">
@@ -1597,13 +1626,15 @@ async function tokenReady(){
   return TOKEN;
 }
 
-function fmt(v,n){ return (v<0?'':' ') + v.toFixed(n===undefined?3:n); }
+// Not `fmt`: the page already has a const fmt for dates, and redeclaring a const is a hard
+// SyntaxError that would kill every script on the page, not just this panel.
+function rcNum(v,n){ return (v<0?'':' ') + v.toFixed(n===undefined?3:n); }
 
 function bindSlider(id, lblId, key, unit, idx){
   const el=document.getElementById(id), lbl=document.getElementById(lblId);
   if(!el) return;
   const paint=()=>{ const v=parseFloat(el.value);
-    lbl.textContent = fmt(v) + (unit||''); };
+    lbl.textContent = rcNum(v) + (unit||''); };
   el.addEventListener('input', ()=>{ tTouch();
     const v=parseFloat(el.value);
     if(idx===undefined) T[key]=v; else T.antennas[idx]=v;
@@ -1621,7 +1652,7 @@ function bindPad(id, lblId, kx, ky, rx, ry, inv){
     const fx=(T[kx]/rx+1)/2, fy=((inv?-T[ky]:T[ky])/ry+1)/2;
     dot.style.left=(Math.min(1,Math.max(0,fx))*100)+'%';
     dot.style.top=(100-Math.min(1,Math.max(0,fy))*100)+'%';
-    lbl.textContent=fmt(T[kx])+' '+fmt(T[ky]);
+    lbl.textContent=rcNum(T[kx])+' '+rcNum(T[ky]);
   };
   const at=(ev)=>{
     const b=pad.getBoundingClientRect();
@@ -1646,7 +1677,7 @@ function syncCtl(rs){
   const p=rs.pose_deg||{}, m=rs.pos_m||{};
   const set=(id,lbl,v,unit)=>{const e=document.getElementById(id);
     if(e&&document.activeElement!==e&&v!=null){e.value=v;
-      const b=document.getElementById(lbl); if(b) b.textContent=fmt(v)+(unit||'');}};
+      const b=document.getElementById(lbl); if(b) b.textContent=rcNum(v)+(unit||'');}};
   if(p.roll!=null){ T.roll=p.roll*D2R; set('roll','rollv',T.roll,' rad'); }
   if(p.pitch!=null) T.pitch=p.pitch*D2R;
   if(p.yaw!=null)   T.yaw=p.yaw*D2R;
@@ -1659,6 +1690,26 @@ function syncCtl(rs){
   const px=document.getElementById('padXY'), pp=document.getElementById('padPY');
   if(px&&px._paint) px._paint();
   if(pp&&pp._paint) pp._paint();
+}
+
+// Installed robot apps. Rendered as one button each rather than a dropdown so the running one can
+// show as pressed - which app has the robot is the thing you actually want to see at a glance.
+async function refreshApps(){
+  const box = document.getElementById('reachyApps');
+  if(!box) return;
+  try{
+    const a = await (await fetch('/api/reachy/apps',{cache:'no-store'})).json();
+    const now = document.getElementById('reachyAppNow');
+    now.textContent = a.running ? ('running: ' + a.running) : 'nothing running';
+    box.innerHTML = (a.installed||[]).map(app=>{
+      const on = app.name === a.running;
+      // The app's own settings page - where a conversation app takes its API key and persona.
+      const link = (on && app.url) ? ` <a href="${esc(app.url)}" target="_blank" rel="noreferrer">↗</a>` : '';
+      const href = '/api/reachy/apps/start/' + encodeURIComponent(app.name);
+      return `<button class="${on?'on':''}" onclick="post('${href}')">${esc(app.name)}</button>${link}`;
+    }).join('') + (a.running
+      ? `<button class="warn" onclick="post('/api/reachy/apps/stop')">Stop app</button>` : '');
+  }catch(e){ /* the panel keeps whatever it last showed */ }
 }
 
 function initCtl(){
@@ -1787,6 +1838,7 @@ async function load(){
       setv('micVol', rs.mic_volume, 'micVal');
       setv('spkVol', rs.speaker_volume, 'spkVal');
       syncCtl(rs);
+      refreshApps();
     } else { box.style.display = rs.enabled ? 'block' : 'none';
              if(rs.enabled) document.getElementById('reachyStatus2').textContent='robot unreachable'; }
 
