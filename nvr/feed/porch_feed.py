@@ -1442,7 +1442,9 @@ button.mini{padding:3px 9px;font-size:11.5px}
     <!-- The Cosmos caption belongs with the picture it describes, not buried in the controls. -->
     <div id="reachyAlert" class="ralert"></div>
     <div class="row" style="margin-top:8px">
-      <button onclick="rq('/api/reachy/check')">Look &amp; describe</button>
+      <button onclick="rq('/api/reachy/check')"
+              title="Grabs one frame from the camera above and sends it to Cosmos3-Edge. This is the button that writes a new caption.">
+        Look &amp; describe</button>
     </div>
     <p class="hint" id="reachyWatchHint"></p>
   </div>
@@ -1473,7 +1475,11 @@ button.mini{padding:3px 9px;font-size:11.5px}
 
     <div class="row" style="margin-top:10px">
       <button onclick="rq('/api/reachy/action/center')">Centre</button>
-      <button onclick="rq('/api/reachy/action/look-at-voice')">Look at voice</button>
+      <!-- Label, not route: the endpoint name stays put so anything already calling it keeps
+           working. "Look at voice" read like it produced a caption, which it does not. -->
+      <button onclick="rq('/api/reachy/action/look-at-voice')"
+              title="Turns the head toward the last sound the microphone array heard. No camera, no caption.">
+        Face the last sound</button>
     </div>
     <div class="row" style="margin-top:8px">
       <span class="hint">Motors</span>
