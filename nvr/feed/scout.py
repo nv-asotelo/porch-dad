@@ -51,6 +51,10 @@ class Scout:
             # clear - distinguish that from "no reading yet" with tof_fresh.
             "tof_m": h.get("tof_m"),
             "tof_fresh": bool(h.get("tof_fresh")),
+            "battery_pct": h.get("battery_pct"),
+            "battery_state": h.get("battery_state"),
+            "battery_fresh": bool(h.get("battery_fresh")),
+            "h264_ready": bool(h.get("h264_ready")),
             "blocked_by": h.get("blocked_by"),
             "error": h.get("error"),
         }

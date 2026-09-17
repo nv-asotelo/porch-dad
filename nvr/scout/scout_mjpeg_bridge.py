@@ -54,6 +54,11 @@ TOF_TOPIC = "/SensorNode/tof"
 # A reading older than this is not trustworthy as an obstacle check.
 TOF_STALE_S = 3.0
 
+# Battery, roller_eye/status: an int32[] where [0] is the charge state and [1] is percent.
+# Constants from status.msg: CHARGING=0, UNCHARGE=1, FULL=2, UNKNOWN=3.
+BATTERY_TOPIC = "/SensorNode/simple_battery_status"
+BATTERY_STATE = {0: "charging", 1: "discharging", 2: "full", 3: "unknown"}
+
 # The vendor's own README documents the video stream as /CoreNode/h264 and never mentions
 # /CoreNode/jpg, while every working community project reads /CoreNode/jpg. Both appear to exist on
 # current firmware, with jpg being the already-encoded preview, but the documentation conflict is
@@ -114,6 +119,9 @@ class Bridge:
         # Latest rangefinder reading and when it arrived. None means nothing within its 2 m range.
         self._tof_m: float | None = None
         self._tof_at = 0.0
+        self._batt_pct: int | None = None
+        self._batt_state: str | None = None
+        self._batt_at = 0.0
         # h264 passthrough. `_h264_ring` holds recent access units keyed by a monotonic sequence
         # so each client can track its own position without a per-client queue; `_h264_params`
         # holds the most recent SPS+PPS and `_h264_idr` the most recent keyframe, which together
@@ -142,6 +150,7 @@ class Bridge:
             from geometry_msgs.msg import Twist
             from sensor_msgs.msg import Range
             from roller_eye.msg import frame as RollerFrame
+            from roller_eye.msg import status as RollerStatus
         except ImportError as e:
             self._ros_error = (f"ROS imports failed ({e}); the roller_eye messages are probably "
                                f"not built - see nvr/scout/README.md")
@@ -159,6 +168,7 @@ class Bridge:
             self._pub = rospy.Publisher(CMD_VEL_TOPIC, Twist, queue_size=1)
             self._sub = rospy.Subscriber(CAMERA_TOPIC, RollerFrame, self._on_frame, queue_size=1)
             rospy.Subscriber(TOF_TOPIC, Range, self._on_tof, queue_size=1)
+            rospy.Subscriber(BATTERY_TOPIC, RollerStatus, self._on_battery, queue_size=1)
             # Separate subscription, same message type: h264 for Frigate, jpg for stills.
             rospy.Subscriber(H264_TOPIC, RollerFrame, self._on_h264, queue_size=4)
             self._ros_ready = True
@@ -258,6 +268,14 @@ class Bridge:
             self._h264_ring.append((self._h264_seq, data))
             self._h264_frames += 1
             self._h264_at = time.monotonic()
+
+    def _on_battery(self, msg) -> None:
+        """roller_eye/status.status is [charge_state, percent, ...]."""
+        st = list(getattr(msg, "status", []) or [])
+        if len(st) >= 2:
+            self._batt_state = BATTERY_STATE.get(int(st[0]), "unknown")
+            self._batt_pct = int(st[1])
+            self._batt_at = time.monotonic()
 
     def _on_tof(self, msg) -> None:
         """Keep the newest range reading.
@@ -446,6 +464,9 @@ class Bridge:
             "tof_m": (round(tof_m, 3) if tof_m is not None else None),
             "tof_age_s": tof_age,
             "tof_fresh": bool(tof_age is not None and tof_age < TOF_STALE_S),
+            "battery_pct": self._batt_pct,
+            "battery_state": self._batt_state,
+            "battery_fresh": bool(self._batt_at and (time.monotonic() - self._batt_at) < 30.0),
             "h264_frames": self._h264_frames,
             "h264_ready": bool(self._h264_idr),
             "h264_age_s": (round(time.monotonic() - self._h264_at, 1) if self._h264_at else None),

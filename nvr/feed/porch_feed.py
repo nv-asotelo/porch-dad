@@ -1473,6 +1473,16 @@ a.chip:hover{border-color:var(--g);background:rgba(118,185,0,.10)}
 input[type=range]{width:100%;accent-color:var(--g)}
 input[type=range].vert{writing-mode:vertical-lr;direction:rtl;width:22px;height:120px}
 .ctl.wide{flex-basis:100%}
+
+/* Scout drive: a D-pad grid plus a rotate pair, laid out like the robot's own app. */
+.sxy{display:flex;gap:18px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:5px}
+.dpad button{width:46px;height:46px;padding:0;font-size:17px;border-radius:9px}
+.d-u{grid-area:1/2}.d-l{grid-area:2/1}.d-c{grid-area:2/2}.d-r{grid-area:2/3}.d-d{grid-area:3/2}
+.dpad button:active{background:rgba(118,185,0,.18);border-color:var(--g)}
+.rotpad{display:flex;flex-direction:column;gap:4px;align-items:center}
+.rotpad button{width:52px;height:46px;font-size:19px}
+.batt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .chip.locked{opacity:.55;cursor:not-allowed;border-style:dashed}
 .chip .hint{margin:0;font-size:11.5px;opacity:.8}
 .callout{background:rgba(74,163,255,.09);border:1px solid rgba(74,163,255,.35);border-left:3px solid var(--b);
@@ -1527,30 +1537,57 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </div>
     <img id="scoutImg" class="still" alt="Scout camera" style="display:none">
     <p class="hint" id="scoutHint" style="display:none"></p>
-    <!-- +y is FORWARD and +x strafes on this robot, which is not the ROS convention. Verified by
-         driving it: a +0.10 y command moved the camera bodily toward the scene. The arrows are
-         laid out the way they read to a person; the axis mapping is done here, once. -->
-    <div class="row" style="margin-top:10px">
-      <button onclick="scoutDrive(0,0.12,0)"   title="forward (+linear.y)">▲ Forward</button>
-      <button onclick="scoutDrive(0,-0.12,0)"  title="back">▼ Back</button>
-      <button onclick="scoutDrive(-0.12,0,0)"  title="strafe left (-linear.x)">◀ Strafe</button>
-      <button onclick="scoutDrive(0.12,0,0)"   title="strafe right (+linear.x)">Strafe ▶</button>
-      <button onclick="scoutDrive(0,0,0.6)"    title="rotate left (+angular.z)">⟲</button>
-      <button onclick="scoutDrive(0,0,-0.6)"   title="rotate right">⟳</button>
-      <button class="warn" onclick="post('/api/scout/stop')">Stop</button>
+
+    <!-- Mecanum drive. +y is FORWARD and +x strafes on this robot, which is NOT the ROS
+         convention - verified by driving it. The pad is laid out the way a person reads it; the
+         axis mapping is done in scoutDrive(), once. Held motion is by repetition: each command
+         drives 0.6 s then the robot's own MotorNode zeroes it, so nothing latches. -->
+    <div class="sxy">
+      <div class="dpad">
+        <button class="d-u" onmousedown="scoutHold(0,0.15,0)" onmouseup="scoutRelease()"
+                onmouseleave="scoutRelease()" ontouchstart="scoutHold(0,0.15,0)" ontouchend="scoutRelease()"
+                title="forward">▲</button>
+        <button class="d-l" onmousedown="scoutHold(-0.15,0,0)" onmouseup="scoutRelease()"
+                onmouseleave="scoutRelease()" ontouchstart="scoutHold(-0.15,0,0)" ontouchend="scoutRelease()"
+                title="strafe left">◀</button>
+        <button class="d-c warn" onclick="post('/api/scout/stop')" title="stop">■</button>
+        <button class="d-r" onmousedown="scoutHold(0.15,0,0)" onmouseup="scoutRelease()"
+                onmouseleave="scoutRelease()" ontouchstart="scoutHold(0.15,0,0)" ontouchend="scoutRelease()"
+                title="strafe right">▶</button>
+        <button class="d-d" onmousedown="scoutHold(0,-0.15,0)" onmouseup="scoutRelease()"
+                onmouseleave="scoutRelease()" ontouchstart="scoutHold(0,-0.15,0)" ontouchend="scoutRelease()"
+                title="back">▼</button>
+      </div>
+      <div class="rotpad">
+        <span class="hint">rotate</span>
+        <div class="row">
+          <button onmousedown="scoutHold(0,0,0.7)" onmouseup="scoutRelease()" onmouseleave="scoutRelease()"
+                  ontouchstart="scoutHold(0,0,0.7)" ontouchend="scoutRelease()" title="rotate left (CCW)">⟲</button>
+          <button onmousedown="scoutHold(0,0,-0.7)" onmouseup="scoutRelease()" onmouseleave="scoutRelease()"
+                  ontouchstart="scoutHold(0,0,-0.7)" ontouchend="scoutRelease()" title="rotate right (CW)">⟳</button>
+        </div>
+      </div>
     </div>
+
+    <!-- Gamepad: any HID controller the browser sees - Amazon Luna, Xbox, PS - drives the robot
+         through the same /drive endpoint. Left stick = strafe + forward, right stick X = rotate.
+         This is what gives the analogue, held-input feel the on-screen pad can only approximate. -->
+    <div class="row" style="margin-top:10px;align-items:center">
+      <button id="scoutGpBtn" onclick="scoutGamepadToggle()">🎮 Use gamepad</button>
+      <span id="scoutGpState" class="hint"></span>
+    </div>
+
     <div class="row" style="margin-top:8px">
+      <button onclick="scoutSnapshot()" title="Save the current frame to your device">📷 Snapshot</button>
       <button onclick="post('/api/scout/check')"
               title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
         Look &amp; describe</button>
     </div>
     <div id="scoutAlert" class="ralert"></div>
-    <p class="hint">Each press drives for 0.6&nbsp;s and then stops on its own — the robot's own
-       MotorNode zeroes velocity when commands stop arriving, so there is nothing latched on.
-       Hold a direction by pressing repeatedly. The <b>range</b> above is the robot's forward
-       time-of-flight sensor, and it is what to trust for obstacles: asked whether it could drive
-       ahead with a dog 25&nbsp;cm in front, the model said “clear” three times out of three while
-       this sensor read 0.25&nbsp;m.</p>
+    <p class="hint">The <b>range</b> in the status line is the forward time-of-flight sensor and is
+       what to trust for obstacles — and it only guards <b>forward</b>: strafe, reverse and rotate
+       are unprotected, and there is no rear sensor. Watch the video. Held motion drives 0.6&nbsp;s
+       at a time and stops itself when you let go.</p>
   </div>
 
   <h2>Reachy Mini</h2>
@@ -1851,6 +1888,85 @@ function scoutDrive(x, y, yaw){
   return postJSON('/api/scout/drive', {x:x, y:y, yaw:yaw, duration:0.6});
 }
 
+// Held motion: repeat the command while a button (or a gamepad stick) is engaged, so the robot
+// keeps moving smoothly instead of lurching once per click. The firmware zeroes velocity when
+// commands stop, so releasing = stopping with nothing latched. One shared loop drives both the
+// on-screen pad and the gamepad; the newest source of input wins.
+let scoutVec = {x:0, y:0, yaw:0};
+let scoutTimer = null;
+function scoutHold(x, y, yaw){
+  scoutVec = {x:x, y:y, yaw:yaw};
+  if(scoutTimer) return;
+  const tick = () => {
+    if(scoutVec.x || scoutVec.y || scoutVec.yaw){
+      // duration 0.4 > the 0.15 s tick, so motion never gaps between commands.
+      postJSON('/api/scout/drive', {x:scoutVec.x, y:scoutVec.y, yaw:scoutVec.yaw, duration:0.4});
+    }
+  };
+  tick();
+  scoutTimer = setInterval(tick, 150);
+}
+function scoutRelease(){
+  scoutVec = {x:0, y:0, yaw:0};
+  if(scoutTimer){ clearInterval(scoutTimer); scoutTimer = null; }
+  // One explicit stop so it halts now rather than at the end of the firmware's watchdog window.
+  post('/api/scout/stop');
+}
+
+// Gamepad: any HID controller the browser exposes (Amazon Luna, Xbox, PS). Left stick strafes and
+// drives forward, right stick X rotates. Deadzoned, and the same held-motion loop carries it.
+let scoutGpOn = false, scoutGpRAF = null, scoutGpIndex = null;
+function scoutGamepadToggle(){
+  scoutGpOn = !scoutGpOn;
+  const btn = document.getElementById('scoutGpBtn');
+  const st = document.getElementById('scoutGpState');
+  if(scoutGpOn){
+    if(!('getGamepads' in navigator)){
+      st.textContent = 'this browser blocks the gamepad API on http — open the page over https or localhost';
+      scoutGpOn = false; return;
+    }
+    btn.classList.add('on'); btn.textContent = '🎮 Gamepad on';
+    window.addEventListener('gamepadconnected', scoutGpConnected);
+    scoutGpLoop();
+  } else {
+    btn.classList.remove('on'); btn.textContent = '🎮 Use gamepad';
+    st.textContent = '';
+    if(scoutGpRAF) cancelAnimationFrame(scoutGpRAF);
+    scoutRelease();
+  }
+}
+function scoutGpConnected(e){ scoutGpIndex = e.gamepad.index; }
+function scoutGpLoop(){
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = null;
+  for(const p of pads){ if(p){ gp = p; break; } }
+  const st = document.getElementById('scoutGpState');
+  if(gp){
+    const dz = v => Math.abs(v) < 0.15 ? 0 : v;
+    // Map to robot axes: left-stick X -> strafe(+x right); left-stick Y up -> forward(+y);
+    // right-stick X right -> rotate CW(-yaw). Scaled to the same gentle limits as the pad.
+    const x   = dz(gp.axes[0] || 0) * 0.2;
+    const y   = -dz(gp.axes[1] || 0) * 0.2;
+    const yaw = -dz(gp.axes[2] || 0) * 0.8;
+    st.textContent = `${gp.id.slice(0,28)} · x${x.toFixed(2)} y${y.toFixed(2)} yaw${yaw.toFixed(2)}`;
+    if(x || y || yaw) scoutHold(x, y, yaw);
+    else if(scoutTimer) scoutRelease();
+  } else {
+    st.textContent = 'press a button on the controller to connect it';
+  }
+  if(scoutGpOn) scoutGpRAF = requestAnimationFrame(scoutGpLoop);
+}
+
+async function scoutSnapshot(){
+  try{
+    const r = await fetch('/scout/latest.jpg?t=' + Date.now(), {cache:'no-store'});
+    if(!r.ok){ say('no frame', false); return; }
+    const b = await r.blob(), u = URL.createObjectURL(b), a = document.createElement('a');
+    a.href = u; a.download = 'scout-' + new Date().toISOString().replace(/[:.]/g,'-') + '.jpg';
+    a.click(); URL.revokeObjectURL(u); say('snapshot saved', true);
+  }catch(e){ say(String(e), false); }
+}
+
 async function postJSON(url, body){
   try{
     const r = await fetch(url, {method:'POST',
@@ -1873,12 +1989,18 @@ async function refreshScout(){
     const st   = document.getElementById('scoutState');
 
     if(s.live){
-      // Range first: it is the number that decides whether driving forward is sensible.
+      // Status strip, app-style: battery, then range (the number that decides forward motion).
+      let batt = '';
+      if(s.battery_fresh && s.battery_pct != null){
+        const glyph = s.battery_state === 'charging' ? '⚡' : s.battery_state === 'full' ? '🔋' : '';
+        batt = `${glyph}${s.battery_pct}% · `;
+      }
       let range;
       if(!s.tof_fresh)        range = 'range —';
       else if(s.tof_m == null) range = 'range >2 m clear';
       else                     range = `range ${s.tof_m.toFixed(2)} m`;
-      st.textContent = `● live · ${range} · ${s.frames} frames` + (s.driving ? ' · driving' : '');
+      st.innerHTML = `<span class="batt">${batt}</span>● live · ${range} · ${s.frames} frames`
+                   + (s.driving ? ' · driving' : '');
       // Amber inside a body-length, red when it is about to touch something.
       st.style.color = (s.tof_fresh && s.tof_m != null)
         ? (s.tof_m < 0.20 ? 'var(--r)' : s.tof_m < 0.50 ? 'var(--y)' : '') : '';

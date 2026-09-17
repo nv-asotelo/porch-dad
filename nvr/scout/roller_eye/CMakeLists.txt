@@ -5,7 +5,7 @@ project(roller_eye)
 # and nothing is built for the robot - see package.xml for why this package exists at all.
 find_package(catkin REQUIRED COMPONENTS message_generation std_msgs)
 
-add_message_files(FILES frame.msg)
+add_message_files(FILES frame.msg status.msg)
 generate_messages(DEPENDENCIES std_msgs)
 
 catkin_package(CATKIN_DEPENDS message_runtime std_msgs)
