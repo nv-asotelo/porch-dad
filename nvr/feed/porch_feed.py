@@ -1143,6 +1143,13 @@ def api_reachy_state():
     return JSONResponse(st)
 
 
+def _reachy_result(ok: bool, msg: str):
+    """Turn the client's (ok, message) into a response, surfacing refusals as 400 not 500."""
+    if not ok:
+        raise HTTPException(400, msg)
+    return {"ok": True, "message": msg}
+
+
 @app.post("/api/reachy/action/{name}")
 def api_reachy_action(name: str, request: Request):
     """One-shot buttons. Guarded like every other control that touches hardware."""
