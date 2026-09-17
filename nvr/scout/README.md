@@ -75,6 +75,27 @@ bridge, a killed container, a pulled network cable and a deliberate stop are all
 the robot, and all of them stop it. Nothing in this container has to be trusted to send a final
 zero.
 
+### The unresolved one: `/CoreNode/jpg` vs `/CoreNode/h264`
+
+The vendor's own README documents the video stream as **`/CoreNode/h264`** and never mentions
+`/CoreNode/jpg`. Every working community project reads **`/CoreNode/jpg`**. Both topics appear to
+exist on current firmware, with `jpg` being the already-encoded preview, but with no robot to test
+against this could not be settled.
+
+It matters more than a topic name normally would, because the entire reason this bridge costs
+37 MB is that JPEG frames need no transcode. A firmware that publishes only h264 would not need a
+config change; it would need an encoder, and a different RAM budget.
+
+So the bridge checks at startup and reports it in plain language rather than showing a black
+camera. With only h264 published, `/healthz` says:
+
+```
+"error": "the robot publishes /CoreNode/h264 but NOT /CoreNode/jpg; this bridge streams
+          pre-encoded JPEG and cannot use h264 without a transcode - see README"
+```
+
+and if neither is there it lists what the robot *is* publishing.
+
 ### The MD5 caveat
 
 ROS refuses a connection when the two ends hash a message definition differently. `frame.msg` is

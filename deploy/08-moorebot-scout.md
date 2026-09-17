@@ -72,6 +72,10 @@ Also established, from the vendor's own firmware source rather than from documen
 
 * Whether the ROS master is reachable from the LAN without SSH or a developer mode.
 * Whether the vendor's own AI service holds the camera exclusively.
+* **Whether the camera topic is `/CoreNode/jpg` or `/CoreNode/h264`.** The vendor README documents
+  h264; every working community project uses jpg. If a firmware publishes only h264 this needs a
+  transcode, which is a different design and a different RAM budget — not a config change. The
+  bridge detects this case at startup and says so in `/healthz` instead of showing black.
 * Whether the shipping firmware's `frame.msg` hashes the same as the public repo's — if not, the
   subscription connects and silently delivers nothing.
 * Whether the robot stays on the network while docked.

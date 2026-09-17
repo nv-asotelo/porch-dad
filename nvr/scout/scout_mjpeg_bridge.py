@@ -40,6 +40,18 @@ _LOG = logging.getLogger("scout-mjpeg")
 CAMERA_TOPIC = "/CoreNode/jpg"
 CMD_VEL_TOPIC = "/cmd_vel"
 
+# The vendor's own README documents the video stream as /CoreNode/h264 and never mentions
+# /CoreNode/jpg, while every working community project reads /CoreNode/jpg. Both appear to exist on
+# current firmware, with jpg being the already-encoded preview, but the documentation conflict is
+# unresolved and the robot was not available to settle it.
+#
+# This matters more than a topic name usually would: the whole reason this bridge is cheap is that
+# jpg frames need no transcode. If a firmware turns out to publish only h264, MJPEG passthrough
+# cannot work at all and this would need an encoder - a different design with a different RAM
+# budget, not a one-line change. So rather than fail with an empty picture, startup checks what the
+# robot actually publishes and says so.
+H264_TOPIC = "/CoreNode/h264"
+
 # roller_eye/frame multiplexes codecs on one topic and tags each with `type`. Only JPEG is useful
 # here; the same topic name also carries H.264 on some firmware, which would look like garbage
 # bytes if passed through as if it were a still.
@@ -109,7 +121,7 @@ class Bridge:
             self._pub = rospy.Publisher(CMD_VEL_TOPIC, Twist, queue_size=1)
             self._sub = rospy.Subscriber(CAMERA_TOPIC, RollerFrame, self._on_frame, queue_size=1)
             self._ros_ready = True
-            self._ros_error = None
+            self._ros_error = self._check_camera_topic(rospy)
             _LOG.info("subscribed to %s, publishing %s", CAMERA_TOPIC, CMD_VEL_TOPIC)
         except Exception as e:
             self._ros_error = f"ROS init failed: {e}"
@@ -120,6 +132,26 @@ class Bridge:
         threading.Thread(target=self._stale_watchdog, args=(rospy, RollerFrame),
                          daemon=True).start()
         rospy.spin()
+
+    def _check_camera_topic(self, rospy) -> str | None:
+        """Say plainly whether the robot publishes the topic we just subscribed to.
+
+        Subscribing to a topic nobody publishes is not an error in ROS - it succeeds and waits
+        forever. Given the vendor/community disagreement about jpg vs h264 (see the constants
+        above), that silence is the single most likely way this ends up showing a black camera, so
+        it is worth one query to turn it into a sentence.
+        """
+        try:
+            published = {name for name, _ in rospy.get_published_topics()}
+        except Exception:
+            return None                      # master busy; not worth failing over
+        if CAMERA_TOPIC in published:
+            return None
+        if H264_TOPIC in published:
+            return (f"the robot publishes {H264_TOPIC} but NOT {CAMERA_TOPIC}; this bridge streams "
+                    f"pre-encoded JPEG and cannot use h264 without a transcode - see README")
+        cams = sorted(t for t in published if "CoreNode" in t) or sorted(published)[:12]
+        return (f"{CAMERA_TOPIC} is not being published; topics seen: {', '.join(cams) or 'none'}")
 
     def _stale_watchdog(self, rospy, frame_cls) -> None:
         """Re-subscribe when the picture stops changing.
