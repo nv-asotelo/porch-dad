@@ -47,6 +47,10 @@ class Scout:
             "frames": h.get("frames"),
             "stale_s": h.get("stale_s"),
             "driving": bool(h.get("driving")),
+            # The obstacle sensor. None means nothing within its 2 m range, which is
+            # clear - distinguish that from "no reading yet" with tof_fresh.
+            "tof_m": h.get("tof_m"),
+            "tof_fresh": bool(h.get("tof_fresh")),
             "blocked_by": h.get("blocked_by"),
             "error": h.get("error"),
         }

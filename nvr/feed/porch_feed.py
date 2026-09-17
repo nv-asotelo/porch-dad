@@ -1270,6 +1270,50 @@ async def api_scout_drive(request: Request):
                                         yaw=b.get("yaw", 0.0), duration=b.get("duration", 0.6)))
 
 
+@app.post("/api/scout/check")
+def api_scout_check(request: Request):
+    """Describe what the Scout can see. Same job Cosmos does for Frigate and the Reachy.
+
+    Description only - it is deliberately NOT asked what the robot should do. Measured on this
+    robot: with a large dog lying 25 cm in front, the model answered "CLEAR" to "could you drive
+    ahead?" three times out of three, while the rangefinder read 0.252 m. It names what it sees
+    reliably ("a large dog is lying on the floor", every time) and judges badly, so the obstacle
+    decision belongs to the sensor and the words belong to the model.
+    """
+    require_control(request)
+    if not SCOUT_BRIDGE:
+        raise HTTPException(503, "scout_bridge_url is not configured")
+    try:
+        img = requests.get(f"{SCOUT_BRIDGE}/still.jpg", timeout=8)
+        if img.status_code != 200 or not img.content:
+            raise HTTPException(503, "no frame available")
+    except requests.RequestException as e:
+        raise HTTPException(503, f"bridge unreachable: {e}")
+
+    payload = {
+        "model": "cosmos3-edge",
+        "messages": [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {
+                "url": "data:image/jpeg;base64," + base64.b64encode(img.content).decode()}},
+            {"type": "text", "text": alert_policy.DESCRIBE_PROMPT},
+        ]}],
+        "max_tokens": 128,
+        "temperature": 0.0,
+    }
+    try:
+        r = requests.post(f"{CFG['cosmos3_url'].rstrip('/')}/v1/chat/completions", json=payload, timeout=180)
+        r.raise_for_status()
+        desc = r.json()["choices"][0]["message"]["content"].strip()
+    except (requests.RequestException, KeyError, ValueError) as e:
+        raise HTTPException(503, f"cosmos: {e}")
+
+    verdict = alert_policy.classify(desc)
+    cats = sorted(verdict.get("categories") or [])
+    state = _scout.state() if _scout else {}
+    return {"description": desc, "categories": cats,
+            "alert": bool(cats), "tof_m": state.get("tof_m"), "at": time.time()}
+
+
 @app.post("/api/scout/stop")
 def api_scout_stop(request: Request):
     require_control(request)
@@ -1495,9 +1539,18 @@ button.mini{padding:3px 9px;font-size:11.5px}
       <button onclick="scoutDrive(0,0,-0.6)"   title="rotate right">⟳</button>
       <button class="warn" onclick="post('/api/scout/stop')">Stop</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="post('/api/scout/check')"
+              title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
+        Look &amp; describe</button>
+    </div>
+    <div id="scoutAlert" class="ralert"></div>
     <p class="hint">Each press drives for 0.6&nbsp;s and then stops on its own — the robot's own
        MotorNode zeroes velocity when commands stop arriving, so there is nothing latched on.
-       Hold a direction by pressing repeatedly.</p>
+       Hold a direction by pressing repeatedly. The <b>range</b> above is the robot's forward
+       time-of-flight sensor, and it is what to trust for obstacles: asked whether it could drive
+       ahead with a dog 25&nbsp;cm in front, the model said “clear” three times out of three while
+       this sensor read 0.25&nbsp;m.</p>
   </div>
 
   <h2>Reachy Mini</h2>
@@ -1820,7 +1873,15 @@ async function refreshScout(){
     const st   = document.getElementById('scoutState');
 
     if(s.live){
-      st.textContent = `● live · ${s.frames} frames` + (s.driving ? ' · driving' : '');
+      // Range first: it is the number that decides whether driving forward is sensible.
+      let range;
+      if(!s.tof_fresh)        range = 'range —';
+      else if(s.tof_m == null) range = 'range >2 m clear';
+      else                     range = `range ${s.tof_m.toFixed(2)} m`;
+      st.textContent = `● live · ${range} · ${s.frames} frames` + (s.driving ? ' · driving' : '');
+      // Amber inside a body-length, red when it is about to touch something.
+      st.style.color = (s.tof_fresh && s.tof_m != null)
+        ? (s.tof_m < 0.20 ? 'var(--r)' : s.tof_m < 0.50 ? 'var(--y)' : '') : '';
       img.src = `/scout/latest.jpg?t=${Date.now()}`;
       img.style.display='block'; hint.style.display='none';
     } else {

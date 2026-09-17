@@ -40,6 +40,19 @@ _LOG = logging.getLogger("scout-mjpeg")
 CAMERA_TOPIC = "/CoreNode/jpg"
 CMD_VEL_TOPIC = "/cmd_vel"
 
+# Forward-facing time-of-flight rangefinder, stock sensor_msgs/Range, 0.03-2.0 m.
+#
+# This is the obstacle sensor, and it is the one that gets believed. A vision model was tried for
+# the same job and is not fit for it: asked whether the robot could drive straight ahead with a
+# large dog lying 25 cm in front, Cosmos3-Edge answered "CLEAR" three times out of three, while
+# this sensor read 0.252 m. The model is excellent at saying WHAT is there ("a large dog is lying
+# on the floor", every time) and unreliable at judging what to do about it, so perception and
+# judgement are split: the rangefinder decides, the model narrates.
+TOF_TOPIC = "/SensorNode/tof"
+
+# A reading older than this is not trustworthy as an obstacle check.
+TOF_STALE_S = 3.0
+
 # The vendor's own README documents the video stream as /CoreNode/h264 and never mentions
 # /CoreNode/jpg, while every working community project reads /CoreNode/jpg. Both appear to exist on
 # current firmware, with jpg being the already-encoded preview, but the documentation conflict is
@@ -87,6 +100,9 @@ class Bridge:
         self._twist_cls = None
         self._drive_until = 0.0
         self._drive_cmd = (0.0, 0.0, 0.0)
+        # Latest rangefinder reading and when it arrived. None means nothing within its 2 m range.
+        self._tof_m: float | None = None
+        self._tof_at = 0.0
 
     # ---------------------------------------------------------------------- ROS
     def start_ros(self, master_uri: str) -> None:
@@ -103,6 +119,7 @@ class Bridge:
         try:
             import rospy
             from geometry_msgs.msg import Twist
+            from sensor_msgs.msg import Range
             from roller_eye.msg import frame as RollerFrame
         except ImportError as e:
             self._ros_error = (f"ROS imports failed ({e}); the roller_eye messages are probably "
@@ -120,6 +137,7 @@ class Bridge:
             self._twist_cls = Twist
             self._pub = rospy.Publisher(CMD_VEL_TOPIC, Twist, queue_size=1)
             self._sub = rospy.Subscriber(CAMERA_TOPIC, RollerFrame, self._on_frame, queue_size=1)
+            rospy.Subscriber(TOF_TOPIC, Range, self._on_tof, queue_size=1)
             self._ros_ready = True
             self._ros_error = self._check_camera_topic(rospy)
             _LOG.info("subscribed to %s, publishing %s", CAMERA_TOPIC, CMD_VEL_TOPIC)
@@ -181,6 +199,26 @@ class Bridge:
                 self._last_digest = None
             except Exception as e:
                 _LOG.error("resubscribe failed: %s", e)
+
+    def _on_tof(self, msg) -> None:
+        """Keep the newest range reading.
+
+        The sensor reports "nothing in range" as inf or -inf rather than a number, so those are
+        normalised to None. That is a meaningful value here - it means clear to 2 m - and is not
+        the same as never having had a reading, which `tof_age_s` distinguishes.
+        """
+        try:
+            r = float(msg.range)
+        except (TypeError, ValueError, AttributeError):
+            return
+        self._tof_m = None if (r != r or r in (float("inf"), float("-inf"))) else r
+        self._tof_at = time.monotonic()
+
+    def tof(self) -> tuple[float | None, float | None]:
+        """(metres, age_seconds); metres is None when nothing is within range."""
+        if not self._tof_at:
+            return None, None
+        return self._tof_m, round(time.monotonic() - self._tof_at, 1)
 
     def _on_frame(self, msg) -> None:
         if getattr(msg, "type", FRAME_TYPE_JPG) != FRAME_TYPE_JPG:
@@ -291,6 +329,7 @@ class Bridge:
     async def health(self, request: web.Request) -> web.Response:
         # `frames` counts callbacks, not distinct pictures, so `stale_s` is the honest signal.
         stale = self._stale_s()
+        tof_m, tof_age = self.tof()
         with self._lock:
             has = self.latest is not None
             frames = self._frames
@@ -303,6 +342,12 @@ class Bridge:
             "resubscribes": self._resubs,
             "live": bool(has and (stale is None or stale < STALE_AFTER)),
             "driving": time.monotonic() < self._drive_until,
+            # The obstacle sensor. null means nothing within its 2 m range, which is "clear" -
+            # not "unknown". tof_age_s distinguishes those: a null with a fresh age is clear, a
+            # null with no age at all means no reading has ever arrived.
+            "tof_m": (round(tof_m, 3) if tof_m is not None else None),
+            "tof_age_s": tof_age,
+            "tof_fresh": bool(tof_age is not None and tof_age < TOF_STALE_S),
         })
 
     async def http_drive(self, request: web.Request) -> web.Response:
