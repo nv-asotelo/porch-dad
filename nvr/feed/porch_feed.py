@@ -24,6 +24,7 @@ and its unit sets MemoryMax. Before starting a heavy service it refuses if free 
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import os
@@ -42,7 +43,7 @@ import base64
 import requests
 import uvicorn
 import yaml
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from reachy import (ANTENNA_LIMIT_RAD, ANTENNA_PARK_DEG, LIMITS_M, LIMITS_RAD, MOTOR_MODES,
@@ -81,6 +82,13 @@ REACHY_CAM = str(CFG.get("reachy_camera_url") or "").rstrip("/")
 REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
 _reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
 SCOUT_BRIDGE = str(CFG.get("scout_bridge_url") or "").rstrip("/")
+# Scout audio goes over SSH (the robot has no ROS/RTSP audio). Key auth, unprivileged linaro.
+# Defaults here so the live box needs no config edit (and its control token stays untouched).
+SCOUT_SSH = str(CFG.get("scout_ssh") or "linaro@192.168.7.6")
+SCOUT_SSH_KEY = str(CFG.get("scout_ssh_key") or "/home/orin/.ssh/scout_ed25519")
+SCOUT_MIC_DEV = str(CFG.get("scout_mic_device") or "hw:0,1")
+SCOUT_SPK_DEV = str(CFG.get("scout_speaker_device") or "hw:0,0")
+AUDIO_RATE = 16000
 _scout = ScoutClient(SCOUT_BRIDGE) if SCOUT_BRIDGE else None
 # Anomaly watch: the microphone triggers the eye.
 #
@@ -1287,6 +1295,50 @@ def scout_mjpeg():
     return StreamingResponse(relay(), media_type=ct, headers={"Cache-Control": "no-store"})
 
 
+def _scout_ssh(remote_cmd: str) -> list[str]:
+    return ["ssh", "-i", SCOUT_SSH_KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=6", SCOUT_SSH, remote_cmd]
+
+
+@app.websocket("/api/audio/scout/listen")
+async def scout_audio_listen(ws: WebSocket):
+    """Stream the Scout's microphone to the browser as 16 kHz mono PCM16.
+
+    The robot exposes no ROS or RTSP audio, so this runs arecord over SSH (key auth, unprivileged
+    linaro in the audio group) and relays the raw bytes. Activating the mic is a privacy-relevant
+    action, so it takes the control token as a query param like every other write.
+
+    The mic is a 2-channel PDM device and mono is rejected at the ALSA layer, so it is captured in
+    stereo and one channel is forwarded - both carry the same voice.
+    """
+    if CONTROL_TOKEN and ws.query_params.get("token") != CONTROL_TOKEN:
+        await ws.close(code=4401)
+        return
+    await ws.accept()
+    import numpy as np
+    cmd = _scout_ssh(f"exec arecord -q -D {SCOUT_MIC_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    try:
+        while True:
+            # 20 ms of stereo S16LE = 320 frames x 2ch x 2 bytes.
+            raw = await proc.stdout.readexactly(1280)
+            mono = np.frombuffer(raw, dtype="<i2").reshape(-1, 2)[:, 0]
+            await ws.send_bytes(mono.tobytes())
+    except (asyncio.IncompleteReadError, WebSocketDisconnect, RuntimeError, ConnectionError):
+        pass
+    finally:
+        # Kill the local ssh; arecord on the robot then gets SIGPIPE on the closed channel and exits.
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=3)
+        except (ProcessLookupError, asyncio.TimeoutError):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
+
 @app.post("/api/scout/drive")
 async def api_scout_drive(request: Request):
     """Bounded motion. +y is FORWARD on this robot, +x strafes - see scout.drive()."""
@@ -1608,6 +1660,8 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </div>
 
     <div class="row" style="margin-top:8px">
+      <button id="scoutListenBtn" onclick="scoutListenToggle()"
+              title="Hear the robot's microphone in your browser">🔊 Listen</button>
       <button onclick="scoutSnapshot()" title="Save the current frame to your device">📷 Snapshot</button>
       <button onclick="post('/api/scout/check')"
               title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
@@ -1989,6 +2043,44 @@ function scoutGpLoop(){
     st.textContent = 'press a button on the controller to connect it';
   }
   if(scoutGpOn) scoutGpRAF = requestAnimationFrame(scoutGpLoop);
+}
+
+// Listen: stream the robot mic (16 kHz mono PCM16 over a WebSocket) and play it back through Web
+// Audio, scheduling each chunk after the last so it plays gaplessly. No secure context needed -
+// only mic CAPTURE (talk) requires https/localhost; playback works on plain http.
+let scoutWS = null, scoutAC = null, scoutPlayAt = 0;
+async function scoutListenToggle(){
+  const btn = document.getElementById('scoutListenBtn');
+  if(scoutWS){ scoutListenStop(); return; }
+  const tok = await tokenReady();
+  scoutAC = new (window.AudioContext || window.webkitAudioContext)();
+  scoutPlayAt = 0;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  scoutWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/listen?token=${encodeURIComponent(tok)}`);
+  scoutWS.binaryType = 'arraybuffer';
+  scoutWS.onopen = () => { btn.classList.add('on'); btn.textContent = '🔊 Listening'; };
+  scoutWS.onmessage = ev => {
+    const pcm = new Int16Array(ev.data);
+    if(!pcm.length || !scoutAC) return;
+    const buf = scoutAC.createBuffer(1, pcm.length, 16000);
+    const ch = buf.getChannelData(0);
+    for(let i=0;i<pcm.length;i++) ch[i] = pcm[i] / 32768;
+    const src = scoutAC.createBufferSource();
+    src.buffer = buf; src.connect(scoutAC.destination);
+    const now = scoutAC.currentTime;
+    // Keep a small lead; if we fall behind (tab throttled), resync rather than pile up latency.
+    if(scoutPlayAt < now + 0.02 || scoutPlayAt > now + 0.5) scoutPlayAt = now + 0.08;
+    src.start(scoutPlayAt);
+    scoutPlayAt += buf.duration;
+  };
+  scoutWS.onclose = () => scoutListenStop();
+  scoutWS.onerror = () => say('listen: connection failed', false);
+}
+function scoutListenStop(){
+  const btn = document.getElementById('scoutListenBtn');
+  if(btn){ btn.classList.remove('on'); btn.textContent = '🔊 Listen'; }
+  if(scoutWS){ try{scoutWS.close();}catch(e){} scoutWS = null; }
+  if(scoutAC){ try{scoutAC.close();}catch(e){} scoutAC = null; }
 }
 
 async function scoutSnapshot(){
