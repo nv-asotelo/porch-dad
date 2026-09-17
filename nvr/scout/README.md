@@ -75,26 +75,33 @@ bridge, a killed container, a pulled network cable and a deliberate stop are all
 the robot, and all of them stop it. Nothing in this container has to be trusted to send a final
 zero.
 
-### The unresolved one: `/CoreNode/jpg` vs `/CoreNode/h264`
+### Settled against hardware: BOTH `/CoreNode/jpg` and `/CoreNode/h264` exist
 
-The vendor's own README documents the video stream as **`/CoreNode/h264`** and never mentions
-`/CoreNode/jpg`. Every working community project reads **`/CoreNode/jpg`**. Both topics appear to
-exist on current firmware, with `jpg` being the already-encoded preview, but with no robot to test
-against this could not be settled.
+The vendor README documents `/CoreNode/h264`; every community project reads `/CoreNode/jpg`.
+Measured on a live Scout, **both are published simultaneously** — so neither source was wrong:
 
-It matters more than a topic name normally would, because the entire reason this bridge costs
-37 MB is that JPEG frames need no transcode. A firmware that publishes only h264 would not need a
-config change; it would need an encoder, and a different RAM budget.
+| topic | type | rate | bandwidth | payload |
+|---|---|---|---|---|
+| `/CoreNode/jpg` | `roller_eye/frame` | 6.7 fps | 756 kB/s | JPEG SOI at offset 41, 1920×1080, `type=1` |
+| `/CoreNode/h264` | `roller_eye/frame` | 23.8 fps | 196 kB/s | Annex-B `00 00 00 01`, `type=0` |
 
-So the bridge checks at startup and reports it in plain language rather than showing a black
-camera. With only h264 published, `/healthz` says:
+This bridge reads `jpg`, which is why it costs ~48 MB and does no transcoding. The startup check
+below is therefore belt-and-braces rather than load-bearing, but it stays: firmware versions
+differ, and a topic that silently never publishes is the hardest failure to diagnose.
 
-```
-"error": "the robot publishes /CoreNode/h264 but NOT /CoreNode/jpg; this bridge streams
-          pre-encoded JPEG and cannot use h264 without a transcode - see README"
-```
+**Worth revisiting:** `h264` carries 3.5× the framerate at a quarter of the bandwidth, and the
+pipeline downstream re-encodes MJPEG to h264 in go2rtc anyway — so passing h264 straight through
+would skip a decode and an encode. That is a design change, not a config change, and it is not
+done here.
 
-and if neither is there it lists what the robot *is* publishing.
+### The one that actually bit: the robot advertises itself by hostname
+
+The ROS master returns `http://linaro-alip:11311/` and hands out peers as
+`['TCPROS', 'linaro-alip', 50218]`. rospy uses those strings verbatim, and nothing on this network
+resolves `linaro-alip` — no DNS, no mDNS. Without a hosts entry the subscription is accepted and
+then no frame ever arrives, which looks exactly like a broken camera. Hence `extra_hosts` in
+`docker-compose.yml`. Verified both ways in this image: without it, `socket.gaierror`; with it,
+frames immediately.
 
 ### The MD5 caveat
 
@@ -178,17 +185,44 @@ May 2025, but the base image's apt source is `snapshots.ros.org/noetic/final` �
 snapshot rather than a rolling repo — and the only package this build installs is `python3-aiohttp`
 from Ubuntu. Built and run successfully on this board in 2026.
 
-## Still unknown until a Scout is on the network
+## Confirmed against a live Scout (2026-09-17)
 
-* Whether the robot exposes its ROS master to the LAN without SSH access or a developer mode, and
-  what the user must do on the robot first. The firmware pins no `ROS_MASTER_URI`, `ROS_IP` or
-  `ROS_HOSTNAME` anywhere, so it runs with ROS defaults — `roscore` on `0.0.0.0:11311`, nodes
-  advertising by hostname. That is encouraging for reachability but means **name resolution is the
-  first thing to suspect**: see the `extra_hosts` note in `docker-compose.yml`.
-* Whether the vendor's own AI/streaming services hold the camera exclusively, so that a second
-  subscriber gets no frames.
-* Whether the shipping firmware's `frame.msg` hashes the same as the public repo's.
-* Whether the robot stays on the network while docked.
+Robot at `192.168.7.6`, hostname `linaro-alip`, SSH banner `OpenSSH_7.4p1 Debian-10+deb9u7`
+(Debian 9, the stock Linaro ALIP image). Only **two ports open: 22 and 11311** — a full scan of
+23/80/443/554/1883/5000/8000-8100/8554/9090/37020 found nothing else, which independently confirms
+there is no RTSP, no ONVIF, no web UI and no MQTT on the robot.
+
+* `roller_eye/frame` md5 on the robot is `bce5a3441e8f21e02d2b9d7ce432bea2` — **identical** to the
+  one this container generates, and the robot's `message_definition` is byte-for-byte the vendored
+  `msg/frame.msg`. The md5 caveat above is satisfied on this firmware.
+* `/cmd_vel` is stock `geometry_msgs/Twist`, md5 `9f195f881246fdfa2798d1d3eebca84a`.
+* The camera works: a frame pulled through this bridge decoded as a valid 1920×1080 JFIF.
+* Bridge cost against the real robot: **47.8 MB RSS, ~2% CPU** — close to the 36.5 MB measured
+  against the fixture, the difference being 1920×1080 frames rather than 160×120.
+
+**The cloud login path**, from the node graph rather than speculation: nothing listens for the
+vendor, so it must be robot-initiated outbound. `/CloudNode` publishes `status` and offers
+`cloud_cmd_send`, a persistent outbound command channel; `/AppNode` publishes `sock_status` and
+`p2p_status` with `P2P_AV_PLAYING/STOP/ERROR` constants — a signalling socket plus a peer-to-peer
+A/V channel, idle when no phone is viewing — and offers `/sys/get_userid`, so the robot holds a
+cloud account binding. `/RTMPNode` and `/S3Node` offer `rtmp_start`/`rtmp_stop` and `s3_setting`.
+None of that is needed for this bridge, which talks only to the local ROS master.
+
+## Still unknown
+
+Three of the four original unknowns are now answered above: the ROS master **is** reachable on the
+LAN with no SSH or developer mode (port 11311, open), the md5 **does** match, and the vendor's own
+services do **not** hold the camera exclusively — `/CloudNode`, `/AppNode` and the rest were all
+running while this bridge pulled frames.
+
+What is still open:
+
+* Whether the robot stays on the network while docked or idle, and whether the ROS master survives
+  a firmware update.
+* Whether driving it works. **`/cmd_vel` has been read, never written** — no motion command has
+  been sent to this robot. The axis convention (`+linear.y` forward) comes from the vendor's
+  firmware source, not from watching it move, so the first drive should be a small one in clear
+  space with a hand near the robot.
 
 The bridge is written to fail visibly rather than silently on all of these: `/healthz` reports
 `ros_connected`, the reason it is not connected, and `stale_s` for the case where frames stop

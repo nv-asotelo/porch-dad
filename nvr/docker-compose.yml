@@ -52,15 +52,20 @@ services:
     # address the robot cannot route to and the camera will connect but never deliver frames.
     network_mode: host
     environment:
-      - ROS_MASTER_URI=http://192.168.6.170:11311   # the Scout; set to the robot's real address
+      - ROS_MASTER_URI=http://192.168.7.6:11311     # the Scout
       - ROS_IP=192.168.6.252                        # this Jetson, as the robot sees it
-    # Likely needed, and the failure it prevents is an obscure one. The Scout's firmware pins no
-    # ROS_IP/ROS_HOSTNAME, so its nodes advertise themselves to us by HOSTNAME. If that name does
-    # not resolve in here, the subscription is accepted by the master and then no frames ever
-    # arrive - it looks like a camera fault, not a DNS one. Uncomment with the robot's real
-    # hostname (`hostname` over SSH, or whatever /healthz reports it failed to reach).
-    # extra_hosts:
-    #   - "scout-xxxx:192.168.6.170"
+    # REQUIRED, and confirmed against the robot rather than guessed. The Scout's firmware pins no
+    # ROS_IP/ROS_HOSTNAME, so its master advertises every node by HOSTNAME:
+    #     master getUri        -> http://linaro-alip:11311/
+    #     requestTopic /jpg    -> ['TCPROS', 'linaro-alip', 50218]
+    # rospy uses those strings verbatim and nothing here resolves "linaro-alip", so without this
+    # line the bridge fails with socket.gaierror and never receives a frame. Tested both ways in
+    # this exact image: without it, name resolution error; with it, frames immediately.
+    #
+    # The two addresses look like different subnets and are not - both hosts carry a /22, so
+    # 192.168.6.252 and 192.168.7.6 share 192.168.4.0/22 and route directly.
+    extra_hosts:
+      - "linaro-alip:192.168.7.6"
     # Binds the docker gateway rather than 0.0.0.0 so the robot's camera stays off the LAN while
     # still being reachable from Frigate's bridged container as host.docker.internal.
     command: ["--listen", "172.17.0.1", "--listen-port", "8098", "--fps", "5"]
