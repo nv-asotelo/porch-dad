@@ -128,8 +128,16 @@ class Reachy:
         out["speaker_volume"] = vol.get("volume")
         out["mic_volume"] = mic.get("volume")
 
+        # current-app-status nests the app under "info" and carries its lifecycle in "state".
+        # Reading "name" off the top level silently reports no app while one is plainly
+        # running, which is exactly how it behaved until this was measured against the daemon.
         app = self._get("/api/apps/current-app-status")
-        out["app"] = (app or {}).get("name") if isinstance(app, dict) else None
+        if isinstance(app, dict):
+            out["app"] = ((app.get("info") or {}).get("name"))
+            out["app_state"] = app.get("state")
+            out["app_error"] = app.get("error")
+        else:
+            out["app"] = None
         out["move_running"] = bool(self._get("/api/move/running") or [])
 
         loop = backend.get("control_loop_stats") or {}
@@ -320,15 +328,21 @@ class Reachy:
         installed = self._get("/api/apps/list-available/installed") or []
         current = self._get("/api/apps/current-app-status")
         startup = (self._get("/api/apps/startup-app") or {}).get("startup_app")
-        running = None
+        running, state, err = None, None, None
         if isinstance(current, dict):
-            running = current.get("name")
+            running = (current.get("info") or {}).get("name")
+            state = current.get("state")
+            err = current.get("error")
         return {
             "installed": [{"name": a.get("name"),
                            "url": ((a.get("extra") or {}).get("custom_app_url") or "").replace(
                                "0.0.0.0", self.base.split("//")[-1].split(":")[0])}
                           for a in installed if a.get("name")],
             "running": running,
+            # An app that died reports state "error" with a traceback. Surfacing it is the
+            # difference between "nothing happened" and a diagnosable failure.
+            "state": state,
+            "error": (err or "").strip()[:400] or None,
             "startup": startup,
         }
 

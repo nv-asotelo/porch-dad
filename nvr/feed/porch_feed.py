@@ -1700,7 +1700,12 @@ async function refreshApps(){
   try{
     const a = await (await fetch('/api/reachy/apps',{cache:'no-store'})).json();
     const now = document.getElementById('reachyAppNow');
-    now.textContent = a.running ? ('running: ' + a.running) : 'nothing running';
+    // An app that died reports state "error" with a Python traceback. Showing the first line beats
+    // "nothing running", which is what this said while an app was crash-looping.
+    now.textContent = a.error ? ('✕ ' + a.running + ': ' + a.error.split('\n')[0].slice(0,90))
+                    : a.running ? ('running: ' + a.running + (a.state && a.state!=='running' ? ' ('+a.state+')' : ''))
+                    : 'nothing running';
+    now.style.color = a.error ? 'var(--r)' : '';
     box.innerHTML = (a.installed||[]).map(app=>{
       const on = app.name === a.running;
       // The app's own settings page - where a conversation app takes its API key and persona.
