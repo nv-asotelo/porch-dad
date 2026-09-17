@@ -1339,6 +1339,47 @@ async def scout_audio_listen(ws: WebSocket):
                 pass
 
 
+@app.websocket("/api/audio/scout/talk")
+async def scout_audio_talk(ws: WebSocket):
+    """Play browser microphone audio through the Scout's speaker.
+
+    Receives 16 kHz mono PCM16 from the browser and pipes it to aplay over SSH. The speaker is a
+    2-channel device that rejects mono, so each sample is duplicated to stereo. Push-to-talk on the
+    browser side keeps this half-duplex - there is no echo cancellation on the robot, so a live mic
+    and live speaker at once would feed back.
+    """
+    if CONTROL_TOKEN and ws.query_params.get("token") != CONTROL_TOKEN:
+        await ws.close(code=4401)
+        return
+    await ws.accept()
+    import numpy as np
+    cmd = _scout_ssh(f"exec aplay -q -D {SCOUT_SPK_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+    try:
+        while True:
+            msg = await ws.receive_bytes()
+            if not msg:
+                continue
+            stereo = np.repeat(np.frombuffer(msg, dtype="<i2"), 2).tobytes()
+            proc.stdin.write(stereo)
+            await proc.stdin.drain()
+    except (WebSocketDisconnect, RuntimeError, ConnectionError, BrokenPipeError):
+        pass
+    finally:
+        try:
+            if proc.stdin:
+                proc.stdin.close()
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=3)
+        except (ProcessLookupError, asyncio.TimeoutError):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
+
 @app.post("/api/scout/drive")
 async def api_scout_drive(request: Request):
     """Bounded motion. +y is FORWARD on this robot, +x strafes - see scout.drive()."""
@@ -1662,6 +1703,9 @@ button.mini{padding:3px 9px;font-size:11.5px}
     <div class="row" style="margin-top:8px">
       <button id="scoutListenBtn" onclick="scoutListenToggle()"
               title="Hear the robot's microphone in your browser">🔊 Listen</button>
+      <button id="scoutTalkBtn" title="Hold to speak through the robot's speaker (needs https or localhost)"
+              onmousedown="scoutTalkStart()" onmouseup="scoutTalkStop()" onmouseleave="scoutTalkStop()"
+              ontouchstart="event.preventDefault();scoutTalkStart()" ontouchend="scoutTalkStop()">🎙 Hold to talk</button>
       <button onclick="scoutSnapshot()" title="Save the current frame to your device">📷 Snapshot</button>
       <button onclick="post('/api/scout/check')"
               title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
@@ -2081,6 +2125,55 @@ function scoutListenStop(){
   if(btn){ btn.classList.remove('on'); btn.textContent = '🔊 Listen'; }
   if(scoutWS){ try{scoutWS.close();}catch(e){} scoutWS = null; }
   if(scoutAC){ try{scoutAC.close();}catch(e){} scoutAC = null; }
+}
+
+// Talk: capture the browser mic, downsample to 16 kHz mono PCM16, and stream it to the robot
+// speaker while the button is held. getUserMedia needs a secure context (https or localhost), so
+// on plain http this reports that instead of silently failing. Listen is paused while talking so
+// the robot mic does not loop the speaker back - half-duplex push-to-talk, no echo cancellation
+// on the robot.
+let talkWS = null, talkStream = null, talkNode = null, talkCtx = null, talkResumeListen = false;
+async function scoutTalkStart(){
+  if(talkWS || talkNode) return;                       // already talking (button repeat)
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    say('Talk needs https or localhost — the browser blocks mic capture on plain http. '
+       + 'Open via an ssh -L localhost forward.', false);
+    return;
+  }
+  const tok = await tokenReady();
+  talkResumeListen = !!scoutWS;
+  if(talkResumeListen) scoutListenStop();              // avoid feedback
+  try{
+    talkStream = await navigator.mediaDevices.getUserMedia(
+      {audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
+  }catch(e){ say('microphone permission denied', false); return; }
+  talkCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = talkCtx.createMediaStreamSource(talkStream);
+  talkNode = talkCtx.createScriptProcessor(4096, 1, 1);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  talkWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/talk?token=${encodeURIComponent(tok)}`);
+  talkWS.binaryType = 'arraybuffer';
+  const ratio = talkCtx.sampleRate / 16000;
+  talkNode.onaudioprocess = e => {
+    if(!talkWS || talkWS.readyState !== 1) return;
+    const inp = e.inputBuffer.getChannelData(0);
+    const n = Math.floor(inp.length / ratio);
+    const out = new Int16Array(n);
+    for(let i=0;i<n;i++){ const s = inp[Math.floor(i*ratio)]; out[i] = Math.max(-32768, Math.min(32767, s*32768)); }
+    talkWS.send(out.buffer);
+  };
+  // Route through a muted gain so the ScriptProcessor runs without playing the user's own mic back.
+  const mute = talkCtx.createGain(); mute.gain.value = 0;
+  src.connect(talkNode); talkNode.connect(mute); mute.connect(talkCtx.destination);
+  const b = document.getElementById('scoutTalkBtn'); if(b){ b.classList.add('on'); b.textContent = '🎙 Talking…'; }
+}
+function scoutTalkStop(){
+  const b = document.getElementById('scoutTalkBtn'); if(b){ b.classList.remove('on'); b.textContent = '🎙 Hold to talk'; }
+  if(talkNode){ try{talkNode.disconnect();}catch(e){} talkNode = null; }
+  if(talkStream){ talkStream.getTracks().forEach(t=>t.stop()); talkStream = null; }
+  if(talkCtx){ try{talkCtx.close();}catch(e){} talkCtx = null; }
+  if(talkWS){ try{talkWS.close();}catch(e){} talkWS = null; }
+  if(talkResumeListen){ talkResumeListen = false; scoutListenToggle(); }
 }
 
 async function scoutSnapshot(){
