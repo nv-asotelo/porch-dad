@@ -68,7 +68,7 @@ services:
       - "linaro-alip:192.168.7.6"
     # Binds the docker gateway rather than 0.0.0.0 so the robot's camera stays off the LAN while
     # still being reachable from Frigate's bridged container as host.docker.internal.
-    command: ["--listen", "172.17.0.1", "--listen-port", "8098", "--fps", "5"]
+    command: ["--listen", "172.17.0.1", "--listen-port", "8098", "--fps", "12"]
 
   frigate:
     image: ghcr.io/blakeblackshear/frigate:stable

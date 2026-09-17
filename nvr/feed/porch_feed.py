@@ -43,7 +43,7 @@ import requests
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from reachy import (ANTENNA_LIMIT_RAD, ANTENNA_PARK_DEG, LIMITS_M, LIMITS_RAD, MOTOR_MODES,
                     Reachy as ReachyClient)
@@ -1256,6 +1256,37 @@ def scout_latest():
         raise HTTPException(503, f"bridge unreachable: {e}")
 
 
+@app.get("/scout/mjpeg")
+def scout_mjpeg():
+    """Live MJPEG, proxied so the browser talks only to this origin.
+
+    The bridge binds the docker gateway (172.17.0.1), which the browser cannot reach, so the
+    command centre relays the multipart stream. An <img> pointed here updates at the stream's rate
+    with essentially no added latency - unlike the old 3-second still poll, which was 0.3 fps and
+    made the robot impossible to drive. The rate is capped by the robot's jpg topic (~7 fps); the
+    h264 path is what exceeds that.
+    """
+    if not SCOUT_BRIDGE:
+        raise HTTPException(404, "scout_bridge_url is not configured")
+    try:
+        up = requests.get(f"{SCOUT_BRIDGE}/mjpeg", stream=True, timeout=(5, 30))
+    except requests.RequestException as e:
+        raise HTTPException(503, f"bridge unreachable: {e}")
+    ct = up.headers.get("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+
+    def relay():
+        try:
+            for chunk in up.iter_content(chunk_size=16384):
+                if chunk:
+                    yield chunk
+        except requests.RequestException:
+            pass
+        finally:
+            up.close()
+
+    return StreamingResponse(relay(), media_type=ct, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/scout/drive")
 async def api_scout_drive(request: Request):
     """Bounded motion. +y is FORWARD on this robot, +x strafes - see scout.drive()."""
@@ -1516,7 +1547,6 @@ button.mini{padding:3px 9px;font-size:11.5px}
   <div class="row"><span id="mem" class="hint"></span><a href="/rss">RSS</a></div>
 </div></div></header>
 <div class="wrap">
-  <div id="msg" class="msg"></div>
 
   <h2>Open a service</h2>
   <div class="selfurl">
@@ -1589,6 +1619,10 @@ button.mini{padding:3px 9px;font-size:11.5px}
        are unprotected, and there is no rear sensor. Watch the video. Held motion drives 0.6&nbsp;s
        at a time and stops itself when you let go.</p>
   </div>
+
+  <!-- Action feedback banner. Placed BELOW the Scout controls, not at the top, so that a message
+       appearing or clearing never reflows the drive pad the user is holding. -->
+  <div id="msg" class="msg"></div>
 
   <h2>Reachy Mini</h2>
   <div class="card" id="reachyCard">
@@ -1899,8 +1933,8 @@ function scoutHold(x, y, yaw){
   if(scoutTimer) return;
   const tick = () => {
     if(scoutVec.x || scoutVec.y || scoutVec.yaw){
-      // duration 0.4 > the 0.15 s tick, so motion never gaps between commands.
-      postJSON('/api/scout/drive', {x:scoutVec.x, y:scoutVec.y, yaw:scoutVec.yaw, duration:0.4});
+      // duration 0.4 > the 0.15 s tick, so motion never gaps between commands. Quiet: no banner.
+      postJSON('/api/scout/drive', {x:scoutVec.x, y:scoutVec.y, yaw:scoutVec.yaw, duration:0.4}, true);
     }
   };
   tick();
@@ -1910,7 +1944,7 @@ function scoutRelease(){
   scoutVec = {x:0, y:0, yaw:0};
   if(scoutTimer){ clearInterval(scoutTimer); scoutTimer = null; }
   // One explicit stop so it halts now rather than at the end of the firmware's watchdog window.
-  post('/api/scout/stop');
+  postJSON('/api/scout/stop', null, true);
 }
 
 // Gamepad: any HID controller the browser exposes (Amazon Luna, Xbox, PS). Left stick strafes and
@@ -1967,14 +2001,16 @@ async function scoutSnapshot(){
   }catch(e){ say(String(e), false); }
 }
 
-async function postJSON(url, body){
+// quiet=true reports only failures. Drive and stop fire many times a second while a control is
+// held; without this they would spam the feedback banner and (before it was moved) reflow the page.
+async function postJSON(url, body, quiet){
   try{
     const r = await fetch(url, {method:'POST',
       headers:{'Content-Type':'application/json','X-Porch-Token': await tokenReady()},
       body: JSON.stringify(body)});
-    const j = await r.json().catch(()=>({}));
-    say(j.message || j.detail || (r.ok?'done':'failed'), r.ok);
-  }catch(e){ say(String(e), false); }
+    if(!r.ok){ const j = await r.json().catch(()=>({})); say(j.detail || j.message || 'failed', false); }
+    else if(!quiet){ const j = await r.json().catch(()=>({})); say(j.message || 'done', true); }
+  }catch(e){ if(!quiet) say(String(e), false); }
 }
 
 async function refreshScout(){
@@ -2004,10 +2040,15 @@ async function refreshScout(){
       // Amber inside a body-length, red when it is about to touch something.
       st.style.color = (s.tof_fresh && s.tof_m != null)
         ? (s.tof_m < 0.20 ? 'var(--r)' : s.tof_m < 0.50 ? 'var(--y)' : '') : '';
-      img.src = `/scout/latest.jpg?t=${Date.now()}`;
+      // Point at the live MJPEG stream ONCE, not a fresh still every poll. Set only when it is
+      // not already streaming, so the 10 s status refresh never restarts the video.
+      if(!img.src.endsWith('/scout/mjpeg')) img.src = '/scout/mjpeg';
       img.style.display='block'; hint.style.display='none';
     } else {
       img.style.display='none'; hint.style.display='block';
+      // Drop the dead stream so the next live poll reconnects: a browser will not re-open an
+      // <img> MJPEG connection on its own once it has ended.
+      if(img.src) img.removeAttribute('src');
       // Distinguish the three ways this goes quiet, because they need different fixes.
       if(!s.reachable){
         st.textContent = '○ bridge not running';
