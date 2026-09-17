@@ -12,6 +12,7 @@ boundary and radians on the wire, matching the robot's published limits.
 from __future__ import annotations
 
 import math
+import time
 
 import requests
 
@@ -23,6 +24,36 @@ LIMITS_DEG = {"pitch": (-40.0, 40.0), "roll": (-40.0, 40.0),
 # Antennas park here rather than 0: at the null position a servo hunts and visibly twitches.
 ANTENNA_PARK_DEG = 10.0
 
+# Live-control limits, in the robot's own units (metres and radians) because set_target() is a
+# direct passthrough to the daemon and converting twice is how sign errors get in.
+#
+# The translation envelope was MEASURED on the robot, not read from a document. The head is on a
+# Stewart platform, and it saturates upward at about +0.019 m: commands of 0.02, 0.03 and 0.05 all
+# return HTTP 200 and all leave the head at 0.0188. So the honest ceiling is lower than the daemon
+# will cheerfully accept, and a slider allowed to reach 0.05 would feel broken over its top half.
+# Held symmetric at +/-0.018 so the control behaves the same in both directions; the platform can
+# actually go to about -0.03 downward, which is simply not used.
+LIMITS_M = {"x": (-0.02, 0.02), "y": (-0.02, 0.02), "z": (-0.018, 0.018)}
+
+LIMITS_RAD = {
+    "roll": (math.radians(-40.0), math.radians(40.0)),
+    "pitch": (math.radians(-40.0), math.radians(40.0)),
+    "yaw": (math.radians(-180.0), math.radians(180.0)),
+    "body_yaw": (math.radians(-160.0), math.radians(160.0)),
+}
+# Antennas are near-continuous: measured tracking to +/-3.0 rad with no complaint.
+ANTENNA_LIMIT_RAD = math.pi
+
+# Index 0 is the LEFT antenna and index 1 the RIGHT. Confirmed against the robot's own desktop app,
+# which displayed Left 0.173 / Right 0.175 while the API returned [0.1733, 0.1749]. An earlier note
+# in this project had these the other way round; it was wrong.
+ANTENNA_LEFT, ANTENNA_RIGHT = 0, 1
+
+# How long set_target() trusts its own last command when holding an unspecified axis. Long
+# enough that a dragged control never falls back to the measured pose mid-drag, short enough
+# that moving the head by hand is adopted rather than fought.
+CMD_MEMORY_S = 5.0
+
 
 class Reachy:
     """Minimal client for one Reachy Mini daemon."""
@@ -30,6 +61,10 @@ class Reachy:
     def __init__(self, base_url: str, timeout: float = 8.0):
         self.base = (base_url or "").rstrip("/")
         self.timeout = timeout
+        # Last pose commanded, so set_target() holds an axis at what it was ASKED to be
+        # rather than at what the platform settled on. See set_target().
+        self._last_cmd: dict = {}
+        self._last_cmd_at = 0.0
 
     # ------------------------------------------------------------------ plumbing
     def _get(self, path: str, default=None):
@@ -74,6 +109,10 @@ class Reachy:
         if pose:
             out["pose_deg"] = {k: round(math.degrees(float(pose.get(k, 0.0))), 1)
                                for k in ("roll", "pitch", "yaw")}
+            # Translation as well as rotation: the live panel has X/Y and Z controls, and without
+            # these they would have nothing to snap back to when the robot is moved by anything
+            # else. Metres, unrounded past mm, because the whole usable range is +/-20 mm.
+            out["pos_m"] = {k: round(float(pose.get(k, 0.0)), 4) for k in ("x", "y", "z")}
             out["body_yaw_deg"] = round(math.degrees(float(full.get("body_yaw") or 0.0)), 1)
             out["antennas_deg"] = [round(math.degrees(float(a)), 1)
                                    for a in (full.get("antennas_position") or [])]
@@ -159,6 +198,100 @@ class Reachy:
         if not ok:
             return False, msg
         return True, "; ".join(notes) or "moving"
+
+    def set_target(self, pose: dict | None = None, body_yaw=None, antennas=None):
+        """Point the robot at a target and return immediately. The unit for live controls.
+
+        Deliberately not goto(). goto() plans an interpolated move of a given duration, which is
+        right for "centre yourself" and wrong for a slider: dragging one would queue a backlog of
+        overlapping trajectories and the head would lag behind the finger and then catch up in
+        lurches. set_target() just updates the setpoint that the robot's own 50 Hz loop is already
+        chasing, so the motion is as smooth as the loop and the newest value always wins.
+
+        Angles are RADIANS and positions METRES here - the daemon's own units - because this is a
+        passthrough and a second conversion is an opportunity for a sign error.
+        """
+        st = self.state()
+        if not st.get("reachable"):
+            return False, "robot unreachable"
+        if (st.get("motor_mode") or "").lower() == "disabled":
+            # The daemon accepts targets with motors off and reports success while nothing turns.
+            return False, "motors are disabled - enable them first"
+
+        payload: dict = {}
+        notes = []
+
+        if pose:
+            vals = {}
+            for k in ("x", "y", "z"):
+                if pose.get(k) is not None:
+                    lo, hi = LIMITS_M[k]
+                    v = float(pose[k])
+                    c = max(lo, min(hi, v))
+                    if abs(c - v) > 1e-9:
+                        notes.append(f"{k} clamped to {c:.3f} m")
+                    vals[k] = c
+            for k in ("roll", "pitch", "yaw"):
+                if pose.get(k) is not None:
+                    lo, hi = LIMITS_RAD[k]
+                    v = float(pose[k])
+                    c = max(lo, min(hi, v))
+                    if abs(c - v) > 1e-9:
+                        notes.append(f"{k} clamped to {math.degrees(c):.0f}°")
+                    vals[k] = c
+            if vals:
+                # The daemon wants a complete pose, so unspecified axes have to be filled in.
+                #
+                # They are filled from the LAST COMMANDED pose, not the measured one. Measuring
+                # looks more correct and is not: this is a Stewart platform that settles a degree
+                # or two off target, so feeding the measurement back as the next command amplifies
+                # that error every call. Measured live, roll walked 3.7 -> 5.1 -> 8.6 -> 10.0 over
+                # four requests that never mentioned roll. Falling back to the measured pose only
+                # when the cache is stale means a head moved by hand, or by another client, is
+                # still picked up instead of fought.
+                cur = st.get("pose_deg") or {}
+                pos = st.get("pos_m") or {}
+                fresh = (time.monotonic() - self._last_cmd_at) < CMD_MEMORY_S
+                held = self._last_cmd if fresh else {}
+
+                def hold(key, measured):
+                    if key in vals:
+                        return vals[key]
+                    return float(held.get(key, measured))
+
+                full = {
+                    "x": hold("x", float(pos.get("x", 0.0))),
+                    "y": hold("y", float(pos.get("y", 0.0))),
+                    "z": hold("z", float(pos.get("z", 0.0))),
+                    "roll": hold("roll", math.radians(cur.get("roll", 0.0))),
+                    "pitch": hold("pitch", math.radians(cur.get("pitch", 0.0))),
+                    "yaw": hold("yaw", math.radians(cur.get("yaw", 0.0))),
+                }
+                payload["target_head_pose"] = full
+
+        if body_yaw is not None:
+            lo, hi = LIMITS_RAD["body_yaw"]
+            v = float(body_yaw)
+            c = max(lo, min(hi, v))
+            if abs(c - v) > 1e-9:
+                notes.append(f"body_yaw clamped to {math.degrees(c):.0f}°")
+            payload["target_body_yaw"] = c
+
+        if antennas is not None:
+            a = [max(-ANTENNA_LIMIT_RAD, min(ANTENNA_LIMIT_RAD, float(x))) for x in antennas]
+            if len(a) != 2:
+                return False, "antennas must be [left, right]"
+            payload["target_antennas"] = a
+
+        if not payload:
+            return False, "nothing to set"
+        ok, msg = self._post("/api/move/set_target", payload)
+        if not ok:
+            return False, msg
+        if "target_head_pose" in payload:
+            self._last_cmd = dict(payload["target_head_pose"])
+            self._last_cmd_at = time.monotonic()
+        return True, "; ".join(notes) or "ok"
 
     def center(self):
         st = self.state()

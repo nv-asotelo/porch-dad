@@ -25,6 +25,7 @@ and its unit sets MemoryMax. Before starting a heavy service it refuses if free 
 from __future__ import annotations
 
 import json
+import math
 import os
 import secrets
 import sqlite3
@@ -44,7 +45,8 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from reachy import MOTOR_MODES, Reachy as ReachyClient
+from reachy import (ANTENNA_LIMIT_RAD, ANTENNA_PARK_DEG, LIMITS_M, LIMITS_RAD, MOTOR_MODES,
+                    Reachy as ReachyClient)
 
 CFG = yaml.safe_load(Path(os.environ.get("PORCH_FEED_CONFIG",
                                          "/home/orin/nvr/feed/config.yaml")).read_text())
@@ -1198,6 +1200,51 @@ def api_reachy_look_axis(axis: str, deg: float, request: Request):
     return _reachy_result(*_reachy.look(**{axis: deg}))
 
 
+@app.post("/api/reachy/target")
+async def api_reachy_target(request: Request):
+    """Live pose control, mirroring the sliders and pads in the robot's own desktop app.
+
+    Units are the daemon's: metres and radians. The panel shows radians because the app does, and
+    converting for display only to convert back before sending would be two chances to get a sign
+    wrong on a robot whose pitch is already positive-downward.
+    """
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(400, "expected a JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "expected a JSON object")
+
+    pose = {k: body[k] for k in ("x", "y", "z", "roll", "pitch", "yaw") if body.get(k) is not None}
+    antennas = body.get("antennas")
+    if antennas is not None and (not isinstance(antennas, (list, tuple)) or len(antennas) != 2):
+        raise HTTPException(400, "antennas must be [left, right]")
+    try:
+        ok, msg = _reachy.set_target(pose=pose or None, body_yaw=body.get("body_yaw"),
+                                     antennas=antennas)
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, f"bad target: {e}")
+    return _reachy_result(ok, msg)
+
+
+@app.get("/api/reachy/limits")
+def api_reachy_limits():
+    """Ranges for the control panel, so the sliders cannot ask for something unreachable.
+
+    Served rather than hard-coded in the page because they were measured against this robot - in
+    particular the head saturates at about +0.019 m upward while the daemon still answers 200.
+    """
+    return {
+        "translation_m": LIMITS_M,
+        "rotation_rad": {k: list(v) for k, v in LIMITS_RAD.items()},
+        "antenna_rad": [-ANTENNA_LIMIT_RAD, ANTENNA_LIMIT_RAD],
+        "antenna_park_rad": math.radians(ANTENNA_PARK_DEG),
+    }
+
+
 @app.get("/api/reachy/alert")
 def api_reachy_alert():
     """Most recent anomaly check: what it saw, and whether the policy called it an alert."""
@@ -1283,6 +1330,33 @@ a{color:var(--g);text-decoration:none}
 a.chip:hover{border-color:var(--g);background:rgba(118,185,0,.10)}
 .chip.on{border-color:var(--g)}
 .chip.down{opacity:.6;border-style:dashed}
+
+/* Reachy controller - the same controls the robot's own desktop app offers (antennas, head
+   X/Y + Z, pitch/yaw, roll, body yaw), in this page's colours rather than the app's orange.
+   Values are shown in radians and metres because that is what the app shows and what the
+   daemon takes; converting for display only would add a place for a sign error. */
+.sec{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut);
+     margin:14px 0 6px;display:flex;align-items:center;gap:7px}
+.ctlrow{display:flex;gap:8px;flex-wrap:wrap}
+.ctl{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:10px;
+     padding:9px 11px;flex:1 1 170px;min-width:0}
+.ctl h4{margin:0 0 6px;font-size:12px;font-weight:600;display:flex;justify-content:space-between;
+        align-items:baseline;gap:8px}
+.ctl h4 b{color:var(--mut);font-weight:400;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-size:11.5px}
+/* 2D pad: drag the dot, both axes at once. */
+.pad{position:relative;width:100%;aspect-ratio:1;max-width:150px;margin:0 auto;
+     border:1px solid var(--line);border-radius:10px;background:
+     linear-gradient(var(--line),var(--line)) center/1px 100% no-repeat,
+     linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat;
+     touch-action:none;cursor:crosshair}
+.pad i{position:absolute;width:15px;height:15px;border-radius:50%;background:var(--g);
+       transform:translate(-50%,-50%);left:50%;top:50%;box-shadow:0 0 0 4px rgba(118,185,0,.18)}
+.padwrap{display:flex;gap:9px;align-items:stretch}
+.vwrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+input[type=range]{width:100%;accent-color:var(--g)}
+input[type=range].vert{writing-mode:vertical-lr;direction:rtl;width:22px;height:120px}
+.ctl.wide{flex-basis:100%}
 .chip.locked{opacity:.55;cursor:not-allowed;border-style:dashed}
 .chip .hint{margin:0;font-size:11.5px;opacity:.8}
 .callout{background:rgba(74,163,255,.09);border:1px solid rgba(74,163,255,.35);border-left:3px solid var(--b);
@@ -1359,15 +1433,56 @@ button.mini{padding:3px 9px;font-size:11.5px}
       <button onclick="rq('/api/reachy/motors/gravity_compensation')">Soft</button>
       <button onclick="rq('/api/reachy/motors/disabled')">Limp</button>
     </div>
-    <div class="row" style="margin-top:8px">
-      <span class="hint">Pose</span>
-      <button onclick="rq('/api/reachy/look/pitch/-12')" title="pitch is positive downward">Look up</button>
-      <button onclick="rq('/api/reachy/look/pitch/12')">Look down</button>
-      <button onclick="rq('/api/reachy/look/yaw/25')">Left</button>
-      <button onclick="rq('/api/reachy/look/yaw/-25')">Right</button>
-      <button onclick="rq('/api/reachy/look/body_yaw/40')">Body ⟲</button>
-      <button onclick="rq('/api/reachy/look/body_yaw/-40')">Body ⟳</button>
+    <div class="sec">⌇⌇ Antennas</div>
+    <div class="ctlrow">
+      <div class="ctl">
+        <h4>Left <b id="antLv">0.000 rad</b></h4>
+        <input type="range" id="antL" min="-3.14" max="3.14" step="0.01" value="0.175">
+      </div>
+      <div class="ctl">
+        <h4>Right <b id="antRv">0.000 rad</b></h4>
+        <input type="range" id="antR" min="-3.14" max="3.14" step="0.01" value="0.175">
+      </div>
     </div>
+
+    <div class="sec">◉◉ Head</div>
+    <div class="ctlrow">
+      <div class="ctl">
+        <h4>Position X/Y <b id="xyv">0.000 0.000</b></h4>
+        <div class="padwrap">
+          <div class="pad" id="padXY"><i></i></div>
+          <div class="vwrap">
+            <span class="hint" style="font-size:10px">Z</span>
+            <input type="range" class="vert" id="posZ" min="-0.018" max="0.018" step="0.001" value="0">
+            <b class="hint" id="zv" style="font-size:10.5px">0.000</b>
+          </div>
+        </div>
+      </div>
+      <div class="ctl">
+        <h4>Pitch / Yaw <b id="pyv">0.000 0.000</b></h4>
+        <div class="pad" id="padPY"><i></i></div>
+      </div>
+    </div>
+    <div class="ctlrow" style="margin-top:8px">
+      <div class="ctl wide">
+        <h4>Roll <b id="rollv">0.000 rad</b></h4>
+        <input type="range" id="roll" min="-0.7" max="0.7" step="0.01" value="0">
+      </div>
+    </div>
+
+    <div class="sec">▭ Body</div>
+    <div class="ctlrow">
+      <div class="ctl wide">
+        <h4>Yaw <b id="byawv">0.000 rad</b></h4>
+        <input type="range" id="byaw" min="-2.79" max="2.79" step="0.01" value="0">
+      </div>
+    </div>
+    <p class="hint">
+      Live control: these set the target the robot's 50&nbsp;Hz loop is already chasing, so they
+      track your finger rather than queueing moves. Pitch is positive <b>downward</b> — the pad is
+      inverted so dragging up looks up. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in Z; the
+      platform saturates at about +19&nbsp;mm however far you ask.
+    </p>
     <div class="vol">
       <label>Microphone <span id="micVal" class="hint"></span></label>
       <input type="range" id="micVol" min="0" max="100" step="5"
@@ -1445,9 +1560,123 @@ async function copySelf(){
   try{ await navigator.clipboard.writeText(window.location.origin + '/'); say('Address copied', true); }
   catch(e){ say('Copy failed - long-press the link instead', false); }
 }
+// ---------------------------------------------------------------- Reachy live controller
+// One target object, one throttled sender. The robot is already running a 50 Hz loop chasing
+// whatever target it last received, so the job here is only to keep that target fresh: send at
+// most every 60 ms while dragging, and always send once more on release so the final resting
+// value is never the one that got throttled away.
+const T = {x:0,y:0,z:0,roll:0,pitch:0,yaw:0,body_yaw:0,antennas:[0.175,0.175]};
+let tBusy=false, tPend=false, tLast=0, tGrabbed=0;
+const D2R = Math.PI/180;
+
+function tTouch(){ tGrabbed = Date.now(); }          // suppress state sync while the user drives
+
+async function tSend(){
+  if(tBusy){ tPend=true; return; }
+  const now=Date.now();
+  if(now-tLast < 60){ if(!tPend){ tPend=true; setTimeout(()=>{tPend=false;tSend();}, 60-(now-tLast)); } return; }
+  tBusy=true; tLast=now;
+  try{
+    const tok = await tokenReady();
+    const r = await fetch('/api/reachy/target',{method:'POST',
+      headers:{'Content-Type':'application/json','X-Porch-Token':tok},
+      body:JSON.stringify(T)});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); say(j.detail||j.message||'target refused', false); }
+  }catch(e){ /* a dropped frame of control is not worth a banner */ }
+  tBusy=false;
+  if(tPend){ tPend=false; tSend(); }
+}
+
+// The control token arrives with the first /api/status poll. Clicking before that landed used to
+// fail with a bare 401 that looked like "the controls are broken" - which is exactly how this was
+// first reported - so wait for it instead of sending an empty header.
+async function tokenReady(){
+  if(TOKEN) return TOKEN;
+  try{ const st = await (await fetch('/api/status',{cache:'no-store'})).json();
+       TOKEN = st.control_token || ''; }catch(e){}
+  return TOKEN;
+}
+
+function fmt(v,n){ return (v<0?'':' ') + v.toFixed(n===undefined?3:n); }
+
+function bindSlider(id, lblId, key, unit, idx){
+  const el=document.getElementById(id), lbl=document.getElementById(lblId);
+  if(!el) return;
+  const paint=()=>{ const v=parseFloat(el.value);
+    lbl.textContent = fmt(v) + (unit||''); };
+  el.addEventListener('input', ()=>{ tTouch();
+    const v=parseFloat(el.value);
+    if(idx===undefined) T[key]=v; else T.antennas[idx]=v;
+    paint(); tSend(); });
+  paint();
+}
+
+// A pad maps the two axes of a square onto two target fields. `inv` flips the vertical axis for
+// pitch, which is positive downward on this robot: without it, dragging up would look down.
+function bindPad(id, lblId, kx, ky, rx, ry, inv){
+  const pad=document.getElementById(id); if(!pad) return;
+  const dot=pad.querySelector('i'), lbl=document.getElementById(lblId);
+  let down=false;
+  const paint=()=>{
+    const fx=(T[kx]/rx+1)/2, fy=((inv?-T[ky]:T[ky])/ry+1)/2;
+    dot.style.left=(Math.min(1,Math.max(0,fx))*100)+'%';
+    dot.style.top=(100-Math.min(1,Math.max(0,fy))*100)+'%';
+    lbl.textContent=fmt(T[kx])+' '+fmt(T[ky]);
+  };
+  const at=(ev)=>{
+    const b=pad.getBoundingClientRect();
+    const fx=Math.min(1,Math.max(0,(ev.clientX-b.left)/b.width));
+    const fy=Math.min(1,Math.max(0,(ev.clientY-b.top)/b.height));
+    T[kx]=(fx*2-1)*rx;
+    const vy=((1-fy)*2-1)*ry;
+    T[ky]=inv?-vy:vy;
+    tTouch(); paint(); tSend();
+  };
+  pad.addEventListener('pointerdown',e=>{down=true;pad.setPointerCapture(e.pointerId);at(e);});
+  pad.addEventListener('pointermove',e=>{if(down)at(e);});
+  pad.addEventListener('pointerup',  e=>{down=false;at(e);});
+  pad.addEventListener('pointercancel',()=>{down=false;});
+  pad._paint=paint; paint();
+}
+
+// Pull the live pose back into the widgets, but only when the user is not driving them - snapping
+// a slider out from under a finger is worse than a stale reading.
+function syncCtl(rs){
+  if(Date.now()-tGrabbed < 1500) return;
+  const p=rs.pose_deg||{}, m=rs.pos_m||{};
+  const set=(id,lbl,v,unit)=>{const e=document.getElementById(id);
+    if(e&&document.activeElement!==e&&v!=null){e.value=v;
+      const b=document.getElementById(lbl); if(b) b.textContent=fmt(v)+(unit||'');}};
+  if(p.roll!=null){ T.roll=p.roll*D2R; set('roll','rollv',T.roll,' rad'); }
+  if(p.pitch!=null) T.pitch=p.pitch*D2R;
+  if(p.yaw!=null)   T.yaw=p.yaw*D2R;
+  if(rs.body_yaw_deg!=null){ T.body_yaw=rs.body_yaw_deg*D2R; set('byaw','byawv',T.body_yaw,' rad'); }
+  if(m.x!=null) T.x=m.x; if(m.y!=null) T.y=m.y;
+  if(m.z!=null){ T.z=m.z; set('posZ','zv',T.z,''); }
+  const a=rs.antennas_deg;
+  if(a&&a.length===2){ T.antennas=[a[0]*D2R,a[1]*D2R];
+    set('antL','antLv',T.antennas[0],' rad'); set('antR','antRv',T.antennas[1],' rad'); }
+  const px=document.getElementById('padXY'), pp=document.getElementById('padPY');
+  if(px&&px._paint) px._paint();
+  if(pp&&pp._paint) pp._paint();
+}
+
+function initCtl(){
+  bindSlider('antL','antLv',null,' rad',0);
+  bindSlider('antR','antRv',null,' rad',1);
+  bindSlider('roll','rollv','roll',' rad');
+  bindSlider('byaw','byawv','body_yaw',' rad');
+  bindSlider('posZ','zv','z','');
+  bindPad('padXY','xyv','x','y',0.02,0.02,false);
+  // Pitch is positive downward, so the pad is inverted: drag up, look up.
+  bindPad('padPY','pyv','yaw','pitch',Math.PI,0.7,true);
+}
+
 async function rq(url){ return post(url); }
 async function post(url){
-  try{ const r=await fetch(url,{method:'POST',headers:{'X-Porch-Token':TOKEN}});
+  // tokenReady(), not TOKEN: the token only arrives with the first status poll, so a click during
+  // the first second used to send an empty header and fail with a bare 401.
+  try{ const r=await fetch(url,{method:'POST',headers:{'X-Porch-Token':await tokenReady()}});
        const j=await r.json().catch(()=>({}));
        say(j.message || j.detail || (r.ok?'done':'failed'), r.ok); }
   catch(e){ say(String(e), false); }
@@ -1557,6 +1786,7 @@ async function load(){
         if(e&&document.activeElement!==e&&v!=null){e.value=v;document.getElementById(lbl).textContent=v+'%';}};
       setv('micVol', rs.mic_volume, 'micVal');
       setv('spkVol', rs.speaker_volume, 'spkVal');
+      syncCtl(rs);
     } else { box.style.display = rs.enabled ? 'block' : 'none';
              if(rs.enabled) document.getElementById('reachyStatus2').textContent='robot unreachable'; }
 
@@ -1602,7 +1832,7 @@ async function load(){
      </div>`).join('')
     : `<p class="hint">No captions yet for this filter. Trigger motion on a camera.</p>`;
 }
-showSelfUrl(); load(); setInterval(load, 10000);
+showSelfUrl(); initCtl(); load(); setInterval(load, 10000);
 </script></body></html>"""
 
 
