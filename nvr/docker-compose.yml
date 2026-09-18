@@ -70,6 +70,26 @@ services:
     # still being reachable from Frigate's bridged container as host.docker.internal.
     command: ["--listen", "172.17.0.1", "--listen-port", "8098", "--fps", "12"]
 
+  # Second Scout: the tracked model on the first floor (192.168.7.7). Identical firmware to the
+  # robot-room Scout - same roller_eye stack, same topics, same cmd_vel convention - so it uses the
+  # same image and only its address changes. Both robots answer to the SAME hostname (linaro-alip):
+  # each bridge pins that name to ITS robot via extra_hosts, so the two never cross even though the
+  # string collides. Port 8100 keeps it clear of the robot-room bridge on 8098.
+  scout-bridge-first-floor:
+    profiles: ["scout"]
+    build: ./scout
+    image: porch-scout-bridge:latest
+    container_name: scout-bridge-first-floor
+    restart: unless-stopped
+    mem_limit: 128m
+    network_mode: host
+    environment:
+      - ROS_MASTER_URI=http://192.168.7.7:11311     # the first-floor Scout
+      - ROS_IP=192.168.6.252                        # this Jetson, as the robot sees it
+    extra_hosts:
+      - "linaro-alip:192.168.7.7"
+    command: ["--listen", "172.17.0.1", "--listen-port", "8100", "--fps", "12"]
+
   frigate:
     image: ghcr.io/blakeblackshear/frigate:stable
     container_name: frigate

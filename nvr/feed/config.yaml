@@ -70,10 +70,32 @@ engines:
       to exist, not accuracy. It spends the most tokens per frame (320), which ought to mean
       a sharper look, but that did not show up as a single extra correct call on this eval.
 
-# Moorebot Scout, via scout-bridge on this box (nvr/scout/). Empty disables the card entirely.
-# The bridge is behind the `scout` compose profile, so this shows as unreachable until it is
-# started - which is the honest state rather than a hidden feature.
-scout_bridge_url: "http://172.17.0.1:8098"
+# Moorebot Scouts. One entry per robot; the command centre renders a card each. Each has its own
+# bridge container on this box (nvr/scout/), behind the `scout` compose profile, so a card shows
+# as unreachable until its bridge is started - the honest state rather than a hidden feature.
+#
+# kinematics: "mecanum" enables strafe; "tracked" hides it, because tank treads cannot strafe even
+# though the firmware (identical across both models - same motor_node, same 4-motor drivers, same
+# plt_track_type) would accept the command. Forward is linear.y and rotate is angular.z on both.
+#
+# ssh is used only for audio (the robot has no ROS/RTSP audio); key auth, unprivileged linaro.
+scouts:
+  - id: robot_room
+    name: "Robot room · 2F"
+    bridge_url: "http://172.17.0.1:8098"
+    ssh: "linaro@192.168.7.6"
+    container: scout-bridge
+    kinematics: mecanum
+  - id: first_floor
+    name: "First floor · tracked"
+    bridge_url: "http://172.17.0.1:8100"
+    ssh: "linaro@192.168.7.7"
+    container: scout-bridge-first-floor
+    kinematics: tracked
+# Shared audio defaults (same rk809 codec on every Scout).
+scout_ssh_key: "/home/orin/.ssh/scout_ed25519"
+scout_mic_device: "hw:0,1"
+scout_speaker_device: "hw:0,0"
 
 # Live camera preview for the Reachy Mini.
 #
@@ -168,12 +190,19 @@ services:
   # come up with the rest of the NVR. Measured at 37 MB with frames flowing, which is why it is
   # worth having at all on this board.
   - key: scout
-    label: "Moorebot Scout bridge"
+    label: "Scout bridge · robot room 2F"
     kind: docker
     name: scout-bridge
     port: 8098
     heavy_mb: 40
-    note: "ROS1 camera -> MJPEG for Frigate, plus the drive relay. Needs a Scout on the LAN."
+    note: "ROS1 camera -> h264/MJPEG plus the drive relay for the robot-room Scout (192.168.7.6)."
+  - key: scout_first_floor
+    label: "Scout bridge · first floor"
+    kind: docker
+    name: scout-bridge-first-floor
+    port: 8100
+    heavy_mb: 40
+    note: "Same bridge for the tracked first-floor Scout (192.168.7.7). Behind the scout profile."
   # Listed last because it is this page. Stopping it removes the only way to start it again from a
   # browser, so the UI demands confirmation and the action is deferred (see _deferred_self_action).
   - key: feed
@@ -199,7 +228,8 @@ links:
   - {name: "Cosmos3-Edge API",   port: 8000,  scheme: "http",  path: "/v1/models"}
   # Health rather than /mjpeg: probing the stream would open a video connection on every poll.
   # Shows as down until the scout profile is started, which is the honest state.
-  - {name: "Scout bridge",       port: 8098,  scheme: "http",  path: "/healthz"}
+  - {name: "Scout bridge · 2F",  port: 8098,  scheme: "http",  path: "/healthz"}
+  - {name: "Scout bridge · 1F",  port: 8100,  scheme: "http",  path: "/healthz"}
   - {name: "ring-mqtt setup",    port: 55123, scheme: "http",  path: "/"}
   - {name: "MQTT broker",        port: 1883,  tcp_only: true}
   - {name: "Ring RTSP",          port: 8554,  tcp_only: true}

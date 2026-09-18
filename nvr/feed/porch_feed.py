@@ -81,15 +81,59 @@ REACHY_WEBUI = str(CFG.get("reachy_webui_url") or "").rstrip("/")
 REACHY_CAM = str(CFG.get("reachy_camera_url") or "").rstrip("/")
 REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
 _reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
-SCOUT_BRIDGE = str(CFG.get("scout_bridge_url") or "").rstrip("/")
 # Scout audio goes over SSH (the robot has no ROS/RTSP audio). Key auth, unprivileged linaro.
-# Defaults here so the live box needs no config edit (and its control token stays untouched).
-SCOUT_SSH = str(CFG.get("scout_ssh") or "linaro@192.168.7.6")
 SCOUT_SSH_KEY = str(CFG.get("scout_ssh_key") or "/home/orin/.ssh/scout_ed25519")
 SCOUT_MIC_DEV = str(CFG.get("scout_mic_device") or "hw:0,1")
 SCOUT_SPK_DEV = str(CFG.get("scout_speaker_device") or "hw:0,0")
 AUDIO_RATE = 16000
-_scout = ScoutClient(SCOUT_BRIDGE) if SCOUT_BRIDGE else None
+
+# One robot per entry. The list drives everything downstream - endpoints, cards, Frigate - so a
+# third Scout is a config line, not code. Falls back to the single scout_bridge_url (old single-
+# robot config) and then to the two known robots, so a live box with neither still works.
+DEFAULT_SCOUTS = [
+    {"id": "robot_room", "name": "Robot room · 2F",
+     "bridge_url": "http://172.17.0.1:8098", "ssh": "linaro@192.168.7.6", "kinematics": "mecanum"},
+    {"id": "first_floor", "name": "First floor · tracked",
+     "bridge_url": "http://172.17.0.1:8100", "ssh": "linaro@192.168.7.7", "kinematics": "tracked"},
+]
+_scouts_cfg = CFG.get("scouts")
+if not _scouts_cfg:
+    if CFG.get("scout_bridge_url"):
+        _scouts_cfg = [{"id": "scout", "name": "Moorebot Scout",
+                        "bridge_url": CFG["scout_bridge_url"],
+                        "ssh": CFG.get("scout_ssh", "linaro@192.168.7.6"), "kinematics": "mecanum"}]
+    else:
+        _scouts_cfg = DEFAULT_SCOUTS
+
+
+class _ScoutEntry:
+    """One robot: its bridge client, ssh target for audio, and display metadata."""
+    def __init__(self, d: dict):
+        self.id = str(d["id"])
+        self.name = str(d.get("name") or self.id)
+        self.kinematics = str(d.get("kinematics") or "mecanum")
+        self.bridge = str(d.get("bridge_url") or "").rstrip("/")
+        self.ssh = str(d.get("ssh") or "")
+        # The docker container running THIS robot's bridge, so a ROS restart can bounce it to
+        # reconnect to the fresh roscore. Empty = skip the bridge bounce (bridge stays as-is).
+        self.container = str(d.get("container") or "")
+        self.client = ScoutClient(self.bridge) if self.bridge else None
+
+
+SCOUTS = {}
+for _d in _scouts_cfg:
+    try:
+        _e = _ScoutEntry(_d)
+        SCOUTS[_e.id] = _e
+    except (KeyError, TypeError) as _err:
+        print(f"[feed] bad scout config entry {_d}: {_err}", flush=True)
+
+
+def _scout_entry(sid: str) -> "_ScoutEntry":
+    e = SCOUTS.get(sid)
+    if e is None:
+        raise HTTPException(404, f"unknown scout '{sid}'")
+    return e
 # Anomaly watch: the microphone triggers the eye.
 #
 # Continuous captioning of the robot's view would mean a ~650 ms VLM call every few seconds,
@@ -1241,45 +1285,54 @@ async def api_reachy_target(request: Request):
     return _reachy_result(ok, msg)
 
 
-@app.get("/api/scout/state")
-def api_scout_state():
+@app.get("/api/scouts")
+def api_scouts():
+    """The robots to render, in config order. Read-only so the page can build its cards."""
+    return {"scouts": [{"id": e.id, "name": e.name, "kinematics": e.kinematics}
+                       for e in SCOUTS.values()]}
+
+
+@app.get("/api/scout/{sid}/state")
+def api_scout_state(sid: str):
     """Bridge health. Read-only, so no token: the panel needs it to render at all."""
-    if not _scout:
+    e = _scout_entry(sid)
+    if not e.client:
         return {"enabled": False}
-    return _scout.state()
+    return e.client.state()
 
 
-@app.get("/scout/latest.jpg")
-def scout_latest():
+@app.get("/scout/{sid}/latest.jpg")
+def scout_latest(sid: str):
     """Proxy the bridge's still so the browser only ever talks to this origin."""
-    if not SCOUT_BRIDGE:
-        raise HTTPException(404, "scout_bridge_url is not configured")
+    e = _scout_entry(sid)
+    if not e.bridge:
+        raise HTTPException(404, "bridge not configured")
     try:
-        r = requests.get(f"{SCOUT_BRIDGE}/still.jpg", timeout=6)
+        r = requests.get(f"{e.bridge}/still.jpg", timeout=6)
         if r.status_code != 200 or not r.content:
             raise HTTPException(503, "no frame")
         return Response(content=r.content, media_type="image/jpeg",
                         headers={"Cache-Control": "no-store"})
-    except requests.RequestException as e:
-        raise HTTPException(503, f"bridge unreachable: {e}")
+    except requests.RequestException as ex:
+        raise HTTPException(503, f"bridge unreachable: {ex}")
 
 
-@app.get("/scout/mjpeg")
-def scout_mjpeg():
+@app.get("/scout/{sid}/mjpeg")
+def scout_mjpeg(sid: str):
     """Live MJPEG, proxied so the browser talks only to this origin.
 
     The bridge binds the docker gateway (172.17.0.1), which the browser cannot reach, so the
     command centre relays the multipart stream. An <img> pointed here updates at the stream's rate
-    with essentially no added latency - unlike the old 3-second still poll, which was 0.3 fps and
-    made the robot impossible to drive. The rate is capped by the robot's jpg topic (~7 fps); the
-    h264 path is what exceeds that.
+    with essentially no added latency - unlike the old 3-second still poll that made the robot
+    impossible to drive.
     """
-    if not SCOUT_BRIDGE:
-        raise HTTPException(404, "scout_bridge_url is not configured")
+    e = _scout_entry(sid)
+    if not e.bridge:
+        raise HTTPException(404, "bridge not configured")
     try:
-        up = requests.get(f"{SCOUT_BRIDGE}/mjpeg", stream=True, timeout=(5, 30))
-    except requests.RequestException as e:
-        raise HTTPException(503, f"bridge unreachable: {e}")
+        up = requests.get(f"{e.bridge}/mjpeg", stream=True, timeout=(5, 30))
+    except requests.RequestException as ex:
+        raise HTTPException(503, f"bridge unreachable: {ex}")
     ct = up.headers.get("Content-Type", "multipart/x-mixed-replace; boundary=frame")
 
     def relay():
@@ -1295,65 +1348,33 @@ def scout_mjpeg():
     return StreamingResponse(relay(), media_type=ct, headers={"Cache-Control": "no-store"})
 
 
-def _scout_ssh(remote_cmd: str) -> list[str]:
+def _scout_ssh(ssh_target: str, remote_cmd: str) -> list[str]:
     return ["ssh", "-i", SCOUT_SSH_KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes",
-            "-o", "ConnectTimeout=6", SCOUT_SSH, remote_cmd]
+            "-o", "ConnectTimeout=6", ssh_target, remote_cmd]
 
 
-@app.websocket("/api/audio/scout/listen")
-async def scout_audio_listen(ws: WebSocket):
-    """Stream the Scout's microphone to the browser as 16 kHz mono PCM16.
-
-    The robot exposes no ROS or RTSP audio, so this runs arecord over SSH (key auth, unprivileged
-    linaro in the audio group) and relays the raw bytes. Activating the mic is a privacy-relevant
-    action, so it takes the control token as a query param like every other write.
-
-    The mic is a 2-channel PDM device and mono is rejected at the ALSA layer, so it is captured in
-    stereo and one channel is forwarded - both carry the same voice.
-    """
-    if CONTROL_TOKEN and ws.query_params.get("token") != CONTROL_TOKEN:
-        await ws.close(code=4401)
-        return
+async def _audio_ws_capture(ws: WebSocket, ssh_target: str):
+    """Mic -> browser: arecord over SSH, one channel of the stereo PDM mic forwarded as PCM16."""
     await ws.accept()
     import numpy as np
-    cmd = _scout_ssh(f"exec arecord -q -D {SCOUT_MIC_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
+    cmd = _scout_ssh(ssh_target, f"exec arecord -q -D {SCOUT_MIC_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
     try:
         while True:
-            # 20 ms of stereo S16LE = 320 frames x 2ch x 2 bytes.
-            raw = await proc.stdout.readexactly(1280)
-            mono = np.frombuffer(raw, dtype="<i2").reshape(-1, 2)[:, 0]
-            await ws.send_bytes(mono.tobytes())
+            raw = await proc.stdout.readexactly(1280)   # 20 ms stereo S16
+            await ws.send_bytes(np.frombuffer(raw, dtype="<i2").reshape(-1, 2)[:, 0].tobytes())
     except (asyncio.IncompleteReadError, WebSocketDisconnect, RuntimeError, ConnectionError):
         pass
     finally:
-        # Kill the local ssh; arecord on the robot then gets SIGPIPE on the closed channel and exits.
-        try:
-            proc.terminate()
-            await asyncio.wait_for(proc.wait(), timeout=3)
-        except (ProcessLookupError, asyncio.TimeoutError):
-            try:
-                proc.kill()
-            except ProcessLookupError:
-                pass
+        await _kill_proc(proc)
 
 
-@app.websocket("/api/audio/scout/talk")
-async def scout_audio_talk(ws: WebSocket):
-    """Play browser microphone audio through the Scout's speaker.
-
-    Receives 16 kHz mono PCM16 from the browser and pipes it to aplay over SSH. The speaker is a
-    2-channel device that rejects mono, so each sample is duplicated to stereo. Push-to-talk on the
-    browser side keeps this half-duplex - there is no echo cancellation on the robot, so a live mic
-    and live speaker at once would feed back.
-    """
-    if CONTROL_TOKEN and ws.query_params.get("token") != CONTROL_TOKEN:
-        await ws.close(code=4401)
-        return
+async def _audio_ws_playback(ws: WebSocket, ssh_target: str):
+    """Browser -> speaker: mono PCM16 in, duplicated to stereo (the sink rejects mono), to aplay."""
     await ws.accept()
     import numpy as np
-    cmd = _scout_ssh(f"exec aplay -q -D {SCOUT_SPK_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
+    cmd = _scout_ssh(ssh_target, f"exec aplay -q -D {SCOUT_SPK_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
@@ -1362,8 +1383,7 @@ async def scout_audio_talk(ws: WebSocket):
             msg = await ws.receive_bytes()
             if not msg:
                 continue
-            stereo = np.repeat(np.frombuffer(msg, dtype="<i2"), 2).tobytes()
-            proc.stdin.write(stereo)
+            proc.stdin.write(np.repeat(np.frombuffer(msg, dtype="<i2"), 2).tobytes())
             await proc.stdin.drain()
     except (WebSocketDisconnect, RuntimeError, ConnectionError, BrokenPipeError):
         pass
@@ -1371,48 +1391,88 @@ async def scout_audio_talk(ws: WebSocket):
         try:
             if proc.stdin:
                 proc.stdin.close()
-            proc.terminate()
-            await asyncio.wait_for(proc.wait(), timeout=3)
-        except (ProcessLookupError, asyncio.TimeoutError):
-            try:
-                proc.kill()
-            except ProcessLookupError:
-                pass
+        except Exception:
+            pass
+        await _kill_proc(proc)
 
 
-@app.post("/api/scout/drive")
-async def api_scout_drive(request: Request):
-    """Bounded motion. +y is FORWARD on this robot, +x strafes - see scout.drive()."""
+async def _kill_proc(proc):
+    """Kill the local ssh; the remote arecord/aplay exits on the broken pipe."""
+    try:
+        proc.terminate()
+        await asyncio.wait_for(proc.wait(), timeout=3)
+    except (ProcessLookupError, asyncio.TimeoutError):
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+
+
+@app.websocket("/api/audio/scout/{sid}/listen")
+async def scout_audio_listen(ws: WebSocket, sid: str):
+    """Hear a Scout's mic. Token as a query param, since a room mic is privacy-relevant."""
+    e = SCOUTS.get(sid)
+    if e is None or not e.ssh:
+        await ws.close(code=4404)
+        return
+    if CONTROL_TOKEN and ws.query_params.get("token") != CONTROL_TOKEN:
+        await ws.close(code=4401)
+        return
+    await _audio_ws_capture(ws, e.ssh)
+
+
+@app.websocket("/api/audio/scout/{sid}/talk")
+async def scout_audio_talk(ws: WebSocket, sid: str):
+    """Talk through a Scout's speaker. Push-to-talk on the browser keeps it half-duplex (no AEC)."""
+    e = SCOUTS.get(sid)
+    if e is None or not e.ssh:
+        await ws.close(code=4404)
+        return
+    if CONTROL_TOKEN and ws.query_params.get("token") != CONTROL_TOKEN:
+        await ws.close(code=4401)
+        return
+    await _audio_ws_playback(ws, e.ssh)
+
+
+@app.post("/api/scout/{sid}/drive")
+async def api_scout_drive(sid: str, request: Request):
+    """Bounded motion. +y is FORWARD, +x strafes (ignored by the tracked model) - see scout.drive()."""
     require_control(request)
-    if not _scout:
-        raise HTTPException(503, "scout_bridge_url is not configured")
+    e = _scout_entry(sid)
+    if not e.client:
+        raise HTTPException(503, "bridge not configured")
     try:
         b = await request.json()
     except (json.JSONDecodeError, ValueError):
         b = {}
-    return _reachy_result(*_scout.drive(x=b.get("x", 0.0), y=b.get("y", 0.0),
-                                        yaw=b.get("yaw", 0.0), duration=b.get("duration", 0.6)))
+    # A tracked robot cannot strafe; drop x so a stray gamepad axis cannot scrub the treads.
+    x = 0.0 if e.kinematics == "tracked" else b.get("x", 0.0)
+    return _reachy_result(*e.client.drive(x=x, y=b.get("y", 0.0),
+                                          yaw=b.get("yaw", 0.0), duration=b.get("duration", 0.6)))
 
 
-@app.post("/api/scout/check")
-def api_scout_check(request: Request):
-    """Describe what the Scout can see. Same job Cosmos does for Frigate and the Reachy.
-
-    Description only - it is deliberately NOT asked what the robot should do. Measured on this
-    robot: with a large dog lying 25 cm in front, the model answered "CLEAR" to "could you drive
-    ahead?" three times out of three, while the rangefinder read 0.252 m. It names what it sees
-    reliably ("a large dog is lying on the floor", every time) and judges badly, so the obstacle
-    decision belongs to the sensor and the words belong to the model.
-    """
+@app.post("/api/scout/{sid}/stop")
+def api_scout_stop(sid: str, request: Request):
     require_control(request)
-    if not SCOUT_BRIDGE:
-        raise HTTPException(503, "scout_bridge_url is not configured")
+    e = _scout_entry(sid)
+    if not e.client:
+        raise HTTPException(503, "bridge not configured")
+    return _reachy_result(*e.client.stop())
+
+
+@app.post("/api/scout/{sid}/check")
+def api_scout_check(sid: str, request: Request):
+    """Describe what a Scout sees. Description only - the rangefinder judges obstacles, not the VLM."""
+    require_control(request)
+    e = _scout_entry(sid)
+    if not e.bridge:
+        raise HTTPException(503, "bridge not configured")
     try:
-        img = requests.get(f"{SCOUT_BRIDGE}/still.jpg", timeout=8)
+        img = requests.get(f"{e.bridge}/still.jpg", timeout=8)
         if img.status_code != 200 or not img.content:
             raise HTTPException(503, "no frame available")
-    except requests.RequestException as e:
-        raise HTTPException(503, f"bridge unreachable: {e}")
+    except requests.RequestException as ex:
+        raise HTTPException(503, f"bridge unreachable: {ex}")
 
     payload = {
         "model": "cosmos3-edge",
@@ -1428,22 +1488,78 @@ def api_scout_check(request: Request):
         r = requests.post(f"{CFG['cosmos3_url'].rstrip('/')}/v1/chat/completions", json=payload, timeout=180)
         r.raise_for_status()
         desc = r.json()["choices"][0]["message"]["content"].strip()
-    except (requests.RequestException, KeyError, ValueError) as e:
-        raise HTTPException(503, f"cosmos: {e}")
+    except (requests.RequestException, KeyError, ValueError) as ex:
+        raise HTTPException(503, f"cosmos: {ex}")
 
-    verdict = alert_policy.classify(desc)
-    cats = sorted(verdict.get("categories") or [])
-    state = _scout.state() if _scout else {}
+    cats = sorted((alert_policy.classify(desc).get("categories") or []))
+    state = e.client.state() if e.client else {}
     return {"description": desc, "categories": cats,
             "alert": bool(cats), "tof_m": state.get("tof_m"), "at": time.time()}
 
 
-@app.post("/api/scout/stop")
-def api_scout_stop(request: Request):
+_bg_tasks: set = set()
+
+
+async def _handoff_to_app(host: str, container: str, name: str) -> None:
+    """Restart the robot's ROS stack, then bounce our bridge so it rejoins the fresh roscore.
+
+    Runs detached from the request. Two things this learned the hard way:
+
+    1. The ssh call must not gate the HTTP response. Restarting roller_eye relaunches ~14 ROS nodes
+       and the robot is CPU-starved for ~20 s, during which the ssh channel close hangs well past
+       any sane request timeout - so the endpoint used to return a 504 even though the restart had
+       already happened. Here it is fire-and-forget with a generous wait.
+
+    2. The bridge does NOT self-heal from a *roscore* restart. Its watchdogs recover a restarted
+       NODE (SensorNode/CoreNode) while the master stays up, but when the master itself restarts,
+       rospy's registration is stale and resubscribing never reconnects (observed: frozen 60 s+).
+       A container bounce is the reliable fix - init_node then blocks until the NEW master answers.
+       The bridge is bounced AFTER a delay so it binds the new roscore, not the old one mid-death.
+    """
+    ssh = ["ssh", "-i", SCOUT_SSH_KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes",
+           "-o", "ConnectTimeout=10", f"root@{host}", "systemctl restart --no-block roller_eye.service"]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *ssh, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=45)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+        print(f"[feed] handoff: issued roller_eye restart on {name} ({host})", flush=True)
+    except OSError as ex:
+        print(f"[feed] handoff: ssh to {host} failed: {ex}", flush=True)
+        return
+    if not container:
+        return
+    await asyncio.sleep(22)   # let roscore come fully back before the bridge reconnects
+    ok, msg = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: run(["sudo", "-n", "docker", "restart", container], 60))
+    print(f"[feed] handoff: bounced bridge {container} ok={ok} {msg[:120]}", flush=True)
+
+
+@app.post("/api/scout/{sid}/restart-ros")
+async def api_scout_restart_ros(sid: str, request: Request):
+    """Hand a Scout back to the official Moorebot app by restarting its ROS stack.
+
+    The app reaches the robot through its /CloudNode and /AppNode, which come up with the roller_eye
+    ROS graph; bouncing the graph re-establishes them and clears any state left by our drive relay.
+    Needs root (sudo is deliberately crippled on this robot), so it uses the durable root key, not
+    the linaro audio login. The actual work - restart robot ROS, then bounce our bridge so our own
+    card recovers - runs in the background (see _handoff_to_app) so this returns at once.
+    """
     require_control(request)
-    if not _scout:
-        raise HTTPException(503, "scout_bridge_url is not configured")
-    return _reachy_result(*_scout.stop())
+    e = _scout_entry(sid)
+    if not e.ssh:
+        raise HTTPException(503, "no ssh target for this scout")
+    host = e.ssh.split("@")[-1]
+    t = asyncio.create_task(_handoff_to_app(host, e.container, e.name))
+    _bg_tasks.add(t)
+    t.add_done_callback(_bg_tasks.discard)
+    return {"message": f"Handing {e.name} back to the Moorebot app — restarting its ROS and "
+                       f"reconnecting the bridge. This feed drops out and returns in ~30–40 s."}
 
 
 @app.get("/api/reachy/apps")
@@ -1604,6 +1720,13 @@ input[type=range].vert{writing-mode:vertical-lr;direction:rtl;width:22px;height:
 .dpad button{width:46px;height:46px;padding:0;font-size:17px;border-radius:9px}
 .d-u{grid-area:1/2}.d-l{grid-area:2/1}.d-c{grid-area:2/2}.d-r{grid-area:2/3}.d-d{grid-area:3/2}
 .dpad button:active{background:rgba(118,185,0,.18);border-color:var(--g)}
+/* Holding a drive button on iOS otherwise pops the text-selection magnifier / copy callout and
+   starts a selection. Suppress selection and the callout on the controls, and touch-action:none on
+   the pads stops a press-drag from scrolling the page. The caption box re-enables selection so the
+   Cosmos description can still be copied. */
+.scoutCard button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.scoutCard .dpad,.scoutCard .rotpad{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none}
+.scoutCard .ralert{-webkit-user-select:text;user-select:text}
 .rotpad{display:flex;flex-direction:column;gap:4px;align-items:center}
 .rotpad button{width:52px;height:46px;font-size:19px}
 .batt{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -1653,71 +1776,11 @@ button.mini{padding:3px 9px;font-size:11.5px}
      when a service is down (🟢 responding, ⚪ not responding). Dashed entries are not browsable
      web UIs (MQTT, RTSP, VNC).</p>
 
-  <h2>Moorebot Scout</h2>
-  <div class="card" id="scoutCard" style="display:none">
-    <div class="row" style="justify-content:space-between;align-items:center">
-      <span id="scoutState" class="hint">checking…</span>
-    </div>
-    <img id="scoutImg" class="still" alt="Scout camera" style="display:none">
-    <p class="hint" id="scoutHint" style="display:none"></p>
-    <!-- Latest Cosmos caption, right under the video it describes. Persists between refreshes. -->
-    <div id="scoutAlert" class="ralert"></div>
-
-    <!-- Mecanum drive. +y is FORWARD and +x strafes on this robot, which is NOT the ROS
-         convention - verified by driving it. The pad is laid out the way a person reads it; the
-         axis mapping is done in scoutDrive(), once. Held motion is by repetition: each command
-         drives 0.6 s then the robot's own MotorNode zeroes it, so nothing latches. -->
-    <div class="sxy">
-      <div class="dpad">
-        <button class="d-u" onmousedown="scoutHold(0,0.15,0)" onmouseup="scoutRelease()"
-                onmouseleave="scoutRelease()" ontouchstart="scoutHold(0,0.15,0)" ontouchend="scoutRelease()"
-                title="forward">▲</button>
-        <button class="d-l" onmousedown="scoutHold(-0.15,0,0)" onmouseup="scoutRelease()"
-                onmouseleave="scoutRelease()" ontouchstart="scoutHold(-0.15,0,0)" ontouchend="scoutRelease()"
-                title="strafe left">◀</button>
-        <button class="d-c warn" onclick="post('/api/scout/stop')" title="stop">■</button>
-        <button class="d-r" onmousedown="scoutHold(0.15,0,0)" onmouseup="scoutRelease()"
-                onmouseleave="scoutRelease()" ontouchstart="scoutHold(0.15,0,0)" ontouchend="scoutRelease()"
-                title="strafe right">▶</button>
-        <button class="d-d" onmousedown="scoutHold(0,-0.15,0)" onmouseup="scoutRelease()"
-                onmouseleave="scoutRelease()" ontouchstart="scoutHold(0,-0.15,0)" ontouchend="scoutRelease()"
-                title="back">▼</button>
-      </div>
-      <div class="rotpad">
-        <span class="hint">rotate</span>
-        <div class="row">
-          <button onmousedown="scoutHold(0,0,0.7)" onmouseup="scoutRelease()" onmouseleave="scoutRelease()"
-                  ontouchstart="scoutHold(0,0,0.7)" ontouchend="scoutRelease()" title="rotate left (CCW)">⟲</button>
-          <button onmousedown="scoutHold(0,0,-0.7)" onmouseup="scoutRelease()" onmouseleave="scoutRelease()"
-                  ontouchstart="scoutHold(0,0,-0.7)" ontouchend="scoutRelease()" title="rotate right (CW)">⟳</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Gamepad: any HID controller the browser sees - Amazon Luna, Xbox, PS - drives the robot
-         through the same /drive endpoint. Left stick = strafe + forward, right stick X = rotate.
-         This is what gives the analogue, held-input feel the on-screen pad can only approximate. -->
-    <div class="row" style="margin-top:10px;align-items:center">
-      <button id="scoutGpBtn" onclick="scoutGamepadToggle()">🎮 Use gamepad</button>
-      <span id="scoutGpState" class="hint"></span>
-    </div>
-
-    <div class="row" style="margin-top:8px">
-      <button id="scoutListenBtn" onclick="scoutListenToggle()"
-              title="Hear the robot's microphone in your browser">🔊 Listen</button>
-      <button id="scoutTalkBtn" title="Hold to speak through the robot's speaker (needs https or localhost)"
-              onmousedown="scoutTalkStart()" onmouseup="scoutTalkStop()" onmouseleave="scoutTalkStop()"
-              ontouchstart="event.preventDefault();scoutTalkStart()" ontouchend="scoutTalkStop()">🎙 Hold to talk</button>
-      <button onclick="scoutSnapshot()" title="Save the current frame to your device">📷 Snapshot</button>
-      <button onclick="scoutCheck(this)"
-              title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
-        Look &amp; describe</button>
-    </div>
-    <p class="hint">The <b>range</b> in the status line is the forward time-of-flight sensor and is
-       what to trust for obstacles — and it only guards <b>forward</b>: strafe, reverse and rotate
-       are unprotected, and there is no rear sensor. Watch the video. Held motion drives 0.6&nbsp;s
-       at a time and stops itself when you let go.</p>
-  </div>
+  <h2>Moorebot Scouts</h2>
+  <!-- One card per robot, built by buildScoutCards() from /api/scouts. Empty until that resolves;
+       a robot whose bridge is down renders a card that reports the bridge is not running, rather
+       than silently vanishing - the same honest-state rule the rest of the page follows. -->
+  <div id="scoutCards"></div>
 
   <!-- Action feedback banner. Placed BELOW the Scout controls, not at the top, so that a message
        appearing or clearing never reflows the drive pad the user is holding. -->
@@ -2014,177 +2077,269 @@ function syncCtl(rs){
   if(pp&&pp._paint) pp._paint();
 }
 
-// ---------------------------------------------------------------- Moorebot Scout
-// +y is FORWARD and +x strafes on this robot - not the ROS convention. The mapping lives here so
-// the buttons can be labelled the way a person thinks about them.
-function scoutDrive(x, y, yaw){
-  return postJSON('/api/scout/drive', {x:x, y:y, yaw:yaw, duration:0.6});
+// ---------------------------------------------------------------- Moorebot Scouts
+// One card per robot, built from /api/scouts. Every DOM id is suffixed with the robot's sid
+// (sc-<part>-<sid>) and every bit of runtime state lives in SC[sid], so two robots never share a
+// timer, WebSocket or audio context. +y is FORWARD and +x strafes on this firmware - not the ROS
+// convention - so the axis mapping lives here and the buttons read the human way. A tracked robot
+// cannot strafe: its strafe buttons are omitted and the backend drops any x regardless.
+const SC = {};                 // sid -> runtime state (vec,timer,gp*,ws,ac,talk*,meta)
+function scEl(sid, part){ return document.getElementById('sc-'+part+'-'+sid); }
+
+function scoutCardHTML(m){
+  const sid = m.id, mec = m.kinematics !== 'tracked';
+  // Tracked robots turn in place by scrubbing both treads sideways, which needs far more command
+  // than a mecanum spin - 0.7 rad/s barely moved them. Tunable up to the bridge's 2.0 ceiling.
+  const rot = mec ? 0.7 : 1.5;
+  // A held button repeats its command through scoutHold; releasing (or leaving) stops. touchstart
+  // is defaulted-prevented so a press does not also scroll or fire a synthetic mouse event.
+  const held = (dx,dy,dyaw,cls,title,glyph) =>
+    `<button class="${cls}" title="${title}"`
+    + ` onmousedown="scoutHold('${sid}',${dx},${dy},${dyaw})" onmouseup="scoutRelease('${sid}')" onmouseleave="scoutRelease('${sid}')"`
+    + ` ontouchstart="event.preventDefault();scoutHold('${sid}',${dx},${dy},${dyaw})" ontouchend="scoutRelease('${sid}')">${glyph}</button>`;
+  const kind = mec ? 'mecanum · strafes' : 'tracked · no strafe';
+  return `
+  <div class="card scoutCard" id="sc-card-${sid}" style="display:none">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <b>${esc(m.name)} <span class="hint" style="font-weight:400">· ${kind}</span></b>
+      <span id="sc-state-${sid}" class="hint">checking…</span>
+    </div>
+    <img id="sc-img-${sid}" class="still" alt="${esc(m.name)} camera" style="display:none">
+    <p class="hint" id="sc-hint-${sid}" style="display:none"></p>
+    <!-- Latest Cosmos caption, right under the video it describes. Persists between refreshes. -->
+    <div id="sc-alert-${sid}" class="ralert"></div>
+    <div class="sxy">
+      <div class="dpad">
+        ${held(0,0.15,0,'d-u','forward','▲')}
+        ${mec ? held(-0.15,0,0,'d-l','strafe left','◀') : ''}
+        <button class="d-c warn" onclick="post('/api/scout/${sid}/stop')" title="stop">■</button>
+        ${mec ? held(0.15,0,0,'d-r','strafe right','▶') : ''}
+        ${held(0,-0.15,0,'d-d','back','▼')}
+      </div>
+      <div class="rotpad">
+        <span class="hint">rotate</span>
+        <div class="row">
+          ${held(0,0,rot,'','rotate left (CCW)','⟲')}
+          ${held(0,0,-rot,'','rotate right (CW)','⟳')}
+        </div>
+      </div>
+    </div>
+    <!-- Gamepad: any HID controller the browser sees (Luna, Xbox, PS). One stick drives one robot -
+         enabling it here disables it on the other card. Left stick = strafe + forward (forward only
+         on a tracked robot), right stick X = rotate. -->
+    <div class="row" style="margin-top:10px;align-items:center">
+      <button id="sc-gpbtn-${sid}" onclick="scoutGamepadToggle('${sid}')">🎮 Use gamepad</button>
+      <span id="sc-gpstate-${sid}" class="hint"></span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="sc-listenbtn-${sid}" onclick="scoutListenToggle('${sid}')"
+              title="Hear this robot's microphone in your browser">🔊 Listen</button>
+      <button id="sc-talkbtn-${sid}" title="Hold to speak through this robot's speaker (needs https or localhost)"
+              onmousedown="scoutTalkStart('${sid}')" onmouseup="scoutTalkStop('${sid}')" onmouseleave="scoutTalkStop('${sid}')"
+              ontouchstart="event.preventDefault();scoutTalkStart('${sid}')" ontouchend="scoutTalkStop('${sid}')">🎙 Hold to talk</button>
+      <button onclick="scoutSnapshot('${sid}')" title="Save the current frame to your device">📷 Snapshot</button>
+      <button onclick="scoutCheck('${sid}',this)"
+              title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
+        Look &amp; describe</button>
+      <button class="warn" onclick="scoutRestartRos('${sid}')"
+              title="Restart the robot's ROS stack (roller_eye.service) so the official Moorebot app can take control. Drive and video on this card pause ~20 s while it comes back, then recover on their own.">
+        ♻ Restart ROS → app</button>
+    </div>
+    <p class="hint">The <b>range</b> in the status line is the forward time-of-flight sensor and is
+       what to trust for obstacles — and it only guards <b>forward</b>: strafe, reverse and rotate
+       are unprotected, and there is no rear sensor. Watch the video. Held motion drives 0.6&nbsp;s
+       at a time and stops itself when you let go.</p>
+  </div>`;
+}
+
+// Build a card per robot once, on load. If /api/scouts is empty or fails the panel stays empty,
+// which is the honest state - no robots configured.
+async function buildScoutCards(){
+  const box = document.getElementById('scoutCards');
+  if(!box) return;
+  let list = [];
+  try{ list = (await (await fetch('/api/scouts',{cache:'no-store'})).json()).scouts || []; }
+  catch(e){ return; }
+  box.innerHTML = list.map(scoutCardHTML).join('');
+  list.forEach(m => { SC[m.id] = {meta:m, vec:{x:0,y:0,yaw:0}, timer:null,
+                                  gpOn:false, gpRAF:null, gpConn:null,
+                                  ws:null, ac:null, playAt:0,
+                                  talkWS:null, talkStream:null, talkNode:null, talkCtx:null, talkResume:false}; });
 }
 
 // Held motion: repeat the command while a button (or a gamepad stick) is engaged, so the robot
 // keeps moving smoothly instead of lurching once per click. The firmware zeroes velocity when
-// commands stop, so releasing = stopping with nothing latched. One shared loop drives both the
-// on-screen pad and the gamepad; the newest source of input wins.
-let scoutVec = {x:0, y:0, yaw:0};
-let scoutTimer = null;
-function scoutHold(x, y, yaw){
-  scoutVec = {x:x, y:y, yaw:yaw};
-  if(scoutTimer) return;
+// commands stop, so releasing = stopping with nothing latched.
+function scoutHold(sid, x, y, yaw){
+  const s = SC[sid]; if(!s) return;
+  s.vec = {x, y, yaw};
+  if(s.timer) return;
   const tick = () => {
-    if(scoutVec.x || scoutVec.y || scoutVec.yaw){
+    if(s.vec.x || s.vec.y || s.vec.yaw){
       // duration 0.4 > the 0.15 s tick, so motion never gaps between commands. Quiet: no banner.
-      postJSON('/api/scout/drive', {x:scoutVec.x, y:scoutVec.y, yaw:scoutVec.yaw, duration:0.4}, true);
+      postJSON(`/api/scout/${sid}/drive`, {x:s.vec.x, y:s.vec.y, yaw:s.vec.yaw, duration:0.4}, true);
     }
   };
   tick();
-  scoutTimer = setInterval(tick, 150);
+  s.timer = setInterval(tick, 150);
 }
-function scoutRelease(){
-  scoutVec = {x:0, y:0, yaw:0};
-  if(scoutTimer){ clearInterval(scoutTimer); scoutTimer = null; }
+function scoutRelease(sid){
+  const s = SC[sid]; if(!s) return;
+  s.vec = {x:0, y:0, yaw:0};
+  if(s.timer){ clearInterval(s.timer); s.timer = null; }
   // One explicit stop so it halts now rather than at the end of the firmware's watchdog window.
-  postJSON('/api/scout/stop', null, true);
+  postJSON(`/api/scout/${sid}/stop`, null, true);
 }
 
-// Gamepad: any HID controller the browser exposes (Amazon Luna, Xbox, PS). Left stick strafes and
-// drives forward, right stick X rotates. Deadzoned, and the same held-motion loop carries it.
-let scoutGpOn = false, scoutGpRAF = null, scoutGpIndex = null;
-function scoutGamepadToggle(){
-  scoutGpOn = !scoutGpOn;
-  const btn = document.getElementById('scoutGpBtn');
-  const st = document.getElementById('scoutGpState');
-  if(scoutGpOn){
-    if(!('getGamepads' in navigator)){
-      st.textContent = 'this browser blocks the gamepad API on http — open the page over https or localhost';
-      scoutGpOn = false; return;
-    }
-    btn.classList.add('on'); btn.textContent = '🎮 Gamepad on';
-    window.addEventListener('gamepadconnected', scoutGpConnected);
-    scoutGpLoop();
-  } else {
-    btn.classList.remove('on'); btn.textContent = '🎮 Use gamepad';
-    st.textContent = '';
-    if(scoutGpRAF) cancelAnimationFrame(scoutGpRAF);
-    scoutRelease();
+// Gamepad: deadzoned axes fed through the same held-motion loop. Only one robot owns the single
+// stick at a time (gpOwner) - enabling it on one card disables it on the other.
+let gpOwner = null;
+function scoutGamepadToggle(sid){
+  const s = SC[sid]; if(!s) return;
+  const btn = scEl(sid,'gpbtn'), st = scEl(sid,'gpstate');
+  if(s.gpOn){ scoutGamepadOff(sid); return; }
+  if(!('getGamepads' in navigator)){
+    st.textContent = 'this browser blocks the gamepad API on http — open the page over https or localhost';
+    return;
   }
+  if(gpOwner && gpOwner !== sid) scoutGamepadOff(gpOwner);   // one stick, one robot
+  gpOwner = sid; s.gpOn = true;
+  btn.classList.add('on'); btn.textContent = '🎮 Gamepad on';
+  s.gpConn = e => {};   // a connect event just makes the pad visible to getGamepads(); loop reads it
+  window.addEventListener('gamepadconnected', s.gpConn);
+  scoutGpLoop(sid);
 }
-function scoutGpConnected(e){ scoutGpIndex = e.gamepad.index; }
-function scoutGpLoop(){
+function scoutGamepadOff(sid){
+  const s = SC[sid]; if(!s) return;
+  s.gpOn = false;
+  const btn = scEl(sid,'gpbtn'), st = scEl(sid,'gpstate');
+  if(btn){ btn.classList.remove('on'); btn.textContent = '🎮 Use gamepad'; }
+  if(st) st.textContent = '';
+  if(s.gpRAF) cancelAnimationFrame(s.gpRAF);
+  if(s.gpConn){ window.removeEventListener('gamepadconnected', s.gpConn); s.gpConn = null; }
+  if(gpOwner === sid) gpOwner = null;
+  scoutRelease(sid);
+}
+function scoutGpLoop(sid){
+  const s = SC[sid]; if(!s || !s.gpOn) return;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   let gp = null;
   for(const p of pads){ if(p){ gp = p; break; } }
-  const st = document.getElementById('scoutGpState');
+  const st = scEl(sid,'gpstate');
   if(gp){
     const dz = v => Math.abs(v) < 0.15 ? 0 : v;
-    // Map to robot axes: left-stick X -> strafe(+x right); left-stick Y up -> forward(+y);
-    // right-stick X right -> rotate CW(-yaw). Scaled to the same gentle limits as the pad.
-    const x   = dz(gp.axes[0] || 0) * 0.2;
+    // left-stick X -> strafe(+x right, mecanum only); left-stick Y up -> forward(+y);
+    // right-stick X right -> rotate CW(-yaw). Same gentle limits as the on-screen pad.
+    const tracked = s.meta.kinematics === 'tracked';
+    const x   = tracked ? 0 : dz(gp.axes[0] || 0) * 0.2;
     const y   = -dz(gp.axes[1] || 0) * 0.2;
-    const yaw = -dz(gp.axes[2] || 0) * 0.8;
-    st.textContent = `${gp.id.slice(0,28)} · x${x.toFixed(2)} y${y.toFixed(2)} yaw${yaw.toFixed(2)}`;
-    if(x || y || yaw) scoutHold(x, y, yaw);
-    else if(scoutTimer) scoutRelease();
-  } else {
+    // Tracked robots need more yaw to break tread friction (matches the on-screen rotate buttons).
+    const yaw = -dz(gp.axes[2] || 0) * (tracked ? 1.5 : 0.8);
+    if(st) st.textContent = `${gp.id.slice(0,28)} · x${x.toFixed(2)} y${y.toFixed(2)} yaw${yaw.toFixed(2)}`;
+    if(x || y || yaw) scoutHold(sid, x, y, yaw);
+    else if(s.timer) scoutRelease(sid);
+  } else if(st){
     st.textContent = 'press a button on the controller to connect it';
   }
-  if(scoutGpOn) scoutGpRAF = requestAnimationFrame(scoutGpLoop);
+  s.gpRAF = requestAnimationFrame(() => scoutGpLoop(sid));
 }
 
 // Listen: stream the robot mic (16 kHz mono PCM16 over a WebSocket) and play it back through Web
 // Audio, scheduling each chunk after the last so it plays gaplessly. No secure context needed -
 // only mic CAPTURE (talk) requires https/localhost; playback works on plain http.
-let scoutWS = null, scoutAC = null, scoutPlayAt = 0;
-async function scoutListenToggle(){
-  const btn = document.getElementById('scoutListenBtn');
-  if(scoutWS){ scoutListenStop(); return; }
+async function scoutListenToggle(sid){
+  const s = SC[sid]; if(!s) return;
+  const btn = scEl(sid,'listenbtn');
+  if(s.ws){ scoutListenStop(sid); return; }
   const tok = await tokenReady();
-  scoutAC = new (window.AudioContext || window.webkitAudioContext)();
-  scoutPlayAt = 0;
+  s.ac = new (window.AudioContext || window.webkitAudioContext)();
+  s.playAt = 0;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  scoutWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/listen?token=${encodeURIComponent(tok)}`);
-  scoutWS.binaryType = 'arraybuffer';
-  scoutWS.onopen = () => { btn.classList.add('on'); btn.textContent = '🔊 Listening'; };
-  scoutWS.onmessage = ev => {
+  s.ws = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/listen?token=${encodeURIComponent(tok)}`);
+  s.ws.binaryType = 'arraybuffer';
+  s.ws.onopen = () => { btn.classList.add('on'); btn.textContent = '🔊 Listening'; };
+  s.ws.onmessage = ev => {
     const pcm = new Int16Array(ev.data);
-    if(!pcm.length || !scoutAC) return;
-    const buf = scoutAC.createBuffer(1, pcm.length, 16000);
+    if(!pcm.length || !s.ac) return;
+    const buf = s.ac.createBuffer(1, pcm.length, 16000);
     const ch = buf.getChannelData(0);
     for(let i=0;i<pcm.length;i++) ch[i] = pcm[i] / 32768;
-    const src = scoutAC.createBufferSource();
-    src.buffer = buf; src.connect(scoutAC.destination);
-    const now = scoutAC.currentTime;
+    const src = s.ac.createBufferSource();
+    src.buffer = buf; src.connect(s.ac.destination);
+    const now = s.ac.currentTime;
     // Keep a small lead; if we fall behind (tab throttled), resync rather than pile up latency.
-    if(scoutPlayAt < now + 0.02 || scoutPlayAt > now + 0.5) scoutPlayAt = now + 0.08;
-    src.start(scoutPlayAt);
-    scoutPlayAt += buf.duration;
+    if(s.playAt < now + 0.02 || s.playAt > now + 0.5) s.playAt = now + 0.08;
+    src.start(s.playAt);
+    s.playAt += buf.duration;
   };
-  scoutWS.onclose = () => scoutListenStop();
-  scoutWS.onerror = () => say('listen: connection failed', false);
+  s.ws.onclose = () => scoutListenStop(sid);
+  s.ws.onerror = () => say('listen: connection failed', false);
 }
-function scoutListenStop(){
-  const btn = document.getElementById('scoutListenBtn');
+function scoutListenStop(sid){
+  const s = SC[sid]; if(!s) return;
+  const btn = scEl(sid,'listenbtn');
   if(btn){ btn.classList.remove('on'); btn.textContent = '🔊 Listen'; }
-  if(scoutWS){ try{scoutWS.close();}catch(e){} scoutWS = null; }
-  if(scoutAC){ try{scoutAC.close();}catch(e){} scoutAC = null; }
+  if(s.ws){ try{s.ws.close();}catch(e){} s.ws = null; }
+  if(s.ac){ try{s.ac.close();}catch(e){} s.ac = null; }
 }
 
-// Talk: capture the browser mic, downsample to 16 kHz mono PCM16, and stream it to the robot
-// speaker while the button is held. getUserMedia needs a secure context (https or localhost), so
-// on plain http this reports that instead of silently failing. Listen is paused while talking so
-// the robot mic does not loop the speaker back - half-duplex push-to-talk, no echo cancellation
-// on the robot.
-let talkWS = null, talkStream = null, talkNode = null, talkCtx = null, talkResumeListen = false;
-async function scoutTalkStart(){
-  if(talkWS || talkNode) return;                       // already talking (button repeat)
+// Talk: capture the browser mic, downsample to 16 kHz mono PCM16, stream it to the robot speaker
+// while the button is held. getUserMedia needs a secure context (https/localhost), so on plain http
+// this reports that instead of silently failing. This robot's Listen is paused while talking so its
+// mic does not loop the speaker back - half-duplex push-to-talk, no on-robot echo cancellation.
+async function scoutTalkStart(sid){
+  const s = SC[sid]; if(!s) return;
+  if(s.talkWS || s.talkNode) return;                   // already talking (button repeat)
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     say('Talk needs https or localhost — the browser blocks mic capture on plain http. '
        + 'Open via an ssh -L localhost forward.', false);
     return;
   }
   const tok = await tokenReady();
-  talkResumeListen = !!scoutWS;
-  if(talkResumeListen) scoutListenStop();              // avoid feedback
+  s.talkResume = !!s.ws;
+  if(s.talkResume) scoutListenStop(sid);               // avoid feedback on THIS robot
   try{
-    talkStream = await navigator.mediaDevices.getUserMedia(
+    s.talkStream = await navigator.mediaDevices.getUserMedia(
       {audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
   }catch(e){ say('microphone permission denied', false); return; }
-  talkCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = talkCtx.createMediaStreamSource(talkStream);
-  talkNode = talkCtx.createScriptProcessor(4096, 1, 1);
+  s.talkCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = s.talkCtx.createMediaStreamSource(s.talkStream);
+  s.talkNode = s.talkCtx.createScriptProcessor(4096, 1, 1);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  talkWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/talk?token=${encodeURIComponent(tok)}`);
-  talkWS.binaryType = 'arraybuffer';
-  const ratio = talkCtx.sampleRate / 16000;
-  talkNode.onaudioprocess = e => {
-    if(!talkWS || talkWS.readyState !== 1) return;
+  s.talkWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/talk?token=${encodeURIComponent(tok)}`);
+  s.talkWS.binaryType = 'arraybuffer';
+  const ratio = s.talkCtx.sampleRate / 16000;
+  s.talkNode.onaudioprocess = e => {
+    if(!s.talkWS || s.talkWS.readyState !== 1) return;
     const inp = e.inputBuffer.getChannelData(0);
     const n = Math.floor(inp.length / ratio);
     const out = new Int16Array(n);
-    for(let i=0;i<n;i++){ const s = inp[Math.floor(i*ratio)]; out[i] = Math.max(-32768, Math.min(32767, s*32768)); }
-    talkWS.send(out.buffer);
+    for(let i=0;i<n;i++){ const v = inp[Math.floor(i*ratio)]; out[i] = Math.max(-32768, Math.min(32767, v*32768)); }
+    s.talkWS.send(out.buffer);
   };
   // Route through a muted gain so the ScriptProcessor runs without playing the user's own mic back.
-  const mute = talkCtx.createGain(); mute.gain.value = 0;
-  src.connect(talkNode); talkNode.connect(mute); mute.connect(talkCtx.destination);
-  const b = document.getElementById('scoutTalkBtn'); if(b){ b.classList.add('on'); b.textContent = '🎙 Talking…'; }
+  const mute = s.talkCtx.createGain(); mute.gain.value = 0;
+  src.connect(s.talkNode); s.talkNode.connect(mute); mute.connect(s.talkCtx.destination);
+  const b = scEl(sid,'talkbtn'); if(b){ b.classList.add('on'); b.textContent = '🎙 Talking…'; }
 }
-function scoutTalkStop(){
-  const b = document.getElementById('scoutTalkBtn'); if(b){ b.classList.remove('on'); b.textContent = '🎙 Hold to talk'; }
-  if(talkNode){ try{talkNode.disconnect();}catch(e){} talkNode = null; }
-  if(talkStream){ talkStream.getTracks().forEach(t=>t.stop()); talkStream = null; }
-  if(talkCtx){ try{talkCtx.close();}catch(e){} talkCtx = null; }
-  if(talkWS){ try{talkWS.close();}catch(e){} talkWS = null; }
-  if(talkResumeListen){ talkResumeListen = false; scoutListenToggle(); }
+function scoutTalkStop(sid){
+  const s = SC[sid]; if(!s) return;
+  const b = scEl(sid,'talkbtn'); if(b){ b.classList.remove('on'); b.textContent = '🎙 Hold to talk'; }
+  if(s.talkNode){ try{s.talkNode.disconnect();}catch(e){} s.talkNode = null; }
+  if(s.talkStream){ s.talkStream.getTracks().forEach(t=>t.stop()); s.talkStream = null; }
+  if(s.talkCtx){ try{s.talkCtx.close();}catch(e){} s.talkCtx = null; }
+  if(s.talkWS){ try{s.talkWS.close();}catch(e){} s.talkWS = null; }
+  if(s.talkResume){ s.talkResume = false; scoutListenToggle(sid); }
 }
 
 // Look & describe: the endpoint returns {description, categories, alert} - it has no "message"
 // field, so routing it through post() showed a bare green "done" and threw the caption away. This
 // renders it into the alert box under the video and keeps it there.
-async function scoutCheck(btn){
+async function scoutCheck(sid, btn){
   if(btn){ btn.classList.add('busy'); btn.textContent = 'Describing…'; }
-  const el = document.getElementById('scoutAlert');
+  const el = scEl(sid,'alert');
   try{
-    const r = await fetch('/api/scout/check', {method:'POST', headers:{'X-Porch-Token': await tokenReady()}});
+    const r = await fetch(`/api/scout/${sid}/check`, {method:'POST', headers:{'X-Porch-Token': await tokenReady()}});
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ say(j.detail || j.message || 'describe failed', false); return; }
     const when = new Date((j.at ? j.at*1000 : Date.now())).toLocaleTimeString();
@@ -2196,12 +2351,26 @@ async function scoutCheck(btn){
   finally{ if(btn){ btn.classList.remove('busy'); btn.textContent = 'Look & describe'; } }
 }
 
-async function scoutSnapshot(){
+// Restart the robot's ROS stack so the official Moorebot app can take over. Disruptive - our own
+// video and drive pause while roscore restarts - so it confirms first, and stops any motion we own
+// before bouncing the stack. The card recovers on its own via the bridge watchdogs.
+async function scoutRestartRos(sid){
+  const s = SC[sid]; if(!s) return;
+  const name = (s.meta && s.meta.name) || sid;
+  if(!confirm(`Restart the ROS stack on "${name}"?\n\n`
+    + `This hands control back to the official Moorebot app. Live video and drive on this card `
+    + `pause for ~20 s while the robot's ROS restarts, then recover on their own.`)) return;
+  scoutRelease(sid);                 // stop anything we are driving before the bounce
+  scoutListenStop(sid);              // its mic/audio pipes die with the stack anyway
+  await post(`/api/scout/${sid}/restart-ros`);
+}
+
+async function scoutSnapshot(sid){
   try{
-    const r = await fetch('/scout/latest.jpg?t=' + Date.now(), {cache:'no-store'});
+    const r = await fetch(`/scout/${sid}/latest.jpg?t=` + Date.now(), {cache:'no-store'});
     if(!r.ok){ say('no frame', false); return; }
     const b = await r.blob(), u = URL.createObjectURL(b), a = document.createElement('a');
-    a.href = u; a.download = 'scout-' + new Date().toISOString().replace(/[:.]/g,'-') + '.jpg';
+    a.href = u; a.download = `scout-${sid}-` + new Date().toISOString().replace(/[:.]/g,'-') + '.jpg';
     a.click(); URL.revokeObjectURL(u); say('snapshot saved', true);
   }catch(e){ say(String(e), false); }
 }
@@ -2218,43 +2387,45 @@ async function postJSON(url, body, quiet){
   }catch(e){ if(!quiet) say(String(e), false); }
 }
 
-async function refreshScout(){
-  const card = document.getElementById('scoutCard');
+// Poll one robot's state and update its card. Same body as the single-robot version, scoped to sid.
+async function refreshScout(sid){
+  const s = SC[sid]; if(!s) return;
+  const card = scEl(sid,'card');
   if(!card) return;
   try{
-    const s = await (await fetch('/api/scout/state',{cache:'no-store'})).json();
-    if(!s.enabled){ card.style.display='none'; return; }
+    const d = await (await fetch(`/api/scout/${sid}/state`,{cache:'no-store'})).json();
+    if(!d.enabled){ card.style.display='none'; return; }
     card.style.display='block';
-    const img  = document.getElementById('scoutImg');
-    const hint = document.getElementById('scoutHint');
-    const st   = document.getElementById('scoutState');
+    const img  = scEl(sid,'img');
+    const hint = scEl(sid,'hint');
+    const st   = scEl(sid,'state');
 
-    if(s.live){
+    if(d.live){
       // Status strip, app-style: battery + charge state, then range. The charge state is spelled
       // out and coloured on its own span (inline colour wins over the line's ToF colour) so it is
       // unambiguous whether the robot is actually charging - green ⚡ when it is, red 🔻 when it is
       // low and running the battery down.
       let batt = '';
-      if(s.battery_fresh && s.battery_pct != null){
-        const bs = s.battery_state;
+      if(d.battery_fresh && d.battery_pct != null){
+        const bs = d.battery_state;
         const label = bs === 'charging' ? '⚡ charging'
                     : bs === 'full'     ? '🔋 full'
                     : bs === 'discharging' ? '🔻 on battery' : bs || '';
         const col = (bs === 'charging' || bs === 'full') ? 'var(--g)'
-                  : (s.battery_pct < 20 ? 'var(--r)' : (s.battery_pct < 40 ? 'var(--y)' : 'var(--fg)'));
-        batt = `<span class="batt" style="color:${col}">${s.battery_pct}% ${label}</span> · `;
-      } else if(s.reachable) {
+                  : (d.battery_pct < 20 ? 'var(--r)' : (d.battery_pct < 40 ? 'var(--y)' : 'var(--fg)'));
+        batt = `<span class="batt" style="color:${col}">${d.battery_pct}% ${label}</span> · `;
+      } else if(d.reachable) {
         batt = `<span class="batt hint">battery —</span> · `;
       }
       let range;
-      if(!s.tof_fresh)        range = 'range —';
-      else if(s.tof_m == null) range = 'range >2 m clear';
-      else                     range = `range ${s.tof_m.toFixed(2)} m`;
-      st.innerHTML = `<span class="batt">${batt}</span>● live · ${range} · ${s.frames} frames`
-                   + (s.driving ? ' · driving' : '');
+      if(!d.tof_fresh)        range = 'range —';
+      else if(d.tof_m == null) range = 'range >2 m clear';
+      else                     range = `range ${d.tof_m.toFixed(2)} m`;
+      st.innerHTML = `<span class="batt">${batt}</span>● live · ${range} · ${d.frames} frames`
+                   + (d.driving ? ' · driving' : '');
       // Amber inside a body-length, red when it is about to touch something.
-      st.style.color = (s.tof_fresh && s.tof_m != null)
-        ? (s.tof_m < 0.20 ? 'var(--r)' : s.tof_m < 0.50 ? 'var(--y)' : '') : '';
+      st.style.color = (d.tof_fresh && d.tof_m != null)
+        ? (d.tof_m < 0.20 ? 'var(--r)' : d.tof_m < 0.50 ? 'var(--y)' : '') : '';
       // Point at the live MJPEG stream ONCE, not a fresh still every poll. An MJPEG <img> holds a
       // persistent connection; if it dies (e.g. porch-feed restarts) the browser keeps the dead
       // socket occupying one of its ~6 per-host slots, and enough of those stall every fetch on
@@ -2263,8 +2434,8 @@ async function refreshScout(){
       if(!img.dataset.streaming){
         img.dataset.streaming = '1';
         img.onerror = () => { if(img.dataset.streaming) setTimeout(() => {
-          img.src = '/scout/mjpeg?t=' + Date.now(); }, 800); };
-        img.src = '/scout/mjpeg';
+          img.src = `/scout/${sid}/mjpeg?t=` + Date.now(); }, 800); };
+        img.src = `/scout/${sid}/mjpeg`;
       }
       img.style.display='block'; hint.style.display='none';
     } else {
@@ -2272,19 +2443,20 @@ async function refreshScout(){
       // Drop the dead stream so the next live poll reconnects cleanly, and free its connection slot.
       if(img.dataset.streaming){ img.onerror = null; delete img.dataset.streaming; img.removeAttribute('src'); }
       // Distinguish the three ways this goes quiet, because they need different fixes.
-      if(!s.reachable){
+      if(!d.reachable){
         st.textContent = '○ bridge not running';
-        hint.innerHTML = 'Start it with <code>docker compose --profile scout up -d scout-bridge</code> in <code>/home/orin/nvr</code>.';
-      } else if(!s.ros_connected){
+        hint.innerHTML = `Start it with <code>docker compose --profile scout up -d</code> in <code>/home/orin/nvr</code>.`;
+      } else if(!d.ros_connected){
         st.textContent = '○ bridge up, robot not reachable';
-        hint.textContent = s.error || 'The bridge cannot reach the robot’s ROS master.';
+        hint.textContent = d.error || 'The bridge cannot reach the robot’s ROS master.';
       } else {
         st.textContent = '○ connected, no frames';
-        hint.textContent = s.blocked_by ? `Camera held by ${s.blocked_by}.` : (s.error || 'No frames yet.');
+        hint.textContent = d.blocked_by ? `Camera held by ${d.blocked_by}.` : (d.error || 'No frames yet.');
       }
     }
   }catch(e){ /* leave the card as it was */ }
 }
+function refreshScouts(){ for(const sid in SC) refreshScout(sid); }
 
 // Installed robot apps. Rendered as one button each rather than a dropdown so the running one can
 // show as pressed - which app has the robot is the thing you actually want to see at a glance.
@@ -2497,10 +2669,11 @@ async function load(){
      </div>`).join('')
     : `<p class="hint">No captions yet for this filter. Trigger motion on a camera.</p>`;
 }
-// The Scout refreshes on its own timer: its camera is worth seeing at a higher rate than the
-// 10 s whole-page poll, and it must keep updating even when the robot sections are hidden.
+// The Scouts refresh on their own timer: their cameras are worth seeing at a higher rate than the
+// 10 s whole-page poll, and they must keep updating even when the robot sections are hidden. Cards
+// are built once from /api/scouts, then each polls on the shared 3 s tick.
 showSelfUrl(); initCtl(); load(); setInterval(load, 10000);
-refreshScout(); setInterval(refreshScout, 3000);
+buildScoutCards().then(() => { refreshScouts(); setInterval(refreshScouts, 3000); });
 </script></body></html>"""
 
 

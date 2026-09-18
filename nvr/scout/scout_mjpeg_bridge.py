@@ -95,7 +95,11 @@ STALE_AFTER = 12.0
 # commands entirely unless its motors are enabled, so these are a courtesy bound to keep a typo in
 # a curl command from requesting a lurch, not the real safety layer.
 MAX_LINEAR = 0.3     # m/s
-MAX_ANGULAR = 1.0    # rad/s
+# The firmware's MACC_MAX is ~7 rad/s; this ceiling is what the UI is allowed to ask for. Raised
+# from 1.0 to give the TRACKED Scout enough authority for an in-place tank turn: spinning treads
+# scrub sideways against the floor and 1.0 rad/s barely broke that static friction. Mecanum still
+# only ever asks for ~0.7, so this headroom changes nothing for it.
+MAX_ANGULAR = 2.0    # rad/s
 MAX_DURATION = 3.0   # s, per request
 CMD_HZ = 10.0
 

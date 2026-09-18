@@ -15,7 +15,7 @@ import requests
 # imported because that module lives in a ROS container, not in this venv - but the bridge clamps
 # independently, so these are a UI courtesy and not the safety boundary.
 MAX_LINEAR = 0.3
-MAX_ANGULAR = 1.0
+MAX_ANGULAR = 2.0    # raised with the bridge, so a tracked Scout's tank-turn command is not clipped
 MAX_DURATION = 3.0
 
 
