@@ -1,0 +1,14 @@
+[Unit]
+Description=Verify Cosmos3-Edge default model is loadable and functional
+After=network.target
+
+[Service]
+Type=oneshot
+User=orin
+ExecStart=/usr/local/bin/cosmos3-edge-infer /home/orin/smoke_test_input.json /home/orin/default_model_healthcheck.json
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

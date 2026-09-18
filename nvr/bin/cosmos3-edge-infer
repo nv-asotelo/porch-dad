@@ -1,0 +1,24 @@
+#!/bin/bash
+# Run inference against the default-loaded TensorRT-Edge-LLM model (Cosmos3-Edge).
+# Usage: cosmos3-edge-infer <input.json> <output.json>
+set -euo pipefail
+
+EDGELLM_ROOT=/home/orin/TensorRT-Edge-LLM
+MODEL_DIR=/opt/tensorrt-edgellm/models/default
+
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 <input.json> <output.json>" >&2
+  exit 1
+fi
+
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}
+source /etc/profile.d/cuda.sh
+export EDGELLM_PLUGIN_PATH="$EDGELLM_ROOT/build/libNvInfer_edgellm_plugin.so"
+
+exec "$EDGELLM_ROOT/build/examples/llm/llm_inference" \
+  --engineDir "$MODEL_DIR" \
+  --multimodalEngineDir "$MODEL_DIR" \
+  --checkpointDir "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge/onnx/reasoning/llm" \
+  --inputFile "$1" \
+  --outputFile "$2" \
+  --dumpOutput
