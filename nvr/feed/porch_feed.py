@@ -2225,15 +2225,22 @@ async function refreshScout(){
       // Amber inside a body-length, red when it is about to touch something.
       st.style.color = (s.tof_fresh && s.tof_m != null)
         ? (s.tof_m < 0.20 ? 'var(--r)' : s.tof_m < 0.50 ? 'var(--y)' : '') : '';
-      // Point at the live MJPEG stream ONCE, not a fresh still every poll. Set only when it is
-      // not already streaming, so the 10 s status refresh never restarts the video.
-      if(!img.src.endsWith('/scout/mjpeg')) img.src = '/scout/mjpeg';
+      // Point at the live MJPEG stream ONCE, not a fresh still every poll. An MJPEG <img> holds a
+      // persistent connection; if it dies (e.g. porch-feed restarts) the browser keeps the dead
+      // socket occupying one of its ~6 per-host slots, and enough of those stall every fetch on
+      // the page - which is how the controls once appeared "broken". onerror reconnects with a
+      // cache-bust so a broken stream frees its slot and reopens instead of lingering.
+      if(!img.dataset.streaming){
+        img.dataset.streaming = '1';
+        img.onerror = () => { if(img.dataset.streaming) setTimeout(() => {
+          img.src = '/scout/mjpeg?t=' + Date.now(); }, 800); };
+        img.src = '/scout/mjpeg';
+      }
       img.style.display='block'; hint.style.display='none';
     } else {
       img.style.display='none'; hint.style.display='block';
-      // Drop the dead stream so the next live poll reconnects: a browser will not re-open an
-      // <img> MJPEG connection on its own once it has ended.
-      if(img.src) img.removeAttribute('src');
+      // Drop the dead stream so the next live poll reconnects cleanly, and free its connection slot.
+      if(img.dataset.streaming){ img.onerror = null; delete img.dataset.streaming; img.removeAttribute('src'); }
       // Distinguish the three ways this goes quiet, because they need different fixes.
       if(!s.reachable){
         st.textContent = '○ bridge not running';
