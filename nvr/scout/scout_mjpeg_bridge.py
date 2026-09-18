@@ -122,6 +122,7 @@ class Bridge:
         self._batt_pct: int | None = None
         self._batt_state: str | None = None
         self._batt_at = 0.0
+        self._pub_recreates = 0
         # h264 passthrough. `_h264_ring` holds recent access units keyed by a monotonic sequence
         # so each client can track its own position without a per-client queue; `_h264_params`
         # holds the most recent SPS+PPS and `_h264_idr` the most recent keyframe, which together
@@ -182,7 +183,51 @@ class Bridge:
         threading.Thread(target=self._drive_loop, daemon=True).start()
         threading.Thread(target=self._stale_watchdog, args=(rospy, RollerFrame),
                          daemon=True).start()
+        threading.Thread(target=self._pub_watchdog, args=(rospy,), daemon=True).start()
         rospy.spin()
+
+    def _pub_connections(self) -> int:
+        try:
+            return self._pub.get_num_connections() if self._pub else 0
+        except Exception:
+            return 0
+
+    def _pub_watchdog(self, rospy) -> None:
+        """Recreate the /cmd_vel publisher if it loses its subscriber.
+
+        The robot's own nodes restart - on low battery, when the app takes control, on a firmware
+        hiccup - and when they do, this publisher drops off the ROS master and every drive command
+        silently goes nowhere while /drive still answers "moving". That is exactly how the robot
+        became undriveable in the field. MotorNode is always subscribed on a healthy robot, so a
+        sustained zero-subscriber count means our registration is stale; recreating the publisher
+        re-registers it with the master and MotorNode reconnects.
+        """
+        missing = 0.0
+        while not rospy.is_shutdown():
+            time.sleep(3)
+            pub = self._pub
+            if pub is None or self._twist_cls is None:
+                continue
+            try:
+                connected = pub.get_num_connections() > 0
+            except Exception:
+                continue
+            if connected:
+                missing = 0.0
+                continue
+            missing += 3
+            if missing >= 9:
+                _LOG.warning("/cmd_vel has had no subscriber for ~%.0fs - recreating publisher", missing)
+                try:
+                    pub.unregister()
+                except Exception:
+                    pass
+                try:
+                    self._pub = rospy.Publisher(CMD_VEL_TOPIC, self._twist_cls, queue_size=1)
+                    self._pub_recreates += 1
+                    missing = 0.0
+                except Exception as e:
+                    _LOG.error("publisher recreate failed: %s", e)
 
     def _check_camera_topic(self, rospy) -> str | None:
         """Say plainly whether the robot publishes the topic we just subscribed to.
@@ -467,6 +512,8 @@ class Bridge:
             "battery_pct": self._batt_pct,
             "battery_state": self._batt_state,
             "battery_fresh": bool(self._batt_at and (time.monotonic() - self._batt_at) < 30.0),
+            "cmd_vel_connected": bool(self._pub is not None and self._pub_connections()),
+            "pub_recreates": self._pub_recreates,
             "h264_frames": self._h264_frames,
             "h264_ready": bool(self._h264_idr),
             "h264_age_s": (round(time.monotonic() - self._h264_at, 1) if self._h264_at else None),
