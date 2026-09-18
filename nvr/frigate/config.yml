@@ -101,12 +101,15 @@ go2rtc:
     # Idle until something consumes it; the camera below is what turns the work on.
     reachy_mini:
       - "ffmpeg:http://host.docker.internal:8099/mjpeg#video=h264"
-    # Moorebot Scout. Same arrangement as the Reachy above: a helper on this box turns a
-    # transport ffmpeg cannot open (here a ROS1 topic) into MJPEG. The robot sends frames it has
-    # already JPEG-encoded, so the bridge only copies bytes and go2rtc does the h264 encode.
-    # Idle until something consumes it; the camera below is what turns the work on.
+    # Moorebot Scout (robot room, 2F). A helper on this box turns a transport ffmpeg cannot open
+    # (a ROS1 topic) into HTTP. h264 passthrough, not MJPEG: the robot already encodes, so go2rtc
+    # only remuxes - encoding the 1920x1080 MJPEG in software cost 33.8% of a CPU and pushed
+    # detector inference from 100 ms to 178 ms, dropping frames on every other camera.
     scout:
-      - "ffmpeg:http://host.docker.internal:8098/mjpeg#video=h264"
+      - "ffmpeg:http://host.docker.internal:8098/h264#video=copy"
+    # Second Scout (first floor, tracked). Same passthrough, different bridge port (8100).
+    scout_first_floor:
+      - "ffmpeg:http://host.docker.internal:8100/h264#video=copy"
     front_entryway:
       - rtsp://ring-mqtt:8554/343ea4e653f3_live?video
     front_driveway:
@@ -283,6 +286,28 @@ cameras:
     objects:
       track:
         - person
+  scout_first_floor:
+    # The tracked Scout on the first floor. Same shape as `scout` above, fed by the second bridge
+    # (scout-bridge-first-floor, port 8100). OFF by default: a second always-on detect camera costs
+    # more of the single CPU detector's ~10 inferences/second, so enabling it is a budget decision -
+    # flip it from the command centre (or the Frigate UI) when you want first-floor detection.
+    enabled: false
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/scout_first_floor
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 2
+    objects:
+      track:
+        - person
+        - dog
+        - cat
   reachy_mini:
     # OFF by default - toggle from the porch-dad command centre (Camera power), which flips this
     # flag over MQTT with no restart. While on it costs ~1 core of detection plus an h264
