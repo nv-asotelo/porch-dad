@@ -2230,11 +2230,21 @@ async function refreshScout(){
     const st   = document.getElementById('scoutState');
 
     if(s.live){
-      // Status strip, app-style: battery, then range (the number that decides forward motion).
+      // Status strip, app-style: battery + charge state, then range. The charge state is spelled
+      // out and coloured on its own span (inline colour wins over the line's ToF colour) so it is
+      // unambiguous whether the robot is actually charging - green ⚡ when it is, red 🔻 when it is
+      // low and running the battery down.
       let batt = '';
       if(s.battery_fresh && s.battery_pct != null){
-        const glyph = s.battery_state === 'charging' ? '⚡' : s.battery_state === 'full' ? '🔋' : '';
-        batt = `${glyph}${s.battery_pct}% · `;
+        const bs = s.battery_state;
+        const label = bs === 'charging' ? '⚡ charging'
+                    : bs === 'full'     ? '🔋 full'
+                    : bs === 'discharging' ? '🔻 on battery' : bs || '';
+        const col = (bs === 'charging' || bs === 'full') ? 'var(--g)'
+                  : (s.battery_pct < 20 ? 'var(--r)' : (s.battery_pct < 40 ? 'var(--y)' : 'var(--fg)'));
+        batt = `<span class="batt" style="color:${col}">${s.battery_pct}% ${label}</span> · `;
+      } else if(s.reachable) {
+        batt = `<span class="batt hint">battery —</span> · `;
       }
       let range;
       if(!s.tof_fresh)        range = 'range —';

@@ -123,6 +123,12 @@ class Bridge:
         self._batt_state: str | None = None
         self._batt_at = 0.0
         self._pub_recreates = 0
+        self._rospy = None
+        self._range_cls = None
+        self._status_cls = None
+        self._tof_sub = None
+        self._batt_sub = None
+        self._sub_resubs = 0
         # h264 passthrough. `_h264_ring` holds recent access units keyed by a monotonic sequence
         # so each client can track its own position without a per-client queue; `_h264_params`
         # holds the most recent SPS+PPS and `_h264_idr` the most recent keyframe, which together
@@ -168,8 +174,13 @@ class Bridge:
             self._twist_cls = Twist
             self._pub = rospy.Publisher(CMD_VEL_TOPIC, Twist, queue_size=1)
             self._sub = rospy.Subscriber(CAMERA_TOPIC, RollerFrame, self._on_frame, queue_size=1)
-            rospy.Subscriber(TOF_TOPIC, Range, self._on_tof, queue_size=1)
-            rospy.Subscriber(BATTERY_TOPIC, RollerStatus, self._on_battery, queue_size=1)
+            # Kept as handles and the classes stored, so the watchdog can resubscribe them: when
+            # the app takes control it restarts the robot's SensorNode, and rospy does not reliably
+            # re-establish these, leaving battery and ToF frozen.
+            self._rospy = rospy
+            self._range_cls, self._status_cls = Range, RollerStatus
+            self._tof_sub = rospy.Subscriber(TOF_TOPIC, Range, self._on_tof, queue_size=1)
+            self._batt_sub = rospy.Subscriber(BATTERY_TOPIC, RollerStatus, self._on_battery, queue_size=1)
             # Separate subscription, same message type: h264 for Frigate, jpg for stills.
             rospy.Subscriber(H264_TOPIC, RollerFrame, self._on_h264, queue_size=4)
             self._ros_ready = True
@@ -192,6 +203,40 @@ class Bridge:
         except Exception:
             return 0
 
+    def _resubscribe_stale_sensors(self) -> None:
+        """Re-establish the battery/ToF subscriptions if they have gone quiet.
+
+        A restart of the robot's SensorNode (which the app triggers when it takes control) breaks
+        these subscriptions and rospy does not reliably recover them, freezing battery and ToF.
+        The topics publish at ~0.6-2 Hz, so more than 15 s of silence means the connection is dead,
+        not merely idle.
+        """
+        if self._rospy is None:
+            return
+        now = time.monotonic()
+        if self._batt_at and now - self._batt_at > 15 and self._status_cls is not None:
+            try:
+                if self._batt_sub is not None:
+                    self._batt_sub.unregister()
+                self._batt_sub = self._rospy.Subscriber(
+                    BATTERY_TOPIC, self._status_cls, self._on_battery, queue_size=1)
+                self._batt_at = now  # reset so it does not churn every pass while genuinely gone
+                self._sub_resubs += 1
+                _LOG.warning("battery subscription was stale - resubscribed")
+            except Exception as e:
+                _LOG.error("battery resubscribe failed: %s", e)
+        if self._tof_at and now - self._tof_at > 15 and self._range_cls is not None:
+            try:
+                if self._tof_sub is not None:
+                    self._tof_sub.unregister()
+                self._tof_sub = self._rospy.Subscriber(
+                    TOF_TOPIC, self._range_cls, self._on_tof, queue_size=1)
+                self._tof_at = now
+                self._sub_resubs += 1
+                _LOG.warning("ToF subscription was stale - resubscribed")
+            except Exception as e:
+                _LOG.error("tof resubscribe failed: %s", e)
+
     def _pub_watchdog(self, rospy) -> None:
         """Recreate the /cmd_vel publisher if it loses its subscriber.
 
@@ -212,6 +257,7 @@ class Bridge:
                 connected = pub.get_num_connections() > 0
             except Exception:
                 continue
+            self._resubscribe_stale_sensors()
             if connected:
                 missing = 0.0
                 continue
@@ -514,6 +560,7 @@ class Bridge:
             "battery_fresh": bool(self._batt_at and (time.monotonic() - self._batt_at) < 30.0),
             "cmd_vel_connected": bool(self._pub is not None and self._pub_connections()),
             "pub_recreates": self._pub_recreates,
+            "sub_resubs": self._sub_resubs,
             "h264_frames": self._h264_frames,
             "h264_ready": bool(self._h264_idr),
             "h264_age_s": (round(time.monotonic() - self._h264_at, 1) if self._h264_at else None),
