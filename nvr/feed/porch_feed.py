@@ -1660,6 +1660,8 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </div>
     <img id="scoutImg" class="still" alt="Scout camera" style="display:none">
     <p class="hint" id="scoutHint" style="display:none"></p>
+    <!-- Latest Cosmos caption, right under the video it describes. Persists between refreshes. -->
+    <div id="scoutAlert" class="ralert"></div>
 
     <!-- Mecanum drive. +y is FORWARD and +x strafes on this robot, which is NOT the ROS
          convention - verified by driving it. The pad is laid out the way a person reads it; the
@@ -1707,11 +1709,10 @@ button.mini{padding:3px 9px;font-size:11.5px}
               onmousedown="scoutTalkStart()" onmouseup="scoutTalkStop()" onmouseleave="scoutTalkStop()"
               ontouchstart="event.preventDefault();scoutTalkStart()" ontouchend="scoutTalkStop()">🎙 Hold to talk</button>
       <button onclick="scoutSnapshot()" title="Save the current frame to your device">📷 Snapshot</button>
-      <button onclick="post('/api/scout/check')"
+      <button onclick="scoutCheck(this)"
               title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
         Look &amp; describe</button>
     </div>
-    <div id="scoutAlert" class="ralert"></div>
     <p class="hint">The <b>range</b> in the status line is the forward time-of-flight sensor and is
        what to trust for obstacles — and it only guards <b>forward</b>: strafe, reverse and rotate
        are unprotected, and there is no rear sensor. Watch the video. Held motion drives 0.6&nbsp;s
@@ -2176,6 +2177,25 @@ function scoutTalkStop(){
   if(talkResumeListen){ talkResumeListen = false; scoutListenToggle(); }
 }
 
+// Look & describe: the endpoint returns {description, categories, alert} - it has no "message"
+// field, so routing it through post() showed a bare green "done" and threw the caption away. This
+// renders it into the alert box under the video and keeps it there.
+async function scoutCheck(btn){
+  if(btn){ btn.classList.add('busy'); btn.textContent = 'Describing…'; }
+  const el = document.getElementById('scoutAlert');
+  try{
+    const r = await fetch('/api/scout/check', {method:'POST', headers:{'X-Porch-Token': await tokenReady()}});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ say(j.detail || j.message || 'describe failed', false); return; }
+    const when = new Date((j.at ? j.at*1000 : Date.now())).toLocaleTimeString();
+    el.className = 'ralert ' + (j.alert ? 'hit' : 'clear');
+    el.innerHTML = `<b>${when}</b> — ${esc(j.description || '(no description)')}`
+      + (j.categories && j.categories.length ? ` <span class="hint">[${esc(j.categories.join(', '))}]</span>` : '')
+      + (j.tof_m != null ? ` <span class="hint">· range ${(+j.tof_m).toFixed(2)} m</span>` : '');
+  }catch(e){ say(String(e), false); }
+  finally{ if(btn){ btn.classList.remove('busy'); btn.textContent = 'Look & describe'; } }
+}
+
 async function scoutSnapshot(){
   try{
     const r = await fetch('/scout/latest.jpg?t=' + Date.now(), {cache:'no-store'});
@@ -2481,7 +2501,8 @@ def main() -> None:
     threading.Thread(target=reachy_watcher, daemon=True).start()
     print(f"[feed] engine={active_engine()['id']} port={CFG.get('web_port', 8096)}", flush=True)
     uvicorn.run(app, host=CFG.get("web_host", "0.0.0.0"),
-                port=int(CFG.get("web_port", 8096)), log_level="warning")
+                port=int(CFG.get("web_port", 8096)),
+                log_level=str(CFG.get("web_log_level", "warning")), access_log=True)
 
 
 if __name__ == "__main__":
