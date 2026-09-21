@@ -115,7 +115,7 @@ spec.loader.exec_module(helper)
 import os
 options = builder.BuildOptions(max_input_len=int(max_input), max_kv_cache_capacity=int(max_kv), max_batch_size=1,
     max_image_tokens=int(os.environ['COSMOS_MAX_IMAGE_TOKENS']) if os.environ.get('COSMOS_MAX_IMAGE_TOKENS') else None,
-    max_image_tokens_per_image=int(os.environ['COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE']) if os.environ.get('COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE') else None)
+    max_image_tokens_per_image=int(os.environ.get('COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE', os.environ.get('COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE'))) if os.environ.get('COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE', os.environ.get('COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE')) else None)
 helper.preserve_existing_cache(builder, pathlib.Path(model), pathlib.Path(cache), options)
 started = datetime.now(timezone.utc).isoformat()
 provenance_before = helper.build_provenance(pathlib.Path.cwd())

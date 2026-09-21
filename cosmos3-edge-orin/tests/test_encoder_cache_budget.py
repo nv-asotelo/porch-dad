@@ -65,9 +65,12 @@ class EncoderCacheBudgetTests(unittest.TestCase):
         self.assertFalse(parsed.model.context_cache_config.enabled)
         self.assertEqual(parsed.model.context_cache_config.encoder_embedding_cache_budget_bytes, 0)
 
-    def test_original_launcher_defaults_off_and_preserves_other_arguments(self):
+    def test_original_launcher_defaults_to_disabled_cache_and_preserves_other_arguments(self):
         original = ["/absolute/model", "--host", "127.0.0.1", "--max-batch-size", "1"]
         budget, args = launcher.server_arguments(original)
+        self.assertEqual(budget, 0)
+        self.assertEqual(args, original + [launcher.BUDGET_FLAG, "0"])
+        budget, args = launcher.server_arguments(original + [launcher.BUDGET_FLAG, "0"])
         self.assertEqual(budget, 0)
         self.assertEqual(args, original + [launcher.BUDGET_FLAG, "0"])
         budget, args = launcher.server_arguments(original + [launcher.BUDGET_FLAG, "16777216"])

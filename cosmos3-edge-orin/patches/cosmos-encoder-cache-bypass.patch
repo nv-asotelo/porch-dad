@@ -1,0 +1,50 @@
+diff --git a/cpp/runtime/imageUtils.h b/cpp/runtime/imageUtils.h
+--- a/cpp/runtime/imageUtils.h
++++ b/cpp/runtime/imageUtils.h
+@@ -49,6 +49,7 @@
+     double fps{1.0};                    //!< Video sample fps for MRoPE timestamps; ignored unless isVideo.
+     bool doResize{true};                //!< When false, the vision runner skips its internal resize.
+     int64_t maxImageTokensPerImage{0};    //!< Optional still-image token cap; zero uses the built profile.
++    bool skipEncoderCache{false};        //!< Bypass encoder-cache lookup/store for controlled cold-encoder requests.
+     bool isVideo{false};                //!< Explicit modality: a single-frame video is still a video.
+     std::vector<double> timestamps;     //!< Optional source timestamps (seconds); empty assumes uniform fps spacing.
+ 
+diff --git a/cpp/runtime/imageUtils.cpp b/cpp/runtime/imageUtils.cpp
+--- a/cpp/runtime/imageUtils.cpp
++++ b/cpp/runtime/imageUtils.cpp
+@@ -62,6 +62,7 @@
+     meta.frames = frames;
+     meta.fps = fps;
+     meta.maxImageTokensPerImage = maxImageTokensPerImage;
++    meta.skipEncoderCache = skipEncoderCache;
+     return meta;
+ }
+ 
+diff --git a/experimental/pybind/edgellm_pybind.cpp b/experimental/pybind/edgellm_pybind.cpp
+--- a/experimental/pybind/edgellm_pybind.cpp
++++ b/experimental/pybind/edgellm_pybind.cpp
+@@ -689,7 +689,8 @@
+         .def_readonly("timestamps", &imageUtils::ImageData::timestamps)
+         .def_readwrite("fps", &imageUtils::ImageData::fps)
+         .def_readwrite("do_resize", &imageUtils::ImageData::doResize)
+-        .def_readwrite("max_image_tokens_per_image", &imageUtils::ImageData::maxImageTokensPerImage);
++        .def_readwrite("max_image_tokens_per_image", &imageUtils::ImageData::maxImageTokensPerImage)
++        .def_readwrite("skip_encoder_cache", &imageUtils::ImageData::skipEncoderCache);
+ 
+     m.def("load_image_from_path", &loadImageFromPath, py::arg("path"), "Load image from file path");
+     m.def("load_image_from_bytes", &loadImageFromBytes, py::arg("data"), "Load image from bytes");
+diff --git a/cpp/runtime/llmRankRuntime.cpp b/cpp/runtime/llmRankRuntime.cpp
+--- a/cpp/runtime/llmRankRuntime.cpp
++++ b/cpp/runtime/llmRankRuntime.cpp
+@@ -1928,7 +1928,10 @@
+             {
+                 for (auto const& img : req.imageBuffers)
+                 {
+-                    if (img.buffer && !img.buffer->isEmpty())
++                    // A bypass request must neither reuse nor populate embeddings. Marking
++                    // any image unhashable clears all image hashes below, disabling both paths
++                    // without evicting entries belonging to ordinary requests.
++                    if (!img.skipEncoderCache && img.buffer && !img.buffer->isEmpty())
+                     {
+                         auto const* rawPtr = reinterpret_cast<char const*>(img.data());
+                         size_t const rawBytes = static_cast<size_t>(img.bytesPerFrame()) * img.frames;

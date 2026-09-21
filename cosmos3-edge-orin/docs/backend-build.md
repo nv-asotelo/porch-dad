@@ -1,10 +1,12 @@
 # Backend build and launch
 
-Current selection (2026-09-21 UTC): **MLP-only RTN INT4 with N4 GEMV tiling and compact buffers is serving through the enabled backend/UI services**. The profile is input 1024 / KV 1664, aggregate and per-image visual capacity 512, batch one, zero encoder cache, no text-context reuse and stock dynamic 25 W clocks. Attention, vision, embeddings, activations and KV remain FP16. Swap is disabled. See [selected environment](../deployment/selected.env), [configuration/provenance](../deployment/selected-config.json), [MLP selection](../results/mlp-goal/selection.json), [MLP reproduction in section 7](#7-selected-mlp-only-rtn-deployment) and [the full findings](../research/mlp-goal.md).
+Current selected policy (2026-09-21 UTC, after the user's final engine choice): **MLP-only RTN INT4 with N4 GEMV tiling, a 512-token runtime image cap, top-p 1.0, zero encoder cache and dynamic clocks within stock 25 W**. The preserved `data/engine-cache-mlp-compact` engine uses input 1024 / KV 1664, aggregate/per-image visual capacities of 512/512 and batch one. Its 56 MLP weights use RTN INT4; attention, vision, embeddings, activations and KV remain FP16. Text-context reuse and swap stay disabled. The UI retains the first-demo Lightweight capture settings, original prompt, temperature 0 and 64-token output default. The latest native extension retains advanced controls and server timing. Image caps of 320, 512 or Custom remain independent of the output cap, adjustable up to 512. See [selected environment](../deployment/selected.env), [configuration/provenance](../deployment/selected-config.json), [runtime controls and measurement](../research/runtime-controls-server-timing.md), and [MLP reproduction](#7-selected-mlp-only-rtn-deployment). The original FP16 cache remains preserved for the separate comparison.
+
+The earlier same-day 320-token / top-p 0.95 / 256 MiB cache / static-clock acceptance remains a record of that experimental MLP configuration. The user stopped its subsequent comparison run, restored the lighter UI parameters, temporarily restored the original FP16 engine, then explicitly selected MLP INT4 again and requested a matched TTFT check. Preserve the [interim MLP acceptance](../results/runtime-controls/validation-lightweight.json) and [temporary FP16 TTFT receipt](../results/runtime-controls/ttft-fp16/receipt.json). The planned FP16 runtime-control acceptance did not run. A final engine choice alone proves no speed advantage, and the interrupted fixed/marginal latency experiment has no completed comparison. The completed [MLP optimization search](../research/mlp-goal.md) remains historical.
 
 ## Historical FP16 checkpoint
 
-The following FP16 measurements describe the earlier checkpoint. It used input 1024 / KV 2048, FP16 weights/activation/KV, zero encoder cache and stock dynamic 25 W clocks. Its [selection decision](../results/optimization-selection.json) remains available alongside the [memory-mode receipt](../results/deployment-memory-mode/receipt.json). The current MLP result appears in section 7 below.
+The following FP16 measurements describe the earlier checkpoint. It used input 1024 / KV 2048, FP16 weights/activation/KV, zero encoder cache and stock dynamic 25 W clocks. Its [selection decision](../results/optimization-selection.json) remains available alongside the [memory-mode receipt](../results/deployment-memory-mode/receipt.json). The original engine was temporarily restored during the user's later comparisons; the final selection returns to compact MLP INT4. Historical measurements retain their original client-timing boundary and workload.
 
 The corrected six-image screen scores [18/19 required facts](../results/quality-fp16-corrected-01-review.json), up from the initial 7/19. The official unmodified model reproduces the sole remaining shape error, so the absolute screen still fails. The selected model meets the frozen [reference-equivalence policy](../results/optimization-quality-policy.json), and all six final-service outputs match corrected FP16 exactly. Browser incremental display, Stop and restart passed [against the actual Orin service](../results/browser-live-ui.json).
 
@@ -64,7 +66,26 @@ nvcc --version
 python -c 'import tensorrt; print(tensorrt.__version__)'
 ```
 
-For this deployment, `bash scripts/build_backend.sh fp16` runs a real CUDA array check, the kernel generation/configuration below, and the required runtime/plugin build targets with one compiler worker. It saves a separate receipt directory with logs, exit status and a `tegrastats` trace when available. This wrapper completed successfully on the normally booted Orin, including the native runtime import. Its optional `int4` mode also generates the INT4 V2 group. Model-engine and image-inference validation remain separate steps; avoid overlapping engine construction, native compilation and resident serving on this memory-constrained board.
+Before the final native build, apply the selected source patches once, in this order, to the immutable public pin. Run this block only for a checkout without these task patches. For an existing patched checkout, first inspect which patches are already present and apply only the missing suffix; `git apply --check` deliberately fails if a patch is already applied.
+
+```bash
+cd "$COSMOS_PROJECT_DIR"
+for patch_name in \
+  cosmos3-patch-embedding-chw.patch \
+  cosmos3-half-pixel-position.patch \
+  tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch \
+  int4-gemv-cosmos-mlp-n4.patch \
+  cosmos-runtime-image-token-budget.patch \
+  cosmos-encoder-cache-bypass.patch; do
+  git -C external/TensorRT-Edge-LLM apply --check "$COSMOS_PROJECT_DIR/patches/$patch_name" || exit 1
+  git -C external/TensorRT-Edge-LLM apply "$COSMOS_PROJECT_DIR/patches/$patch_name" || exit 1
+done
+cd "$COSMOS_PROJECT_DIR/external/TensorRT-Edge-LLM"
+```
+
+Require all six patches to be present before proceeding. The last two depend on the earlier encoder-cache binding patch, and the cache-bypass patch follows the runtime-image-budget patch. On the already corrected MLP deployment, adding only these final two patches requires rebuilding `_edgellm_runtime` and its native dependencies; it does not require rebuilding the existing 512-capacity engine. Preserve the previous native binary for rollback. The original projection repair requires a fresh visual engine if that repair was not already incorporated. The build wrapper does not apply patches automatically.
+
+For this deployment, `bash "$COSMOS_PROJECT_DIR/scripts/build_backend.sh" fp16` runs a real CUDA array check, the kernel generation/configuration below, and the required runtime/plugin build targets with one compiler worker. It saves a separate receipt directory with logs, exit status and a `tegrastats` trace when available. This wrapper completed successfully on the normally booted Orin, including the native runtime import. Its optional `int4` mode also generates the INT4 V2 group. Model-engine and image-inference validation remain separate steps; avoid overlapping engine construction, native compilation and resident serving on this memory-constrained board.
 
 The source checkout does not contain the generated CuTe DSL artifacts. Generate the SM87 artifacts before CMake; a single compile worker reduces build memory pressure:
 
@@ -95,7 +116,7 @@ The `--system-site-packages` environment exposes JetPack's apt-installed TensorR
 
 Transformers 5.14.1 and Jinja2 3.1.6 from `server-tools` are needed to derive this checkpoint's processed chat template. The earlier [tokenizer preflight](../results/cosmos3-tokenizer-preflight.json) verified text formatting and rendered model image delimiters, but did not catch missing `content_types` mappings in the generated artifact. Actual image requests exposed that omission. The [media repair](../scripts/repair_cosmos_chat_template.py) now restores the exact image/video delimiters from the checkpoint template; the [RoPE repair](../scripts/repair_cosmos_runtime_config.py) supplies existing checkpoint values under the aliases consumed by the C++ vision runner. Both helpers retain before/after receipts and are run by `build_model_cache.py`. The current [artifact preflight](../scripts/preflight_cosmos_artifacts.py) rejects missing repairs, generic fallback templates and unsupported cache state. These checks support launch correctness; actual image inference remains the acceptance test.
 
-Apply the task's exact source patches to the pinned public checkout before reproducing the corrected candidate: [HWC→CHW patch projection](../patches/cosmos3-patch-embedding-chw.patch), [Cosmos half-pixel position alignment](../patches/cosmos3-half-pixel-position.patch), and [encoder embedding-cache budget API](../patches/tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch). Use `git apply --check` on a clean checkout first and do not apply a patch twice. The projection repair requires a fresh visual engine; the position and cache-control patches require a native runtime rebuild. Preserve the original cache as diagnostic evidence and use a new `COSMOS_CACHE_DIR` for the corrected engine. Exact design, tests and upstream credit are recorded in the [contribution ledger](../research/contribution-ledger.md).
+The first three patches repair [patch-projection layout](../patches/cosmos3-patch-embedding-chw.patch), [Cosmos position alignment](../patches/cosmos3-half-pixel-position.patch), and [encoder-cache configuration](../patches/tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch). The selected N4 MLP and runtime-control patches follow them in the sequence above. Preserve existing caches as diagnostic evidence; a changed projection needs a distinct newly built visual engine, whereas the new runtime controls reuse the existing engine. Attribution is recorded in the [contribution ledger](../research/contribution-ledger.md) and [runtime-control record](../research/runtime-controls-server-timing.md).
 
 The exact dense reasoner uses the supported `fmha` group for FP16 decoder and vision attention; its dense matmuls and normalization do not require the other CuTe groups. This selects 25 SM87 variants instead of all 81. Actual generation still requires a working GPU; it cannot run in the driverless recovery chroot. See [the source audit](../research/cosmos3-kernel-selection.md).
 
@@ -154,39 +175,17 @@ PY
 
 This preserves the provider's root config, processor, tokenizer, chat template, index, and referenced weights. It deliberately never downloads generator component configs or VAE weights into this new folder. The upstream component resolver then has only LLM and VISUAL to build. Keep the original model's license/origin notices and the [OpenMDW-1.1 agreement](https://openmdw.ai/license/1-1/) with any redistributed model artifacts. [Pinned component-selection source](https://github.com/NVIDIA/TensorRT-Edge-LLM/blob/e8b29522938901f6df19ebeedd4b69bc8edbcd97/experimental/builder/models/cosmos3/configuration.py)
 
-## 4. Reproduce the selected build and services
+## 4. Start the selected build and services
 
-The prepared Orin already has the corrected native runtime and selected engine. These build commands are for reproduction after applying the three source patches described above; stop the task's resident services before any native/engine rebuild. A changed visual projection requires a fresh visual engine, so use a new cache directory for a changed implementation and update both selected deployment files only after validation. The helper preserves existing profiles and refuses incomplete/stale matching bundles instead of deleting them.
+The selected deployment loads the preserved compact MLP INT4 engine from `data/engine-cache-mlp-compact`; switching back does not rebuild it. For a fresh target, follow [MLP reproduction](#7-selected-mlp-only-rtn-deployment) after applying all six reviewed source patches. Do not run native compilation, engine construction and resident serving concurrently on this board. Startup requires a complete normalized bundle and does not intentionally build missing engines.
 
-From a normal boot on the Orin, with the pinned backend Python environment prepared:
+The checked-in `deployment/selected.env` uses systemd `NAME=value` syntax and selects `COSMOS_PROFILE=rtn-v1`, `models/cosmos3-edge-rtn-mlp-int4`, `data/engine-cache-mlp-compact`, input 1024 and KV 1664. Explicit `COSMOS_MAX_IMAGE_TOKENS=512` and `COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE=512` match this engine's original build options. `COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE=512` is the independent runtime default. The file also selects `COSMOS_TOP_P=1`, `COSMOS_ENCODER_CACHE_BYTES=0` and `COSMOS_STATIC_CLOCKS=0`. These differ from the preserved FP16 cache's input 1024 / KV 2048 and `None`/`None` image-build overrides. Keep model, cache and builder options together when changing profiles. The companion [configuration](../deployment/selected-config.json) identifies provenance and validation evidence; copied receipts do not validate a new target.
 
-```bash
-cd /home/jetson/cosmos-edge
-sudo systemctl stop cosmos-edge-ui.service cosmos-edge-backend.service
-export COSMOS_PROJECT_DIR="$PWD"
-export COSMOS_REASONER_DIR="$PWD/models/cosmos3-edge-reasoner"
-export COSMOS_CACHE_DIR="$PWD/data/engine-cache-chw"
-export COSMOS_MAX_INPUT_LEN=1024
-export COSMOS_MAX_KV_CAPACITY=2048
-export COSMOS_ENCODER_CACHE_BYTES=0
-unset COSMOS_MAX_IMAGE_TOKENS COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE
-bash scripts/build_backend.sh fp16
-python3 scripts/measure_command.py --output "results/engine-reproduction-$(date -u +%Y%m%dT%H%M%SZ)" -- \
-  external/TensorRT-Edge-LLM/.venv/bin/python scripts/build_model_cache.py \
-  --model "$COSMOS_REASONER_DIR" --cache-dir "$COSMOS_CACHE_DIR"
-bash scripts/run_backend.sh --preflight-only "$COSMOS_REASONER_DIR"
-```
-
-For a fresh deployment without installed units, omit the initial service-stop command. Install Ubuntu's `time` package if `/usr/bin/time` is absent. Native compilation, engine construction and resident serving must run sequentially on this board. The measurement wrapper saves output, sampled system RAM/swap, `tegrastats`, GNU time and terminal status. A cache hit records the current environment without claiming a new engine build; compile/build peaks are distinct from inference peaks.
-
-The build helper runs the checkpoint-specific media and RoPE repairs. Direct server startup requires a complete normalized bundle matching the model, input/KV and visual profile; **startup does not build missing engines**. Preserve the original checkpoint and its notices. Build success still requires actual image-quality and streaming validation.
-
-The checked-in `deployment/selected.env` contains only task paths and explicit runtime settings, using systemd `NAME=value` syntax. It now selects `COSMOS_PROFILE=rtn-v1`, the MLP-only INT4 checkpoint, `data/engine-cache-mlp-compact`, input 1024, KV 1664, aggregate/per-image visual capacity 512, encoder cache zero and `COSMOS_STATIC_CLOCKS=0`. Section 7 describes building that selected configuration. The companion `deployment/selected-config.json` records source/model pins, patches and observed deployment state; copied provenance does not establish that a newly built engine has been validated.
-
-Install and start the selected services after the cache is ready and any task-owned foreground servers have stopped:
+Install and start the selected services after the cache is ready and task-owned foreground servers have stopped. For an upgrade of an already running backend, stop it before reinstalling the units. If that backend previously used static clocks, first complete the [dynamic-clock restoration](#7-preserve-or-restore-the-selected-memory-and-clock-state); setting the environment to zero does not itself restore clocks:
 
 ```bash
 cd /home/jetson/cosmos-edge
+sudo systemctl stop cosmos-edge-backend.service
 sudo bash scripts/install_services.sh
 sudo systemctl start cosmos-edge-backend.service cosmos-edge-ui.service
 systemctl is-enabled cosmos-edge-backend.service cosmos-edge-ui.service
@@ -201,13 +200,13 @@ The installer verifies units and enables boot startup but never starts them itse
 ssh -N -L 8090:127.0.0.1:8090 jetson@YOUR_JETSON_ADDRESS
 ```
 
-The selected service uses one active request, at most one queued request, no prefix reuse or speculation, and zero encoder embedding cache. The pinned upstream server's default visual profile is 1024 total image tokens and 512 per image. The task wrapper supports explicit `COSMOS_MAX_IMAGE_TOKENS` and `COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE` through the pinned Python `BuildOptions` API; if used, identical values must be present during build and serve. The compact-profile candidate was not run in the original FP16 phase because its stop rule had fired. The later user-selected MLP phase did build and select a compact profile; see section 6 below. [Pinned BuildOptions](https://github.com/NVIDIA/TensorRT-Edge-LLM/blob/e8b29522938901f6df19ebeedd4b69bc8edbcd97/experimental/server/runtime/engine_build.py)
+The selected service allows one active request and at most one queued request, disables text-context reuse/speculation, and uses zero encoder-cache budget. The built visual profile has aggregate/per-image capacities of 512/512; single-image requests use a validated 4–512 cap, with 512 the load default. Build and serve must agree on the engine options. The runtime cap is independent and cannot exceed the loaded per-image capacity. The UI's output cap stays 1–512, with 64 the restored page-load default. An accepted prompt plus image must fit the 1024-token input limit; that input and a 512-token output fit within KV capacity 1664. A character limit alone cannot guarantee that an arbitrary prompt fits; overlong tokenized input is rejected by the backend.
 
-The Cosmos positional repair aligns the learned grid for the fixed 512×512 quality fixtures. When a processed image axis is below 256 pixels, its four-tap approximation differs from the official model's wider antialiased downsampling filter. The UI preserves image content/aspect and centers it on black padding when either resized axis would be below 256; it never crops, distorts or upscales small images. Direct API clients must account for this [documented interpolation boundary](../patches/cosmos3-half-pixel-position.md). UI padding is not a claim of general backend parity.
+The Cosmos positional repair aligns the learned grid for the fixed 512×512 quality fixtures. When a **native processed** image axis falls below 256 pixels, its four-tap approximation differs from the official model's wider antialiased downsampling filter. Existing browser padding preserves source content/aspect, but a low runtime image cap can reduce a native axis below 256 after that padding. Custom values as low as 4 are supported capacity choices, not a promise of unchanged detail or reference-model parity. See the [documented interpolation boundary](../patches/cosmos3-half-pixel-position.md).
 
 ## 5. Quantization findings and the unselected AWQ route
 
-There is no upstream RTN switch in this pin. This task implemented an isolated [CPU INT4 round-to-nearest converter](../scripts/quantize_cosmos3_rtn.py) and [backend integration](../scripts/rtn_backend.py), built both candidates and measured their actual outputs on the Orin. The broad decoder candidate scored [13/19 required facts](../results/quality-rtn-v1-01-review.json). The MLP-only candidate scored [18/19](../results/quality-rtn-mlp-01-review.json), but introduced a new color error while fixing the permitted reference shape error. Both failed the original frozen FP16-equivalence rule. The user later selected MLP-only RTN as the new starting point, accepting its documented color error. Section 6 describes the current MLP deployment. Packed checkpoint size alone does not establish runtime memory or dedicated VRAM usage.
+There is no upstream RTN switch in this pin. This task implemented an isolated [CPU INT4 round-to-nearest converter](../scripts/quantize_cosmos3_rtn.py) and [backend integration](../scripts/rtn_backend.py), built both candidates and measured actual outputs on the Orin. The broad decoder candidate scored [13/19 required facts](../results/quality-rtn-v1-01-review.json). The MLP-only candidate scored [18/19](../results/quality-rtn-mlp-01-review.json), but introduced a new color error while fixing the permitted reference shape error. Both failed the original frozen FP16-equivalence rule. The user later selected MLP-only RTN, accepting its documented color error; after a temporary FP16 restoration, the final choice returns to the preserved compact MLP engine. Packed checkpoint size alone does not establish runtime memory or dedicated VRAM usage.
 
 The fourth trial used static maximum clocks within unchanged stock 25 W. It preserved the FP16 outputs, but missed the required 5% latency improvement and recorded workload swap activity. The search stopped at the declared three consecutive non-improvements; stock dynamic clocks were restored and independently verified. [Selection receipt](../results/optimization-selection.json), [clock restoration check](../results/deployment-memory-mode/clock-restore-verification.json).
 
@@ -236,7 +235,9 @@ An AWQ checkpoint would need a separate compatible cache-preparation route and a
 
 ## 6. Measurement and acceptance
 
-Use the project's benchmark harness and the exact stopping rule in `GOAL.md`. Compare fixed JPEGs, prompts, output caps, and power settings after warmup. Collect median/p95 time to first token, request completion latency, genuine completion-token throughput, device allocated-memory peak where native instrumentation permits, total DRAM use, and an image-grounding/OCR/counting quality check. The client throughput includes the whole request; isolated decode speed requires native timing. Label cold compilation separately. FP16 and INT4 weight arithmetic is available in `research/backend-feasibility.md`; none of it is measured VRAM or an observed speedup.
+The earlier bounded search and client-timed results remain historical. Run `scripts/validate_runtime_controls.py --policy lightweight` against a fresh, idle loopback backend with a new `--output` path to check the lightweight defaults, image budgets, native metrics and streaming. Confirm separately that the live service identifies the selected MLP checkpoint/cache and input 1024 / KV 1664; the Lightweight policy name alone does not identify an engine. Preserve [the interim MLP acceptance](../results/runtime-controls/validation-lightweight.json) and [the separate temporary FP16 TTFT run](../results/runtime-controls/ttft-fp16/receipt.json); the latter is a timing receipt, not the planned runtime-control acceptance, which did not run. Captions support human review, not a quality score. The historical `--policy experimental320` mode checks the earlier 320-token / top-p 0.95 / 256 MiB cache / static-clock configuration only when that configuration is explicitly loaded.
+
+The native benchmark/comparator remain available as described in the [server-side measurement record](../research/runtime-controls-server-timing.md); the interrupted run does not establish a completed comparison. Any new controlled run should score native server duration after JPEG decoding and admission, excluding transport and response serialization, and fit fixed milliseconds plus marginal milliseconds per actual output token separately by image budget and observed encoder-cache mode. Keep the same input, prompt, sampling and clock policy; disclose changed controls explicitly. Historical client timings cannot be converted to this boundary. Record shared DRAM use and caption quality separately; a lower image cap changes visual detail and need not reduce resident engine allocations proportionally.
 
 ## 7. Preserve or restore the selected memory and clock state
 
@@ -265,24 +266,27 @@ cat /proc/swaps
 
 The diff is expected to show the commented entry. Restoring swap changes the measured deployment configuration; record that change before comparing performance. To return to no-swap operation, first stop the task's resident services and verify enough available RAM to page in any occupied swap, then run `sudo /sbin/swapoff /swapfile`, comment that same fstab entry, and reload systemd. Preserve `/swapfile` and the saved original fstab.
 
-Dynamic clocks are already restored and `COSMOS_STATIC_CLOCKS=0` is selected. Only exact `COSMOS_STATIC_CLOCKS=1` makes the installer add the root oneshot `cosmos-edge-clocks.service`, ordered after `nvpmodel.service` and required before the backend; no fan or power-mode changes are requested. If a future clock trial enables it, restoring dynamic operation requires setting the selection back to zero and reinstalling units to remove the backend dependency, then disabling the clock unit and restoring the saved settings:
+The current policy explicitly selects `COSMOS_STATIC_CLOCKS=0` for dynamic clocks. The earlier experiment enabled the root oneshot `cosmos-edge-clocks.service` and made it a backend dependency. To restore the selected dynamic policy after that experiment, stop the backend, confirm the selection is zero, reinstall units to remove that dependency, then disable the clock unit and restore the saved stock 25 W snapshot. Setting the environment alone does not restore clocks:
 
 ```bash
 cd /home/jetson/cosmos-edge
-# Set COSMOS_STATIC_CLOCKS=0 in deployment/selected.env first.
+sudo systemctl stop cosmos-edge-backend.service
+# Confirm COSMOS_STATIC_CLOCKS=0 in deployment/selected.env first.
 sudo bash scripts/install_services.sh
 sudo systemctl disable --now cosmos-edge-clocks.service
 sudo /usr/bin/jetson_clocks --restore /home/jetson/cosmos-edge/data/power/stock25w.before.conf
 ```
 
-The disable command applies only if a clock unit was previously installed; none is needed for the selected dynamic configuration. Merely disabling a clock unit while leaving the backend's `Requires` dependency in place would let a later backend start activate it again.
+Run that restoration block only on a target with the task's existing clock service and saved snapshot. Verify the resulting state with `jetson_clocks --show` before restarting the backend. Merely disabling the clock unit while leaving the backend's `Requires` dependency in place would let a later backend start activate it again. A fresh target using the selected zero setting needs no task clock service. Clock state belongs in every new measurement record.
 
 
-## 7. Selected MLP-only RTN deployment
+<a id="7-selected-mlp-only-rtn-deployment"></a>
 
-The current [selection](../deployment/selected-config.json) uses the same pinned source model and a task-generated MLP-only INT4 derivative. Attention, LM head, vision, projector, embeddings, activations and KV remain FP16. The known yellow-to-orange error remains. The first new candidate saved 163.45 MiB of sampled peak shared RAM and showed 1.19% lower aggregate p50. The search stopped below the user's 10% continuation threshold and retained the smaller configuration. Read the [measurement and policy record](../research/mlp-goal.md) before interpreting those figures.
+## 8. Selected compact MLP-only RTN reproduction
 
-On the configured Orin the model, engine cache and native binaries already exist. Start the enabled services as above. The selected launcher uses `COSMOS_PROFILE=rtn-v1`, model `models/cosmos3-edge-rtn-mlp-int4`, cache `data/engine-cache-mlp-compact`, input capacity 1024, KV capacity 1664, total image capacity 512 and per-image capacity 512. These preserve the UI's single-image input and 512-output-token envelope. The first build used the original V1 plugin, followed by the task's native kernel rebuild. Runtime receipts identify the final rebuilt plugin and extension.
+The current [selection](../deployment/selected-config.json) returns to the task-generated MLP-only INT4 derivative and compact N4 engine. Attention, LM head, vision, projector, embeddings, activations and KV remain FP16. In the completed **512-token, uncached, dynamic-clock** MLP optimization search, the compact candidate saved 163.45 MiB of sampled peak shared RAM and showed 1.19% lower aggregate p50; the search stopped below the user's 10% continuation threshold. Those historical quality/performance results, including the yellow-to-orange limitation, do not establish today's server TTFT or a new engine-to-engine speed result. See the [search record](../research/mlp-goal.md) and [runtime-policy record](../research/runtime-controls-server-timing.md).
+
+The selected profile uses `COSMOS_PROFILE=rtn-v1`, model `models/cosmos3-edge-rtn-mlp-int4`, cache `data/engine-cache-mlp-compact`, input capacity 1024, KV capacity 1664 and explicit built total/per-image capacities of 512. The runtime defaults are image cap 512, top-p 1.0, cache budget 0 and dynamic clocks; the UI retains its lightweight prompt/capture parameters and 64-token answer cap. The first build used the original V1 plugin, followed by the task's native N4 kernel rebuild. Historical receipts identify that build; later native receipts identify the added runtime controls and instrumentation.
 
 For a fresh reconstruction after the pinned dependencies and earlier compatibility patches in this document, stop the task's backend before allocating build/model memory. Preserve existing model/cache directories; the converter and engine wrapper validate their receipts. The converter's `--apply` writes a new derivative, without calibration:
 
@@ -295,7 +299,7 @@ external/TensorRT-Edge-LLM/.venv/bin/python scripts/quantize_cosmos3_rtn.py \
   --quantization-scope mlp-only --apply
 ```
 
-Apply the new launch patch once to the pinned upstream checkout, preserving its original license notices, then rebuild both targets. An already patched checkout fails `apply --check`; do not apply it twice.
+After applying all six patches in section 2, preserving the original license notices, rebuild both native targets. Do not apply the N4 or runtime patches again if already present. The CLI image values below are this MLP engine's build capacities, explicitly 512. The preserved original FP16 cache uses different builder overrides.
 
 ```bash
 export PATH="/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/.venv/bin:/usr/local/cuda-13.2/bin:$PATH"
@@ -304,8 +308,6 @@ export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/local/cuda-13.2/lib64
 export TMPDIR=/home/jetson/cosmos-edge/data/tmp
 export XDG_CACHE_HOME=/home/jetson/cosmos-edge/data/cache
 export CUDA_CACHE_PATH=/home/jetson/cosmos-edge/data/cache/cuda
-git -C external/TensorRT-Edge-LLM apply --check /home/jetson/cosmos-edge/patches/int4-gemv-cosmos-mlp-n4.patch
-git -C external/TensorRT-Edge-LLM apply /home/jetson/cosmos-edge/patches/int4-gemv-cosmos-mlp-n4.patch
 cmake --build external/TensorRT-Edge-LLM/build --parallel 1 \
   --target NvInfer_edgellm_plugin _edgellm_runtime
 external/TensorRT-Edge-LLM/.venv/bin/python scripts/rtn_backend.py build \
@@ -313,7 +315,6 @@ external/TensorRT-Edge-LLM/.venv/bin/python scripts/rtn_backend.py build \
   --cache-dir /home/jetson/cosmos-edge/data/engine-cache-mlp-compact \
   --max-input-len 1024 --max-kv-capacity 1664 \
   --max-image-tokens 512 --max-image-tokens-per-image 512
-sudo systemctl start cosmos-edge-backend
 ```
 
-Build/serve options must agree. A reconstruction is a new build with new binary hashes and may choose different TensorRT tactics; do not reuse historical receipts as proof of its identity or performance. Validate real inference, quality and runtime memory before treating a rebuilt engine as equivalent. The [launch patch](../patches/int4-gemv-cosmos-mlp-n4.patch), [GPU equivalence harness](../scripts/profile_mlp_gemv.cu), and [recorded build receipt](../results/rtn-build-20260921T040030Z-41c97631.json) document the measured version.
+Engine build/serve settings must agree with this MLP model/cache, input/KV profile and explicit numeric image-build capacities. Install/start the selected service using section 4 after artifacts are ready. A reconstruction is a new build with new binary hashes and may choose different TensorRT tactics; historical receipts do not prove its identity or performance. Validate real inference, quality and memory before treating a rebuilt engine as equivalent. The [launch patch](../patches/int4-gemv-cosmos-mlp-n4.patch), [GPU equivalence harness](../scripts/profile_mlp_gemv.cu), and [recorded build receipt](../results/rtn-build-20260921T040030Z-41c97631.json) document the measured version.

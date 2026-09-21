@@ -174,7 +174,7 @@ class ProxyTests(unittest.TestCase):
         return connection, response
 
     def test_static_and_readiness(self):
-        for path in ("/", "/app.js", "/style.css", "/health/ready", "/v1/models"):
+        for path in ("/", "/app.js", "/style.css", "/health/ready", "/v1/models", "/api/runtime"):
             self.assertEqual(self.request("GET", path)[0], 200)
         self.assertEqual(self.request("GET", "/../scripts/serve_ui.py")[0], 404)
 
@@ -268,6 +268,26 @@ class ProxyTests(unittest.TestCase):
         status, data = self.request("POST", "/v1/chat/completions", value)
         self.assertEqual(status, 400)
         self.assertIn(b"does not support seed", data)
+
+    def test_image_budget_and_top_p_are_independent_bounded_controls(self):
+        for budget in (4, 320, 384, 512):
+            value = payload()
+            value.update(max_image_tokens_per_image=budget, max_tokens=512, top_p=.95)
+            ui.validate_request(value)
+        for budget in (True, None, 3, 513, 320.5, "320"):
+            value = payload()
+            value['max_image_tokens_per_image'] = budget
+            with self.subTest(budget=budget), self.assertRaises(ValueError):
+                ui.validate_request(value)
+        for top_p in (True, None, 0, -1, 1.01, float('nan'), float('inf'), '.95'):
+            value = payload()
+            value['top_p'] = top_p
+            with self.subTest(top_p=top_p), self.assertRaises(ValueError):
+                ui.validate_request(value)
+        value = payload()
+        value['cosmos_benchmark'] = {'cache_mode': 'bypass'}
+        with self.assertRaises(ValueError):
+            ui.validate_request(value)  # Benchmark controls stay on the loopback backend.
 
     def test_live_vlm_temperature_keeps_backend_sampling_defaults(self):
         value = payload()

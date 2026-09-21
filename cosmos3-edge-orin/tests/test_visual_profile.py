@@ -36,7 +36,12 @@ class VisualProfileTests(unittest.TestCase):
         environment_cases = [({}, None, None),
             ({"COSMOS_MAX_IMAGE_TOKENS": "", "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": ""}, None, None),
             ({"COSMOS_MAX_IMAGE_TOKENS": "256", "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": "256"}, 256, 256),
-            ({"COSMOS_MAX_IMAGE_TOKENS": "1024"}, 1024, None)]
+            ({"COSMOS_MAX_IMAGE_TOKENS": "1024"}, 1024, None),
+            ({"COSMOS_MAX_IMAGE_TOKENS": "512", "COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE": "512",
+              "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": "320"}, 512, 512),
+            ({"COSMOS_MAX_IMAGE_TOKENS": "512", "COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE": "512",
+              "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": "512"}, 512, 512),
+            ({"COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE": "", "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": "512"}, None, None)]
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
             (folder / "scripts").mkdir()
@@ -72,6 +77,8 @@ class VisualProfileTests(unittest.TestCase):
             self.assertEqual(paths[0], paths[1], "Empty overrides must retain the original None fingerprint")
             self.assertNotEqual(paths[0], paths[2], "Compact profile must select a different bundle")
             self.assertNotEqual(paths[0], paths[3], "Explicit values participate in cache identity")
+            self.assertEqual(paths[4], paths[5], "Runtime 320/512 must reuse the same built 512-capacity engine")
+            self.assertEqual(paths[0], paths[6], "Explicit empty engine override must retain original FP16 cache identity")
 
     def test_optional_flags_are_consumed_locally_and_bad_capacities_refused(self):
         visual, remaining = serve_backend.visual_arguments(["/model", "--max-image-tokens", "256", "--max-batch-size", "1"])

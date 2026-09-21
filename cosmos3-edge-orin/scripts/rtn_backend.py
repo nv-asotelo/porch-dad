@@ -163,6 +163,8 @@ def main(argv=None):
     parser.add_argument("--max-kv-capacity", type=int, default=2048)
     parser.add_argument("--max-image-tokens", type=int)
     parser.add_argument("--max-image-tokens-per-image", type=int)
+    from serve_backend import budget_bytes
+    parser.add_argument("--encoder-embedding-cache-budget-bytes", type=budget_bytes, default=0)
     args = parser.parse_args(argv)
     if not args.model.is_absolute() or not args.cache_dir.is_absolute():
         raise ValueError("Model and cache paths must be absolute")
@@ -212,13 +214,14 @@ def main(argv=None):
         # no default V2 profile is substituted and no global API is monkeypatched.
         from experimental.server.runtime.engine import load_model, _import_runtime
         from experimental.server.runtime.engine_client import EngineClient
-        from experimental.server.api.app import run_http_server
+        from cosmos_runtime import run_http_server
         from experimental.server.config import ApiConfig, ContextCacheConfig
         from serve_backend import verify_native_binding
-        verify_native_binding(_import_runtime(), 0)
+        verify_native_binding(_import_runtime(), args.encoder_embedding_cache_budget_bytes)
         api = ApiConfig(host=args.host, port=args.port, served_model_name=args.served_model_name,
                         max_queued_requests=1)
-        context = ContextCacheConfig(enabled=False, encoder_embedding_cache_budget_bytes=0)
+        context = ContextCacheConfig(enabled=False,
+            encoder_embedding_cache_budget_bytes=args.encoder_embedding_cache_budget_bytes)
         logging.basicConfig(level=logging.INFO)
         llm = load_model(model=str(model), cache_dir=str(cache), build_options=options,
                          max_input_len=args.max_input_len, max_kv_cache_capacity=args.max_kv_capacity, max_batch_size=1,

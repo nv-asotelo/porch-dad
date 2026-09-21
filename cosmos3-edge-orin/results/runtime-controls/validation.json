@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "kind": "runtime_controls_acceptance",
+  "passed": false,
+  "created_utc": "2026-09-21T17:37:07.560620+00:00",
+  "run_id": "acceptance-234285ba53f44fd695ed0e7b6b4a1a03",
+  "requests": [],
+  "invalid_inputs": [],
+  "caption_review": [],
+  "scope": "Functional acceptance only. Captions require human review; these are not performance or quality scores.",
+  "cancellation_check": "Not performed by this bounded acceptance script.",
+  "runtime": {
+    "engine_id": "8b6d1b60d14f4ad695fade09ca1a6779",
+    "max_image_tokens_per_image": 320,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 268435456,
+    "static_clocks": true,
+    "top_p": 0.95,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "fixture_manifest_sha256": "92618b79acc7a6f0ed1b1d0264e9fd9e29b177ed71480cd5edca7b5e2b2f41bf",
+  "error": "ValueError: cache-sequence-1: HTTP 400: {'error': {'message': 'Extra inputs are not permitted', 'type': 'invalid_request_error', 'param': 'cosmos_benchmark', 'code': 400}}",
+  "completed_utc": "2026-09-21T17:37:07.631551+00:00"
+}

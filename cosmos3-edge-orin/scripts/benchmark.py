@@ -103,6 +103,7 @@ def stream_request(url: str, payload: dict, timeout: float, api_key: str | None 
     started = time.perf_counter()
     first_text = None
     usage = None
+    cosmos_metrics = None
     output: list[str] = []
     finished = False
     error = None
@@ -128,6 +129,8 @@ def stream_request(url: str, payload: dict, timeout: float, api_key: str | None 
                     raise ValueError("Backend returned an error: " + str(item["error"])[:1000])
                 if isinstance(item.get("usage"), dict):
                     usage = item["usage"]
+                if isinstance(item.get("cosmos_metrics"), dict):
+                    cosmos_metrics = item["cosmos_metrics"]
                 choices = item.get("choices") or []
                 if len(choices) > 1:
                     raise ValueError("Expected a single completion choice")
@@ -164,6 +167,7 @@ def stream_request(url: str, payload: dict, timeout: float, api_key: str | None 
         "completion_tokens_per_second": tokens / elapsed if tokens is not None and not error else None,
         "throughput_definition": "completion_tokens / total_request_seconds",
         "usage": usage,
+        "cosmos_metrics": cosmos_metrics,
         "output_text": "".join(output),
         "http_status": status,
         "finish_reason": finish_reason,

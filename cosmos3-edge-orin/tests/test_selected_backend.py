@@ -52,7 +52,8 @@ class SelectedBackendTests(unittest.TestCase):
         self.assertTrue(lines[1].endswith("/scripts/rtn_backend.py"))
         self.assertEqual(lines[2:], ["serve", "--model", "/selected/model", "--cache-dir",
                                     "/selected/cache", "--max-input-len", "1024", "--max-kv-capacity", "2048",
-                                    "--host", "127.0.0.1", "--port", "8000"])
+                                    "--host", "127.0.0.1", "--port", "8000",
+                                    "--encoder-embedding-cache-budget-bytes", "0"])
 
     def test_rtn_compact_profile_forwards_all_selected_limits(self):
         result = self.launch("rtn-v1", overrides={"COSMOS_MAX_INPUT_LEN": "512", "COSMOS_MAX_KV_CAPACITY": "1024",
@@ -60,13 +61,29 @@ class SelectedBackendTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines()[2:], ["serve", "--model", "/selected/model", "--cache-dir",
             "/selected/cache", "--max-input-len", "512", "--max-kv-capacity", "1024", "--host", "127.0.0.1",
-            "--port", "8000", "--max-image-tokens", "256", "--max-image-tokens-per-image", "256"])
+            "--port", "8000", "--max-image-tokens", "256", "--max-image-tokens-per-image", "256",
+            "--encoder-embedding-cache-budget-bytes", "0"])
 
     def test_rtn_empty_optional_limits_preserve_default_profile(self):
         default = self.launch("rtn-v1")
         empty = self.launch("rtn-v1", overrides={"COSMOS_MAX_IMAGE_TOKENS": "", "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": ""})
         self.assertEqual(empty.returncode, 0, empty.stderr)
         self.assertEqual(empty.stdout.splitlines()[2:], default.stdout.splitlines()[2:])
+
+    def test_rtn_engine_capacity_is_separate_from_runtime_image_budget(self):
+        for budget in ("320", "512"):
+            with self.subTest(runtime_image_budget=budget):
+                result = self.launch("rtn-v1", overrides={"COSMOS_MAX_IMAGE_TOKENS": "512",
+                    "COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE": "512",
+                    "COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE": budget})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines()[-6:-2],
+                    ["--max-image-tokens", "512", "--max-image-tokens-per-image", "512"])
+
+    def test_rtn_explicit_cache_budget_overrides_lightweight_default(self):
+        result = self.launch("rtn-v1", overrides={"COSMOS_ENCODER_CACHE_BYTES": "268435456"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines()[-2:], ["--encoder-embedding-cache-budget-bytes", "268435456"])
 
     def test_missing_selection_or_unknown_profile_refuses_before_dispatch(self):
         for profile in ("fp16", "rtn-v1"):
@@ -93,7 +110,7 @@ class ServiceInstallTests(unittest.TestCase):
             for name in ("run_selected_backend.sh", "run_backend.sh", "rtn_backend.py",
                          "serve_backend.py", "serve_ui.py", "preflight_cosmos_artifacts.py",
                          "repair_cosmos_runtime_config.py", "repair_cosmos_chat_template.py",
-                         "build_model_cache.py"):
+                         "build_model_cache.py", "cosmos_runtime.py"):
                 (scripts / name).touch()
             python = root / "external/TensorRT-Edge-LLM/.venv/bin/python"
             python.parent.mkdir(parents=True)

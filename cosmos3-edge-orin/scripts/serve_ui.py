@@ -12,6 +12,7 @@ import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
+import math
 from pathlib import Path
 import re
 import select
@@ -148,7 +149,8 @@ def validate_request(payload):
     """Accept one bounded image and prompt, with no URLs or conversation history."""
     if not isinstance(payload, dict):
         raise ValueError("Expected a JSON object.")
-    allowed = {"model", "messages", "stream", "temperature", "max_tokens", "top_p", "stream_options"}
+    allowed = {"model", "messages", "stream", "temperature", "max_tokens", "top_p", "stream_options",
+               "max_image_tokens_per_image"}
     if "seed" in payload:
         raise ValueError("Upstream TensorRT-Edge-LLM does not support seed. Use temperature 0.")
     if set(payload) - allowed or payload.get("stream") is not True:
@@ -160,8 +162,12 @@ def validate_request(payload):
         raise ValueError("max_tokens must be from 1 to 512.")
     if type(payload.get("temperature")) not in (int, float) or payload["temperature"] not in (0, 0.7):
         raise ValueError("Use temperature 0 (Lightweight) or 0.7 (Live VLM WebUI).")
-    if "top_p" in payload and (type(payload["top_p"]) not in (int, float) or payload["top_p"] != 1):
-        raise ValueError("This deployment uses top_p 1.")
+    if "top_p" in payload and (type(payload["top_p"]) not in (int, float)
+            or not math.isfinite(payload["top_p"]) or not 0 < payload["top_p"] <= 1):
+        raise ValueError("top_p must be greater than 0 and at most 1.")
+    if "max_image_tokens_per_image" in payload and (type(payload["max_image_tokens_per_image"]) is not int
+            or not 4 <= payload["max_image_tokens_per_image"] <= 512):
+        raise ValueError("Image token budget must be an integer from 4 to 512.")
     if "stream_options" in payload:
         options = payload["stream_options"]
         if not isinstance(options, dict) or set(options) != {"include_usage"} or options["include_usage"] is not True:
@@ -302,7 +308,7 @@ class Handler(BaseHTTPRequestHandler):
             if target:
                 self.send_headers(302, "text/plain; charset=utf-8", 0, {"Location": target})
                 return
-        if self.path in {"/health/ready", "/v1/models"}:
+        if self.path in {"/health/ready", "/v1/models", "/api/runtime"}:
             self.proxy(self.path)
             return
         if self.path == "/api/metrics":

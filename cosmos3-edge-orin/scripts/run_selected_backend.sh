@@ -14,9 +14,10 @@ case "${COSMOS_PROFILE:-}" in
     if [[ -n "${COSMOS_MAX_IMAGE_TOKENS:-}" ]]; then
       rtn_args+=(--max-image-tokens "$COSMOS_MAX_IMAGE_TOKENS")
     fi
-    if [[ -n "${COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE:-}" ]]; then
-      rtn_args+=(--max-image-tokens-per-image "$COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE")
+    if [[ -n "${COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE-${COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE:-}}" ]]; then
+      rtn_args+=(--max-image-tokens-per-image "${COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE-$COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE}")
     fi
+    rtn_args+=(--encoder-embedding-cache-budget-bytes "${COSMOS_ENCODER_CACHE_BYTES:-0}")
     exec "$project_dir/external/TensorRT-Edge-LLM/.venv/bin/python" \
       "$project_dir/scripts/rtn_backend.py" serve \
       --model "${COSMOS_MODEL_DIR:?Selected model is required}" \

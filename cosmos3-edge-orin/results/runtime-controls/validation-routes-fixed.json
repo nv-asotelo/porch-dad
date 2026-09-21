@@ -1,0 +1,1151 @@
+{
+  "schema_version": 1,
+  "kind": "runtime_controls_acceptance",
+  "passed": true,
+  "created_utc": "2026-09-21T17:42:34.854042+00:00",
+  "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+  "requests": [
+    {
+      "label": "cache-sequence-1",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "11ce808ac70249eba4566060b40455f1",
+        "server_elapsed_ms": 795.053225,
+        "native_inference_ms": 795.053225,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 299
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "11ce808ac70249eba4566060b40455f1",
+        "at_utc": "2026-09-21T17:42:34.929560+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 795.053225,
+        "native_inference_ms": 795.053225,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 299
+      }
+    },
+    {
+      "label": "cache-sequence-2",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "3d76db2a9cbb426ab6278039e0ffd2e3",
+        "server_elapsed_ms": 631.702146,
+        "native_inference_ms": 631.702146,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "3d76db2a9cbb426ab6278039e0ffd2e3",
+        "at_utc": "2026-09-21T17:42:35.759635+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 631.702146,
+        "native_inference_ms": 631.702146,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    },
+    {
+      "label": "cache-sequence-3",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 512,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors in front of his face.",
+      "usage": {
+        "prompt_tokens": 511,
+        "completion_tokens": 16,
+        "total_tokens": 527
+      },
+      "metrics": {
+        "request_id": "c43e5c29667348b882c62f33b793cee1",
+        "server_elapsed_ms": 808.568823,
+        "native_inference_ms": 808.568823,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 480
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "c43e5c29667348b882c62f33b793cee1",
+        "at_utc": "2026-09-21T17:42:36.425393+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 512,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 808.568823,
+        "native_inference_ms": 808.568823,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 480
+      }
+    },
+    {
+      "label": "cache-sequence-4",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 512,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors in front of his face.",
+      "usage": {
+        "prompt_tokens": 511,
+        "completion_tokens": 16,
+        "total_tokens": 527
+      },
+      "metrics": {
+        "request_id": "528728b643a1462ba1230f159a393eb4",
+        "server_elapsed_ms": 563.0995,
+        "native_inference_ms": 563.0995,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "528728b643a1462ba1230f159a393eb4",
+        "at_utc": "2026-09-21T17:42:37.266348+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 512,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 563.0995,
+        "native_inference_ms": 563.0995,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    },
+    {
+      "label": "cache-sequence-5",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "1829ddbbd7744eea9ea2937b76faf68c",
+        "server_elapsed_ms": 633.787694,
+        "native_inference_ms": 633.787694,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "1829ddbbd7744eea9ea2937b76faf68c",
+        "at_utc": "2026-09-21T17:42:37.861704+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 633.787694,
+        "native_inference_ms": 633.787694,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    },
+    {
+      "label": "cache-sequence-6",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "bypass",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "698bbabe7b4c49f08a534be9adbb4e6b",
+        "server_elapsed_ms": 765.044532,
+        "native_inference_ms": 765.044532,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 299
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "698bbabe7b4c49f08a534be9adbb4e6b",
+        "at_utc": "2026-09-21T17:42:38.527408+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "bypass",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 765.044532,
+        "native_inference_ms": 765.044532,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "disabled",
+        "observed_image_tokens": 299
+      }
+    },
+    {
+      "label": "cache-sequence-7",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "bypass",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "c614f4cd32884c88888a09e24bba8ffe",
+        "server_elapsed_ms": 764.541577,
+        "native_inference_ms": 764.541577,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 299
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "c614f4cd32884c88888a09e24bba8ffe",
+        "at_utc": "2026-09-21T17:42:39.324373+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "bypass",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 764.541577,
+        "native_inference_ms": 764.541577,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "disabled",
+        "observed_image_tokens": 299
+      }
+    },
+    {
+      "label": "cache-sequence-8",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "05099e0258a74ad4b6fc1537575e088e",
+        "server_elapsed_ms": 633.218311,
+        "native_inference_ms": 633.218311,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "05099e0258a74ad4b6fc1537575e088e",
+        "at_utc": "2026-09-21T17:42:40.120852+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 633.218311,
+        "native_inference_ms": 633.218311,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    },
+    {
+      "label": "custom-image-budget-384",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 384,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his forehead.",
+      "usage": {
+        "prompt_tokens": 395,
+        "completion_tokens": 15,
+        "total_tokens": 410
+      },
+      "metrics": {
+        "request_id": "34d72e3da37540c8afdb6a0099255f68",
+        "server_elapsed_ms": 689.741137,
+        "native_inference_ms": 689.741137,
+        "completion_tokens": 15,
+        "prompt_tokens": 395,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 364
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "34d72e3da37540c8afdb6a0099255f68",
+        "at_utc": "2026-09-21T17:42:40.786141+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 384,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 689.741137,
+        "native_inference_ms": 689.741137,
+        "completion_tokens": 15,
+        "prompt_tokens": 395,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 364
+      }
+    },
+    {
+      "label": "omitted-image-budget-and-top-p",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "7cc8ee5804a542879c5df890a7385258",
+        "server_elapsed_ms": 631.571225,
+        "native_inference_ms": 631.571225,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "7cc8ee5804a542879c5df890a7385258",
+        "at_utc": "2026-09-21T17:42:41.508410+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 631.571225,
+        "native_inference_ms": 631.571225,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    },
+    {
+      "label": "caption-review-01-action-camera.jpg-320",
+      "fixture": "01-action-camera.jpg",
+      "fixture_sha256": "4a4035cd049f02280e3b9248a869e62e30d9aaab827d2c6a9f7c9a8d9e7c3963",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man holds a small white action camera up to his face as if it were his own.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 20,
+        "total_tokens": 350
+      },
+      "metrics": {
+        "request_id": "559c05210b6f40c5a1982a1e22e9b5ea",
+        "server_elapsed_ms": 750.521378,
+        "native_inference_ms": 750.521378,
+        "completion_tokens": 20,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 299
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "559c05210b6f40c5a1982a1e22e9b5ea",
+        "at_utc": "2026-09-21T17:42:42.187529+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "dcda57267eb29382afc1aad2da6ab52e410558ac58c47d12a047767984b99356",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 750.521378,
+        "native_inference_ms": 750.521378,
+        "completion_tokens": 20,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 299
+      }
+    },
+    {
+      "label": "caption-review-01-action-camera.jpg-512",
+      "fixture": "01-action-camera.jpg",
+      "fixture_sha256": "4a4035cd049f02280e3b9248a869e62e30d9aaab827d2c6a9f7c9a8d9e7c3963",
+      "image_budget": 512,
+      "cache_mode": "default",
+      "text": "A man holds a GoPro camera up to his face as if he is taking a selfie.",
+      "usage": {
+        "prompt_tokens": 511,
+        "completion_tokens": 21,
+        "total_tokens": 532
+      },
+      "metrics": {
+        "request_id": "307fc6c3ca114af9aef628928fbbc946",
+        "server_elapsed_ms": 930.078581,
+        "native_inference_ms": 930.078581,
+        "completion_tokens": 21,
+        "prompt_tokens": 511,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 480
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "307fc6c3ca114af9aef628928fbbc946",
+        "at_utc": "2026-09-21T17:42:42.969729+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "dcda57267eb29382afc1aad2da6ab52e410558ac58c47d12a047767984b99356",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 512,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 930.078581,
+        "native_inference_ms": 930.078581,
+        "completion_tokens": 21,
+        "prompt_tokens": 511,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 480
+      }
+    },
+    {
+      "label": "caption-review-02-pen.jpg-320",
+      "fixture": "02-pen.jpg",
+      "fixture_sha256": "a9e59c6d32c8782e9964571275a4134ee1dedff8b1da7e47ccac73a828932dfa",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man with gray hair holds a pen in his right hand, raised to his face as if to strike a pose for a photograph.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 28,
+        "total_tokens": 358
+      },
+      "metrics": {
+        "request_id": "acbe4ab51c034bf6a81119a0d99fed96",
+        "server_elapsed_ms": 941.836556,
+        "native_inference_ms": 941.836556,
+        "completion_tokens": 28,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 299
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "acbe4ab51c034bf6a81119a0d99fed96",
+        "at_utc": "2026-09-21T17:42:43.932050+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "48944ea46702d35f9926f1bc75f3f8b1d78b04370db4446b4dfc30bbc08773a4",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 941.836556,
+        "native_inference_ms": 941.836556,
+        "completion_tokens": 28,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 299
+      }
+    },
+    {
+      "label": "caption-review-02-pen.jpg-512",
+      "fixture": "02-pen.jpg",
+      "fixture_sha256": "a9e59c6d32c8782e9964571275a4134ee1dedff8b1da7e47ccac73a828932dfa",
+      "image_budget": 512,
+      "cache_mode": "default",
+      "text": "A man holds a pen in front of his face while raising three fingers.",
+      "usage": {
+        "prompt_tokens": 511,
+        "completion_tokens": 16,
+        "total_tokens": 527
+      },
+      "metrics": {
+        "request_id": "413072eccad04705ab4e9bc4d03667e1",
+        "server_elapsed_ms": 805.633166,
+        "native_inference_ms": 805.633166,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "miss",
+        "observed_image_tokens": 480
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "413072eccad04705ab4e9bc4d03667e1",
+        "at_utc": "2026-09-21T17:42:44.909127+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "48944ea46702d35f9926f1bc75f3f8b1d78b04370db4446b4dfc30bbc08773a4",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 512,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 805.633166,
+        "native_inference_ms": 805.633166,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "finish_reason": "stop",
+        "cache_state": "miss",
+        "observed_image_tokens": 480
+      }
+    },
+    {
+      "label": "caption-review-03-scissors.jpg-320",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 320,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "usage": {
+        "prompt_tokens": 330,
+        "completion_tokens": 21,
+        "total_tokens": 351
+      },
+      "metrics": {
+        "request_id": "846686d36b9342bf9cb325de841f3e34",
+        "server_elapsed_ms": 631.557165,
+        "native_inference_ms": 631.557165,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "846686d36b9342bf9cb325de841f3e34",
+        "at_utc": "2026-09-21T17:42:45.747082+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 320,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 631.557165,
+        "native_inference_ms": 631.557165,
+        "completion_tokens": 21,
+        "prompt_tokens": 330,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    },
+    {
+      "label": "caption-review-03-scissors.jpg-512",
+      "fixture": "03-scissors.jpg",
+      "fixture_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "image_budget": 512,
+      "cache_mode": "default",
+      "text": "A man is holding a pair of scissors in front of his face.",
+      "usage": {
+        "prompt_tokens": 511,
+        "completion_tokens": 16,
+        "total_tokens": 527
+      },
+      "metrics": {
+        "request_id": "9dc92b1e66f04734abc261293529bed0",
+        "server_elapsed_ms": 562.938764,
+        "native_inference_ms": 562.938764,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      },
+      "native_log": {
+        "kind": "server_request",
+        "schema_version": 1,
+        "request_id": "9dc92b1e66f04734abc261293529bed0",
+        "at_utc": "2026-09-21T17:42:46.410845+00:00",
+        "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+        "backend_id": "cosmos3-edge-mlp-n4",
+        "status": "completed",
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "warmup": true,
+        "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+        "image_count": 1,
+        "requested_max_tokens": 512,
+        "controls": {
+          "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+          "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+          "max_image_tokens_per_image": 512,
+          "temperature": 0.7,
+          "top_p": 0.95,
+          "top_k": 50,
+          "concurrency": 1,
+          "clock_policy": "static",
+          "encoder_cache_mode": "default",
+          "encoder_cache_bytes": 268435456,
+          "text_context_reuse": false
+        },
+        "server_elapsed_ms": 562.938764,
+        "native_inference_ms": 562.938764,
+        "completion_tokens": 16,
+        "prompt_tokens": 511,
+        "finish_reason": "stop",
+        "cache_state": "hit",
+        "observed_image_tokens": null
+      }
+    }
+  ],
+  "invalid_inputs": [
+    {
+      "value": 3,
+      "status": 400,
+      "response": {
+        "error": {
+          "message": "Image token budget must be an integer from 4 to 512.",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": 400
+        }
+      }
+    },
+    {
+      "value": 513,
+      "status": 400,
+      "response": {
+        "error": {
+          "message": "Image token budget must be an integer from 4 to 512.",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": 400
+        }
+      }
+    },
+    {
+      "value": true,
+      "status": 400,
+      "response": {
+        "error": {
+          "message": "Image token budget must be an integer from 4 to 512.",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": 400
+        }
+      }
+    },
+    {
+      "value": 320.5,
+      "status": 400,
+      "response": {
+        "error": {
+          "message": "Image token budget must be an integer from 4 to 512.",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": 400
+        }
+      }
+    }
+  ],
+  "caption_review": [
+    {
+      "fixture": "01-action-camera.jpg",
+      "image_budget": 320,
+      "reference_facts": [
+        "A person holds a small action camera close to their face."
+      ],
+      "text": "A man holds a small white action camera up to his face as if it were his own.",
+      "request_id": "559c05210b6f40c5a1982a1e22e9b5ea"
+    },
+    {
+      "fixture": "01-action-camera.jpg",
+      "image_budget": 512,
+      "reference_facts": [
+        "A person holds a small action camera close to their face."
+      ],
+      "text": "A man holds a GoPro camera up to his face as if he is taking a selfie.",
+      "request_id": "307fc6c3ca114af9aef628928fbbc946"
+    },
+    {
+      "fixture": "02-pen.jpg",
+      "image_budget": 320,
+      "reference_facts": [
+        "A person holds a pen near their face; intended use is not established."
+      ],
+      "text": "A man with gray hair holds a pen in his right hand, raised to his face as if to strike a pose for a photograph.",
+      "request_id": "acbe4ab51c034bf6a81119a0d99fed96"
+    },
+    {
+      "fixture": "02-pen.jpg",
+      "image_budget": 512,
+      "reference_facts": [
+        "A person holds a pen near their face; intended use is not established."
+      ],
+      "text": "A man holds a pen in front of his face while raising three fingers.",
+      "request_id": "413072eccad04705ab4e9bc4d03667e1"
+    },
+    {
+      "fixture": "03-scissors.jpg",
+      "image_budget": 320,
+      "reference_facts": [
+        "A person holds scissors."
+      ],
+      "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+      "request_id": "846686d36b9342bf9cb325de841f3e34"
+    },
+    {
+      "fixture": "03-scissors.jpg",
+      "image_budget": 512,
+      "reference_facts": [
+        "A person holds scissors."
+      ],
+      "text": "A man is holding a pair of scissors in front of his face.",
+      "request_id": "9dc92b1e66f04734abc261293529bed0"
+    }
+  ],
+  "scope": "Functional acceptance only. Captions require human review; these are not performance or quality scores.",
+  "cancellation_check": "Not performed by this bounded acceptance script.",
+  "runtime": {
+    "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+    "max_image_tokens_per_image": 320,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 268435456,
+    "static_clocks": true,
+    "top_p": 0.95,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "fixture_manifest_sha256": "92618b79acc7a6f0ed1b1d0264e9fd9e29b177ed71480cd5edca7b5e2b2f41bf",
+  "cache_sequence_verified": true,
+  "omitted_defaults_verified": {
+    "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+    "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+    "max_image_tokens_per_image": 320,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 50,
+    "concurrency": 1,
+    "clock_policy": "static",
+    "encoder_cache_mode": "default",
+    "encoder_cache_bytes": 268435456,
+    "text_context_reuse": false
+  },
+  "invalid_inputs_started_no_native_requests": true,
+  "streaming": {
+    "text": "A man is holding a pair of scissors up to his head as if they were a sword.",
+    "usage": {
+      "prompt_tokens": 330,
+      "completion_tokens": 21,
+      "total_tokens": 351
+    },
+    "metrics": {
+      "request_id": "711147e7d2424403bd55e3d777b8d848",
+      "server_elapsed_ms": 633.757656,
+      "native_inference_ms": 633.757656,
+      "completion_tokens": 21,
+      "prompt_tokens": 330,
+      "timing_source": "server_monotonic",
+      "timing_boundary": "native_inference",
+      "cache_state": "hit",
+      "observed_image_tokens": null
+    },
+    "finish_reason": "stop",
+    "done": true,
+    "native_log": {
+      "kind": "server_request",
+      "schema_version": 1,
+      "request_id": "711147e7d2424403bd55e3d777b8d848",
+      "at_utc": "2026-09-21T17:42:47.006040+00:00",
+      "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+      "backend_id": "cosmos3-edge-mlp-n4",
+      "status": "completed",
+      "timing_source": "server_monotonic",
+      "timing_boundary": "native_inference",
+      "warmup": true,
+      "run_id": "acceptance-f1b415b500a3469ab7577a68134cd804",
+      "image_count": 1,
+      "requested_max_tokens": 512,
+      "controls": {
+        "image_sha256": "14d6a4deaf8c46490f21ec5415107369bce481f9c06cd32cc5e49df5b953c478",
+        "prompt_sha256": "2d44087b75d7afd46d620ffa8152bff02999677e31e2f53506924743a58a688e",
+        "max_image_tokens_per_image": 320,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": 50,
+        "concurrency": 1,
+        "clock_policy": "static",
+        "encoder_cache_mode": "default",
+        "encoder_cache_bytes": 268435456,
+        "text_context_reuse": false
+      },
+      "server_elapsed_ms": 633.757656,
+      "native_inference_ms": 633.757656,
+      "completion_tokens": 21,
+      "prompt_tokens": 330,
+      "finish_reason": "stop",
+      "cache_state": "hit",
+      "observed_image_tokens": null
+    }
+  },
+  "final_health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "native_request_count": 17,
+  "completed_utc": "2026-09-21T17:42:47.672240+00:00"
+}

@@ -1,0 +1,7 @@
+{
+  "at_utc": "2026-09-21T17:46:48.328260+00:00",
+  "reason": "User reported live UI slower and requested original defaults; stop benchmark contention. Preserve partial results, no completed comparison claim.",
+  "terminated_pids": [
+    147291
+  ]
+}

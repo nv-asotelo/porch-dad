@@ -69,8 +69,45 @@ class FrameCadence {
   }
 }
 
-// Live VLM WebUI reports its last complete-request duration and the arithmetic
-// mean over successful requests, rather than TTFT or a moving average.
+const ADVANCED_DEFAULTS = {imageTokens: 512, imageTokenLimit: 512, topP: 1};
+
+function validateAdvancedSettings(imageTokens, topP, limit = ADVANCED_DEFAULTS.imageTokenLimit) {
+  if (!Number.isInteger(imageTokens) || imageTokens < 4 || imageTokens > limit) {
+    throw new Error(`Choose an input image token budget from 4 to ${limit}, in whole tokens.`);
+  }
+  if (!Number.isFinite(topP) || topP <= 0 || topP > 1) {
+    throw new Error("Sampling top-p must be greater than 0 and at most 1.");
+  }
+  return {imageTokens, topP};
+}
+
+// Only the native model boundary is comparable. Browser clocks and broader
+// server request durations include JPEG work or transport and never substitute.
+function readServerInferenceMs(metrics) {
+  if (!metrics || metrics.timing_boundary !== "native_inference" ||
+      metrics.timing_source !== "server_monotonic" ||
+      typeof metrics.request_id !== "string" || !metrics.request_id.trim() ||
+      !Number.isInteger(metrics.completion_tokens) || metrics.completion_tokens < 0 ||
+      typeof metrics.native_inference_ms !== "number" ||
+      !Number.isFinite(metrics.native_inference_ms) || metrics.native_inference_ms < 0) return null;
+  return metrics.native_inference_ms;
+}
+
+// Server observation of the first nonempty text delta, before transport. Its
+// consumer-scheduling delay can put it after native generation has completed.
+function readServerFirstTextMs(metrics) {
+  if (!metrics || metrics.timing_boundary !== "native_inference" ||
+      metrics.first_text_timing_boundary !== "native_start_to_server_text" ||
+      metrics.timing_source !== "server_monotonic" ||
+      typeof metrics.request_id !== "string" || !metrics.request_id.trim() ||
+      !Number.isInteger(metrics.completion_tokens) || metrics.completion_tokens < 0 ||
+      typeof metrics.server_first_text_ms !== "number" ||
+      !Number.isFinite(metrics.server_first_text_ms) || metrics.server_first_text_ms < 0) return null;
+  return metrics.server_first_text_ms;
+}
+
+// Last server inference duration and the unrounded arithmetic mean over
+// successful timed requests in one settings group; never a browser duration.
 class LatencySummary {
   constructor() { this.reset(); }
   reset() { this.count = 0; this.totalMs = 0; this.lastMs = null; }
@@ -128,7 +165,8 @@ function readCompletionEvent(event) {
   if (["error", "cancelled", "canceled"].includes(finishReason)) {
     throw new Error(`Backend ended generation with status: ${finishReason}.`);
   }
-  return {text: choice?.delta?.content, finishReason};
+  return {text: choice?.delta?.content, finishReason,
+    ...(Object.hasOwn(data, "cosmos_metrics") ? {metrics: data.cosmos_metrics} : {})};
 }
 
 // Original history/drawing code; the colored sparklines are inspired by Live VLM WebUI.
@@ -314,22 +352,86 @@ function startDeviceTelemetry() {
   resume();
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
   const state = {ready: false, model: "", running: false, busy: false, media: null,
     abort: null, captureAt: null, completed: 0, imageURL: null, checking: false, cameraGeneration: 0,
-    preset: "live-vlm", frameCallback: null, sampled: 0, skipped: 0,
-    liveStreaming: true, activeTrigger: null};
+    preset: "lightweight", frameCallback: null, sampled: 0, skipped: 0,
+    liveStreaming: true, activeTrigger: null, engineId: null, timingGroup: 0,
+    advanced: {...ADVANCED_DEFAULTS}, advancedValid: true};
   const canvas = document.createElement("canvas");
   const duration = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
   const latency = new LatencySummary();
+  let serverFirstTextMs = null;
   function renderLatency() {
+    $("serverTtftValue").textContent = serverFirstTextMs === null ? "—" : String(Math.round(serverFirstTextMs));
     $("latencyValue").textContent = latency.lastMs === null ? "—" : String(Math.round(latency.lastMs));
     $("avgLatencyValue").textContent = latency.averageMs === null ? "—" : String(Math.round(latency.averageMs));
     $("countValue").textContent = String(latency.count);
   }
+  function resetTimingGroup(message) {
+    state.timingGroup += 1;
+    serverFirstTextMs = null; latency.reset(); renderLatency();
+    $("timingStatus").textContent = message;
+  }
+  function advancedValues() {
+    const selected = $("imageTokenPreset").value;
+    return validateAdvancedSettings(Number(selected === "custom" ? $("customImageTokens").value : selected),
+      Number($("topP").value), state.advanced.imageTokenLimit);
+  }
+  function applyAdvancedControls(reset = true) {
+    $("customImageTokensLabel").hidden = $("imageTokenPreset").value !== "custom";
+    try {
+      const values = advancedValues();
+      const changed = values.imageTokens !== state.advanced.imageTokens || values.topP !== state.advanced.topP;
+      Object.assign(state.advanced, values);
+      state.advancedValid = true;
+      $("advancedError").hidden = true; $("advancedError").textContent = "";
+      if (changed && reset) resetTimingGroup("Settings changed · waiting for a timed answer with these settings.");
+    } catch (err) {
+      state.advancedValid = false;
+      $("advancedError").hidden = false; $("advancedError").textContent = err.message;
+    }
+    controls();
+  }
+  function applyRuntime(runtime) {
+    if (!runtime || typeof runtime.engine_id !== "string" || !runtime.engine_id.trim() ||
+        !Number.isInteger(runtime.max_image_tokens_per_image_limit) || runtime.max_image_tokens_per_image_limit < 4 ||
+        typeof runtime.static_clocks !== "boolean" || !Number.isInteger(runtime.encoder_cache_bytes) ||
+        runtime.encoder_cache_bytes < 0) throw new Error("Invalid engine settings");
+    const limit = Math.min(512, runtime.max_image_tokens_per_image_limit);
+    const defaults = validateAdvancedSettings(runtime.max_image_tokens_per_image, runtime.top_p, limit);
+    const engineChanged = state.engineId !== runtime.engine_id;
+    const capacityChanged = state.advanced.imageTokenLimit !== limit;
+    state.advanced.imageTokenLimit = limit;
+    $("customImageTokens").max = String(limit);
+    $("imageTokenCapacity").textContent = `Loaded engine supports 4–${limit} input image tokens. This does not change the output token limit.`;
+    for (const option of $("imageTokenPreset").options || []) {
+      if (option.value !== "custom") option.disabled = Number(option.value) > limit;
+    }
+    if (engineChanged) {
+      state.engineId = runtime.engine_id;
+      $("imageTokenPreset").value = [320, 512].includes(defaults.imageTokens) ? String(defaults.imageTokens) : "custom";
+      $("customImageTokens").value = String(defaults.imageTokens);
+      $("topP").value = String(defaults.topP);
+      applyAdvancedControls(false);
+      resetTimingGroup("Engine loaded · waiting for a timed answer with its defaults.");
+    } else if (capacityChanged) {
+      applyAdvancedControls(false);
+      resetTimingGroup("Engine capacity changed · waiting for a timed answer.");
+    }
+    $("staticClocksValue").textContent = runtime.static_clocks ? "Enabled (1)" : "Disabled (0)";
+    $("encoderCacheValue").textContent = `${(runtime.encoder_cache_bytes / 2**20).toLocaleString(undefined, {maximumFractionDigits: 2})} MiB`;
+    $("runtimeStatus").textContent = "Active engine settings reported by the server. Fixed clocks and encoder cache are read-only here; changing them requires a backend restart.";
+  }
+  $("imageTokenPreset").value = String(ADVANCED_DEFAULTS.imageTokens);
+  $("customImageTokens").value = String(ADVANCED_DEFAULTS.imageTokens);
+  $("topP").value = String(ADVANCED_DEFAULTS.topP);
+  $("imageTokenPreset").addEventListener("change", () => applyAdvancedControls());
+  $("customImageTokens").addEventListener("input", () => applyAdvancedControls());
+  $("topP").addEventListener("input", () => applyAdvancedControls());
   // Move one caption element between docks, keeping both the live video and
   // active token stream intact. No duplicated or separately updated captions.
   const captionPositions = new Set(["side", "above", "below"]);
@@ -374,7 +476,7 @@ if (typeof document !== "undefined") {
     $("startButton").disabled = state.running || state.busy;
     $("stopButton").disabled = !state.running && !state.busy;
     const sourceReady = state.running ? Boolean(state.media && $("video").readyState >= 2) : Boolean(state.imageURL);
-    $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy;
+    $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid;
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
   }
@@ -382,9 +484,11 @@ if (typeof document !== "undefined") {
     if (state.checking) return;
     state.checking = true;
     try {
-      const [health, models] = await Promise.all([
+      const [health, models, runtime] = await Promise.all([
         fetch("/health/ready", {signal: AbortSignal.timeout(5000)}),
-        fetch("/v1/models", {signal: AbortSignal.timeout(5000)})
+        fetch("/v1/models", {signal: AbortSignal.timeout(5000)}),
+        fetch("/api/runtime", {cache: "no-store", signal: AbortSignal.timeout(5000)})
+          .then(response => response.ok ? response.json() : null).catch(() => null)
       ]);
       if (!health.ok || !models.ok) throw new Error("unavailable");
       const healthData = await health.json();
@@ -395,11 +499,18 @@ if (typeof document !== "undefined") {
       $("backendStatus").textContent = "Local backend ready";
       $("backendStatus").className = "badge ready";
       $("modelName").textContent = model;
+      try { applyRuntime(runtime); } catch (_) {
+        $("staticClocksValue").textContent = "Unavailable";
+        $("encoderCacheValue").textContent = "Unavailable";
+        $("runtimeStatus").textContent = "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified. Load defaults are shown above.";
+      }
     } catch (_) {
       state.ready = false;
       $("backendStatus").textContent = "Backend not ready";
       $("backendStatus").className = "badge unavailable";
       $("modelName").textContent = "Waiting for local TensorRT-Edge-LLM";
+      $("staticClocksValue").textContent = "Unavailable"; $("encoderCacheValue").textContent = "Unavailable";
+      $("runtimeStatus").textContent = "Waiting for the backend to report active engine settings. Load defaults are shown above.";
       if (!state.busy) $("runStatus").textContent = "Waiting for local backend";
     } finally { state.checking = false; controls(); }
   }
@@ -432,31 +543,34 @@ if (typeof document !== "undefined") {
     return {url, capturedAt};
   }
   async function analyze(source, trigger = "manual") {
-    if (state.busy || !state.ready) return;
+    if (state.busy || !state.ready || !state.advancedValid) return;
     const prompt = $("prompt").value.trim();
     const maxTokens = Number($("maxTokens").value);
     if (!prompt || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 512) {
       error("Enter a prompt and an output token limit from 1 to 512.");
       stop(); return;
     }
+    // Freeze request settings and group ownership before capture. Later UI or
+    // engine changes affect the next request and cannot mix timing populations.
+    let advanced;
+    try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
+    const timingGroup = state.timingGroup;
+    const temperature = CAPTURE_PRESETS[state.preset].temperature;
     const controller = new AbortController();
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
     $("runStatus").textContent = "Reading frame…";
     let reader;
     try {
-      // Include canvas capture/JPEG encoding, as upstream times its PIL JPEG
-      // conversion and full API response. The browser/transport still differs.
-      const latencyStarted = performance.now();
       const image = capture(source);
       state.captureAt = image.capturedAt;
       if (state.running && source === $("video")) state.sampled += 1;
       const started = performance.now();
-      let firstToken = null, done = false, output = "", finishReason = null;
+      let firstToken = null, done = false, output = "", finishReason = null, serverMetrics = null;
       const response = await fetch("/v1/chat/completions", {
         method: "POST", headers: {"Content-Type": "application/json"}, signal: controller.signal,
-        body: JSON.stringify({model: state.model, stream: true, temperature: CAPTURE_PRESETS[state.preset].temperature,
-          ...(state.preset === "lightweight" ? {top_p: 1} : {}),
+        body: JSON.stringify({model: state.model, stream: true, temperature,
+          top_p: advanced.topP, max_image_tokens_per_image: advanced.imageTokens,
           stream_options: {include_usage: true},
           max_tokens: maxTokens, messages: [{role: "user", content: [
             {type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}
@@ -474,6 +588,7 @@ if (typeof document !== "undefined") {
       const parser = new SSEParser(event => {
         const completion = readCompletionEvent(event);
         if (completion.done) { done = true; return; }
+        if (Object.hasOwn(completion, "metrics")) serverMetrics = completion.metrics;
         if (completion.finishReason) finishReason = completion.finishReason;
         const text = completion.text;
         if (typeof text === "string" && text.length) {
@@ -498,7 +613,18 @@ if (typeof document !== "undefined") {
       if (!["stop", "length"].includes(finishReason)) throw new Error("Backend stream did not confirm a successful completion.");
       if (!output.trim()) throw new Error("The backend completed without visible answer text. Try a larger output token limit.");
       $("totalTime").textContent = duration(performance.now() - started);
-      latency.add(performance.now() - latencyStarted); renderLatency();
+      if (timingGroup === state.timingGroup) {
+        serverFirstTextMs = readServerFirstTextMs(serverMetrics);
+        const milliseconds = readServerInferenceMs(serverMetrics);
+        if (milliseconds === null) {
+          latency.lastMs = null;
+          $("timingStatus").textContent = "Latest answer has no valid server inference timing; excluded from Average and Timed.";
+        } else {
+          latency.add(milliseconds);
+          $("timingStatus").textContent = "Server-measured native inference · current settings only.";
+        }
+        renderLatency();
+      }
       $("runStatus").textContent = finishReason === "length" ? "Output token limit reached" : "Answer complete";
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
     } catch (err) {
@@ -558,7 +684,7 @@ if (typeof document !== "undefined") {
       // cleanup must never overwrite the new preset or a restarted request.
       state.abort = null; state.busy = false; state.activeTrigger = null;
       state.completed = 0; state.captureAt = null;
-      latency.reset(); renderLatency();
+      resetTimingGroup("Capture preset changed · waiting for a timed answer.");
       $("answer").textContent = "Preset changed. Start the camera or analyze your selected image.";
       $("answer").classList.remove("streaming");
       $("runStatus").textContent = "Waiting for input";
@@ -574,7 +700,7 @@ if (typeof document !== "undefined") {
     $("interval").disabled = live; $("resolution").disabled = live;
     $("presetDescription").textContent = live
       ? "Requests a 1280×720 camera with no FPS cap. Sends full-size frames every 30 video frames and skips samples while busy. Temperature 0.7."
-      : "Requests a 640×480 camera at 15 FPS. Defaults to 512-pixel frames and a 1-second minimum interval, adjustable below. Captures after each answer. Temperature 0.";
+      : "First demo defaults: requests a 640×480 camera at an ideal 15 FPS (maximum 30). Sends frames with a 512-pixel longest side, JPEG quality 0.8 and a 1-second minimum interval, adjustable below. Captures after each answer. Temperature 0.";
     $("samplingStatus").textContent = live ? "Every 30 frames · waiting for camera" : "Capture after each answer";
     controls();
   }
@@ -631,7 +757,7 @@ if (typeof document !== "undefined") {
   });
   window.addEventListener("pagehide", stop);
   setInterval(() => { if (state.captureAt !== null) $("frameAge").textContent = duration(performance.now() - state.captureAt); }, 100);
-  applyPreset("live-vlm", false);
+  applyPreset("lightweight", false);
   setInterval(checkBackend, 5000); checkBackend(); controls();
   if (!window.isSecureContext) {
     $("cameraHelp").textContent = "Image upload works here. Camera access requires HTTPS.";

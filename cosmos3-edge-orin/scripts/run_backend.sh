@@ -19,9 +19,21 @@ Environment overrides:
   COSMOS_BACKEND_PORT      Port (default 8000)
   COSMOS_MAX_INPUT_LEN     Input token limit (default 1024)
   COSMOS_MAX_KV_CAPACITY   KV token capacity (default 2048)
-  COSMOS_MAX_IMAGE_TOKENS  Optional total visual profile capacity
-  COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE  Optional per-image visual capacity
+  COSMOS_MAX_IMAGE_TOKENS  Built aggregate override (selected compact MLP: 512).
+                          Unset or blank preserves the original builder default.
+  COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE  Built per-image override (selected
+                          compact MLP: 512). An explicit blank preserves the
+                          original FP16 cache's None builder override instead.
+  COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE  Runtime image cap (default 512; UI can override)
+                          Match the engine override to the selected cache. An absent
+                          override can use this runtime value as a legacy build
+                          override; blank and absent differ.
   COSMOS_ENCODER_CACHE_BYTES  Encoder embedding cache budget in bytes (default 0)
+  COSMOS_STATIC_CLOCKS    Selected 0; dynamic clocks within the existing power mode.
+                          This standalone launcher does not apply clocks itself.
+  COSMOS_TOP_P            Runtime top_p default (default 1; requests can override)
+Image tokens are independent of max output tokens (UI default 64, editable to 512).
+Apply both runtime-control patches and rebuild the native binding before launch.
 HELP
   exit 0
 fi
@@ -125,7 +137,7 @@ try:
     options = BuildOptions(max_input_len=int(os.environ.get('COSMOS_MAX_INPUT_LEN', '1024')),
         max_kv_cache_capacity=int(os.environ.get('COSMOS_MAX_KV_CAPACITY', '2048')), max_batch_size=1,
         max_image_tokens=int(os.environ['COSMOS_MAX_IMAGE_TOKENS']) if os.environ.get('COSMOS_MAX_IMAGE_TOKENS') else None,
-        max_image_tokens_per_image=int(os.environ['COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE']) if os.environ.get('COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE') else None)
+        max_image_tokens_per_image=int(os.environ.get('COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE', os.environ.get('COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE'))) if os.environ.get('COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE', os.environ.get('COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE')) else None)
     validate(root, sys.argv[2], sys.argv[3],
              max_input_len=int(os.environ.get('COSMOS_MAX_INPUT_LEN', '1024')),
              max_kv_capacity=int(os.environ.get('COSMOS_MAX_KV_CAPACITY', '2048')),
@@ -150,8 +162,8 @@ visual_args=()
 if [[ -n "${COSMOS_MAX_IMAGE_TOKENS:-}" ]]; then
   visual_args+=(--max-image-tokens "$COSMOS_MAX_IMAGE_TOKENS")
 fi
-if [[ -n "${COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE:-}" ]]; then
-  visual_args+=(--max-image-tokens-per-image "$COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE")
+if [[ -n "${COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE-${COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE:-}}" ]]; then
+  visual_args+=(--max-image-tokens-per-image "${COSMOS_ENGINE_MAX_IMAGE_TOKENS_PER_IMAGE-$COSMOS_MAX_IMAGE_TOKENS_PER_IMAGE}")
 fi
 printf 'Starting actual TensorRT Edge-LLM; health remains unavailable until engine load succeeds.\n'
 exec "$python_bin" "$project_dir/scripts/serve_backend.py" "$checkpoint" \

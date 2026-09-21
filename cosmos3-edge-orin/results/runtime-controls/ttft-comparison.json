@@ -1,0 +1,111 @@
+{
+  "status": "passed",
+  "order": [
+    "original FP16",
+    "MLP INT4"
+  ],
+  "warmups_per_engine": 5,
+  "measured_per_engine": 30,
+  "primary_boundary": "native_start_to_server_text",
+  "results": {
+    "fp16": {
+      "backend_id": "cosmos3-edge-original-fp16",
+      "server_ttft_ms": {
+        "count": 30,
+        "mean": 249.416055,
+        "p50": 249.50099,
+        "p95": 250.5663975,
+        "minimum": 247.794464,
+        "maximum": 250.620526
+      },
+      "loopback_http_ttft_ms": {
+        "count": 30,
+        "mean": 268.05045256526984,
+        "p50": 267.6691169908736,
+        "p95": 271.67189794417936,
+        "minimum": 265.28016399242915,
+        "maximum": 272.89817997370847
+      },
+      "native_total_ms": {
+        "count": 30,
+        "mean": 1804.1716928,
+        "p50": 1804.557978,
+        "p95": 1811.3960224,
+        "minimum": 1788.259668,
+        "maximum": 1811.546123
+      },
+      "actual_completion_tokens": [
+        37
+      ],
+      "observed_image_tokens": [
+        256
+      ],
+      "other_completed_requests_during_run": 0
+    },
+    "mlp_int4": {
+      "backend_id": "cosmos3-edge-mlp-n4",
+      "server_ttft_ms": {
+        "count": 30,
+        "mean": 239.40216766666666,
+        "p50": 239.318147,
+        "p95": 240.71571125,
+        "minimum": 237.842459,
+        "maximum": 242.630536
+      },
+      "loopback_http_ttft_ms": {
+        "count": 30,
+        "mean": 280.96917249980226,
+        "p50": 261.6707909910474,
+        "p95": 265.38067189540016,
+        "minimum": 257.46873300522566,
+        "maximum": 849.357356026303
+      },
+      "native_total_ms": {
+        "count": 30,
+        "mean": 1006.9399375,
+        "p50": 1008.9662275000001,
+        "p95": 1012.5732816,
+        "minimum": 987.075424,
+        "maximum": 1013.731558
+      },
+      "actual_completion_tokens": [
+        31
+      ],
+      "observed_image_tokens": [
+        256
+      ],
+      "other_completed_requests_during_run": 1
+    }
+  },
+  "observed_median_ttft_reduction_ms": 10.182842999999991,
+  "observed_median_ttft_reduction_percent": 4.081283605327575,
+  "historical_original_fp16": {
+    "source": "results/raw/benchmark-final-service-01.jsonl",
+    "p50_ms": 265.540398,
+    "p95_ms": 267.364909,
+    "boundary": "loopback HTTP request start to first nonempty SSE text; broader than native server TTFT"
+  },
+  "caveats": [
+    "Sequential engine runs, not randomized engine order. Dynamic clocks in stock25W mode.",
+    "One additional logged, completed request started during MLP run; none during FP16. Detection uses logged request-start timestamps, not all possible overlapping activity. Native timing excludes admission queue; shared scheduling/clock effects remain possible. The849.36ms HTTP outlier is not conclusively attributed to that request.",
+    "Fixed512x512 synthetic image and shape/color prompt; livecamera workload can differ. Runtime imagecap512 produced256actual visualtokens.",
+    "Current instrumentation and native binary used for both; preserved engine artifacts reused.",
+    "FP16 generated37tokens; MLP generated31. Completeanswer durations do not isolate engine throughput.",
+    "Single answer length per engine cannot identify fixed milliseconds and marginal milliseconds per outputtoken. No fit is claimed.",
+    "No VRAM benchmark was rerun for this TTFT comparison. Historical memory evidence remains separately labeled."
+  ],
+  "stopping_rule": "Completed exactly5warmups+30measurements perengine; no further performance search.",
+  "final_engine": "MLP INT4 with original lightweight demo settings",
+  "sources": {
+    "results/runtime-controls/ttft-fp16/plan.json": "f890cac02b7e09e4a8f3f7108547e2eba562563e1e0cfe30e17d9bc24d2e333c",
+    "results/runtime-controls/ttft-fp16/receipt.json": "03a925c5f1a93984c878386de30fe187abb9160d6a9383406338a28ffd905cc6",
+    "results/runtime-controls/ttft-fp16/responses.jsonl": "065691f2ebae5b9b7b6dc4d181b1b467a5ed062f23d793da30179d5e0dc6ffed",
+    "results/runtime-controls/ttft-fp16/server-requests.jsonl": "0ba1e3c73d9c579719b2e441319dce48cb226c3d6b2b839c3466cb590700b331",
+    "results/runtime-controls/ttft-mlp/plan.json": "a1de7994d78b20bbf2f72d5e10ebbdf59847385fcefd7747ea670d2c97d8e1be",
+    "results/runtime-controls/ttft-mlp/receipt.json": "e02048d5899e67685f6b39e405b9160ab592e0159e171ba8fff138fc0f9cca6a",
+    "results/runtime-controls/ttft-mlp/responses.jsonl": "5677d27ffdbdf34206aa809a7a668065e7b13c92561bf5d848140393e2a26fe2",
+    "results/runtime-controls/ttft-mlp/server-requests.jsonl": "e97961c8f0d53a85da6976158c79dc1a1810b149bc5035185bee8edf472b18cd",
+    "results/runtime-controls/ttft-fp16/other-requests.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "results/runtime-controls/ttft-mlp/other-requests.jsonl": "04b279fc7cfedcb8c09c8d827ed5464d7503f1880aff9437756d3b5d1133f990"
+  }
+}

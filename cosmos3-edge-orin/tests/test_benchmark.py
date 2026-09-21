@@ -118,6 +118,17 @@ class StreamTests(unittest.TestCase):
         self.assertIsNone(result["completion_tokens"])
         self.assertIsNone(result["completion_tokens_per_second"])
 
+    def test_server_metrics_are_retained_separately_from_client_timing(self):
+        metrics = {"request_id": "example", "server_first_text_ms": 12.5,
+                   "first_text_timing_boundary": "native_start_to_server_text"}
+        result = self.request([
+            {"choices": [{"delta": {"content": "A scene."}, "finish_reason": "stop"}]},
+            {"choices": [], "cosmos_metrics": metrics}, "[DONE]",
+        ])
+        self.assertIsNone(result["error"])
+        self.assertEqual(result["cosmos_metrics"], metrics)
+        self.assertIsNotNone(result["ttft_ms"])
+
     def test_truncated_stream_is_an_error_even_with_finish_reason(self):
         result = self.request([{"choices": [{"delta": {"content": "partial"}, "finish_reason": "stop"}]}])
         self.assertIn("missing [DONE]", result["error"]["message"])

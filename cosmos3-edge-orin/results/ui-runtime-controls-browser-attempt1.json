@@ -1,0 +1,41 @@
+{
+  "at_utc": "2026-09-21T17:54:42.354Z",
+  "origin": "https://192.168.6.252:8443",
+  "scope": "Deployed Orin UI with real TensorRT inference and synthetic browser camera. Functional settings, timing-boundary and responsive checks only; these samples are not a performance benchmark.",
+  "checks": {
+    "first_demo_lightweight_512_image_64_output_top_p_1_cache_0_dynamic_clocks": true
+  },
+  "requests": [
+    {
+      "index": 1,
+      "max_image_tokens_per_image": 512,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 288
+      },
+      "http_status": 200,
+      "transport_error": "response.text: Protocol error (Network.getResponseBody): No data found for resource with given identifier\nResponse body is not available for a response that was navigated away from. Read response.body() before triggering any navigation.",
+      "observed": true
+    }
+  ],
+  "screenshots": [],
+  "errors": [],
+  "runtime": {
+    "engine_id": "affe8b705a7b4733a6de1d804b2cd44e",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "status": "failed",
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ undefined\n- true\n\n    at observedRow (/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/.qa/runtime-controls-browser.cjs:134:12)\n    at async manual (/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/.qa/runtime-controls-browser.cjs:151:17)\n    at async /Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/.qa/runtime-controls-browser.cjs:197:19",
+  "finished_at_utc": "2026-09-21T17:54:46.820Z"
+}

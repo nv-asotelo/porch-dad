@@ -1,0 +1,40 @@
+{
+  "run_id": "native-a4a38b5869954535a8cec4adcc4d51d3",
+  "created_utc": "2026-09-21T17:43:17.153915+00:00",
+  "runtime": {
+    "engine_id": "6dd2234de7324b0e9323296f83baaf09",
+    "max_image_tokens_per_image": 320,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 268435456,
+    "static_clocks": true,
+    "top_p": 0.95,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "image_sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+  "prompt": "Provide a detailed description of the scene for a visually impaired person.",
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "output_caps": [
+    8,
+    16,
+    32,
+    64
+  ],
+  "image_budgets": [
+    320,
+    512
+  ],
+  "repetitions_per_cell": 8,
+  "warmups_per_budget_and_cache_mode": 3,
+  "randomization_seed": 20260921,
+  "measured_requests": 128,
+  "timing_boundary": "native_inference",
+  "cache_modes": {
+    "default": "Repeated image; native cache hit must be observed.",
+    "bypass": "Native encoder runs each time; lookup/storage bypassed without changing pixels."
+  },
+  "stop_rule": "One fixed experiment. Stop on any failed request; no optimization search.",
+  "comparison": "Fit fixed_ms + marginal_ms_per_token * actual_completion_tokens separately by image budget and cache mode; do not score client durations."
+}

@@ -3,6 +3,16 @@
 
 Preparation is entirely local. Sending requires an explicit host and SSH identity;
 it creates only /home/jetson/cosmos-edge and refuses an existing destination.
+
+The model allowlist still contains the original verified FP16 reasoner checkpoint,
+not the separately generated MLP INT4 weights or any built engine. With the MLP
+profile selected, plain `prepare` refuses to imply a runnable deployment. Explicit
+`prepare --source-stage` packages the source and original checkpoint as a staging
+input, marks the missing selected artifacts in its manifest, and requires separate
+MLP conversion, native build, engine build and validation before service startup.
+The local public backend must match all six reviewed patches exactly; preparation
+does not repair or change that checkout. See --help before using historical
+three-patch transfer instructions.
 """
 
 from __future__ import annotations
@@ -42,6 +52,9 @@ BACKEND_PATCHES = [
     "patches/cosmos3-patch-embedding-chw.patch",
     "patches/cosmos3-half-pixel-position.patch",
     "patches/tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch",
+    "patches/int4-gemv-cosmos-mlp-n4.patch",
+    "patches/cosmos-runtime-image-token-budget.patch",
+    "patches/cosmos-encoder-cache-bypass.patch",
 ]
 DIFF_ARGUMENTS = ("diff", "--binary", "--full-index", "--no-color", "--no-renames",
                   "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--")
@@ -55,7 +68,8 @@ ORIGINAL_FILES = [
     "scripts/build_model_cache.py", "scripts/sample_storage_irqs.py", "scripts/measure_command.py",
     "scripts/repair_cosmos_runtime_config.py", "scripts/repair_cosmos_chat_template.py",
     "scripts/preflight_cosmos_artifacts.py", "scripts/serve_backend.py", "scripts/install_services.sh",
-    "scripts/run_selected_backend.sh",
+    "scripts/run_selected_backend.sh", "scripts/cosmos_runtime.py",
+    "scripts/benchmark_native.py", "scripts/benchmark_ttft.py", "scripts/validate_runtime_controls.py", "scripts/compare_server_timings.py",
     "scripts/quantize_cosmos3_rtn.py", "scripts/rtn_backend.py", "scripts/run_quality_suite.py",
     "scripts/host_probe.py",
     "scripts/deploy_transfer.py", "scripts/ssh_nfs_bridge.py",
@@ -66,10 +80,14 @@ ORIGINAL_FILES = [
     "tests/test_cosmos3_patch_layout.py", "tests/test_cosmos3_position_layout.py",
     "tests/test_rtn_backend.py", "tests/test_rtn_quantization.py",
     "tests/test_selected_backend.py",
-    "tests/test_visual_profile.py",
+    "tests/test_visual_profile.py", "tests/test_cosmos_runtime.py", "tests/test_cosmos_runtime_routes.py",
+    "tests/test_runtime_image_budget_patch.py",
+    "tests/test_compare_server_timings.py", "tests/test_ui_metrics.js", "tests/test_capture_presets.js",
     "patches/cosmos3-patch-embedding-chw.patch", "patches/cosmos3-patch-embedding-chw.md",
     "patches/cosmos3-half-pixel-position.patch", "patches/cosmos3-half-pixel-position.md",
     "patches/tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch", "patches/encoder-cache-budget.json",
+    "patches/int4-gemv-cosmos-mlp-n4.patch", "patches/cosmos-runtime-image-token-budget.patch",
+    "patches/cosmos-encoder-cache-bypass.patch",
     "docs/backend-build.md", "docs/expand-nvme-rootfs.md", "docs/jetpack-install.md",
     "docs/quality-workload.md", "docs/api-streaming-soak.md", "docs/usb-nfs-bridge.md", "docs/usb-package-proxy.md", "docs/deployment-transfer.md",
     "research/benchmark-method.md", "research/backend-feasibility.md", "research/ui-feasibility.md",
@@ -79,6 +97,7 @@ ORIGINAL_FILES = [
     "research/python-system-site-compatibility.md",
     "research/contribution-ledger.md", "research/nvme-timeout-investigation.md",
     "research/reference-quality-diagnostic.md",
+    "research/runtime-controls-server-timing.md",
     "research/int4-without-aux-gpu.md", "research/calibration-data.md",
     "research/bsp-preflight-audit.md", "research/confirmed-board-flash-options.md",
     "research/initrd-nfs-ssh-tunnel-audit.md", "research/iso-recovery-assets.md",
@@ -93,6 +112,9 @@ ORIGINAL_FILES = [
     "benchmarks/fixtures/02-counts.png", "benchmarks/fixtures/03-above-below.png",
     "benchmarks/fixtures/04-inside-outside.png", "benchmarks/fixtures/05-relative-size.png",
     "benchmarks/fixtures/06-quadrants.png",
+    "benchmarks/live-vlm-1280/manifest.json", "benchmarks/live-vlm-1280/README.md",
+    "benchmarks/live-vlm-1280/01-action-camera.jpg", "benchmarks/live-vlm-1280/02-pen.jpg",
+    "benchmarks/live-vlm-1280/03-scissors.jpg",
     "benchmarks/natural-smoke/README.md", "benchmarks/natural-smoke/manifest.json",
     "benchmarks/natural-smoke/images/000000023781.jpg",
     "benchmarks/natural-smoke/images/000000027932.jpg",
@@ -161,6 +183,52 @@ def verified_model_files():
     return files
 
 
+def deployment_scope(*, source_stage=False):
+    """Describe what is actually bundled without sourcing an environment file."""
+    settings = {}
+    for line in local_file("deployment/selected.env").read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or key in settings:
+            raise ValueError("Expected unique, unquoted NAME=value settings in deployment/selected.env")
+        settings[key] = value
+    profile = settings.get("COSMOS_PROFILE")
+    selected_model = settings.get("COSMOS_MODEL_DIR", "")
+    if profile not in {"fp16", "rtn-v1"} or not selected_model.startswith(DESTINATION + "/models/"):
+        raise ValueError("Selected profile/model path is outside the reviewed deployment scope")
+    relative_path(selected_model.removeprefix(DESTINATION + "/"))
+    included_model = DESTINATION + "/" + MODEL_DIRECTORY
+    selected_weights_included = profile == "fp16" and selected_model == included_model
+    if not selected_weights_included and not source_stage:
+        raise ValueError(
+            "The selected " + str(profile) + " service requires " + selected_model
+            + ", but this transfer includes only the verified original FP16 reasoner checkpoint at "
+            + included_model + ". MLP INT4 weights and engines are not included. "
+            "Use prepare --source-stage only to stage sources/checkpoint, then separately generate or "
+            "verify the selected weights, build native code/engines, and validate before starting services.")
+    followup = ["Build native runtime from the six recorded source patches.",
+                "Build and validate the selected engine; engine caches and native binaries are not transferred.",
+                "Validate runtime controls, image quality and local service readiness before starting services."]
+    if not selected_weights_included:
+        followup.insert(0, "Generate or separately transfer and verify the selected MLP INT4 weights; "
+                           "only the original verified reasoner checkpoint is included.")
+    return {"kind": "source_stage" if source_stage else "fp16_checkpoint_and_sources",
+            "selected_profile": profile, "selected_model_path": selected_model,
+            "included_model_path": included_model, "selected_weights_included": selected_weights_included,
+            "engine_caches_included": False, "native_binaries_included": False,
+            "ready_to_start_selected_service": False, "required_followup": followup}
+
+
+def require_reviewed_backend_diff(actual, expected):
+    if actual != expected:
+        raise ValueError(
+            "Backend tracked edits differ from the " + str(len(BACKEND_PATCHES))
+            + " reviewed patches (" + ", ".join(Path(item).name for item in BACKEND_PATCHES)
+            + "). Nothing was silently omitted. Reconstruct the same reviewed source state "
+            "in the local pinned public checkout before preparing a transfer; this helper does not modify it.")
+
+
 def backend_snapshot(destination):
     upstream = ROOT / "external/TensorRT-Edge-LLM"
     for relative, revision, _ in REPOSITORIES:
@@ -202,8 +270,7 @@ def backend_snapshot(destination):
             git(stage, "apply", "--check", str(patch))
             git(stage, "apply", str(patch))
         expected_diff = git(stage, *DIFF_ARGUMENTS, raw=True)
-        if git(upstream, *DIFF_ARGUMENTS, raw=True) != expected_diff:
-            raise ValueError("Backend tracked edits differ from the three documented patches; nothing was silently omitted")
+        require_reviewed_backend_diff(git(upstream, *DIFF_ARGUMENTS, raw=True), expected_diff)
         changed_files = []
         for relative in git(stage, "diff", "--name-only", "HEAD").splitlines():
             relative_path(relative)
@@ -237,7 +304,8 @@ def backend_snapshot(destination):
         return source_state
 
 
-def prepare():
+def prepare(*, source_stage=False):
+    scope = deployment_scope(source_stage=source_stage)
     if PACKAGE.resolve() != PACKAGE:
         raise ValueError("Deployment package directory must remain inside the actual project data directory")
     PACKAGE.mkdir(parents=True, exist_ok=True)
@@ -263,6 +331,7 @@ def prepare():
     manifest = {
         "schema_version": 1, "prepared_utc": datetime.now(timezone.utc).isoformat(),
         "destination": DESTINATION, "status": "prepared_locally_not_transferred",
+        "deployment_scope": scope,
         "backend": {"path": "external/TensorRT-Edge-LLM", "revision": BACKEND,
                     "source_state": backend_state,
                     "repositories": [{"path": path, "revision": revision, "public_url": url}
@@ -272,16 +341,16 @@ def prepare():
                   "inference_validated": False},
         "exclusions": [".qa and credentials", "original Git configuration/hooks/history outside pinned backend commits",
                        "other external repositories", "downloads", "build/engine caches", "virtual environments",
-                       "unverified model files", "unlisted project files"],
+                       "unverified model files", "generated MLP INT4 model weights", "unlisted project files"],
         "files": files, "file_count": len(files), "transfer_bytes": sum(item["bytes"] for item in files),
-        "note": "Backend archive contains sanitized Git repositories preserving exact HEAD/submodule pins plus the three documented patches, with patch/file/full-diff hashes. No target access, package installation, build or inference is performed during preparation.",
+        "note": "Backend archive contains sanitized Git repositories preserving exact HEAD/submodule pins plus all six reviewed patches, with patch/file/full-diff hashes. Model scope is the original verified FP16 checkpoint only; inspect deployment_scope for missing selected artifacts. No target access, package installation, build or inference is performed during preparation.",
     }
     output = PACKAGE / "manifest.json"
     temporary = output.with_suffix(".json.pending")
     temporary.write_text(json.dumps(manifest, indent=2) + "\n")
     temporary.replace(output)
     print(json.dumps({"manifest": str(output), "files": len(files), "transfer_bytes": manifest["transfer_bytes"],
-                      "status": manifest["status"]}, indent=2))
+                      "status": manifest["status"], "deployment_scope": scope}, indent=2))
 
 
 REMOTE_RECEIVER = r'''
@@ -374,6 +443,7 @@ incomplete.unlink()
 (ROOT/'DEPLOYMENT-VERIFIED.json').write_text(json.dumps({'status':'files_verified','file_count':len(received),
     'backend_revision':manifest['backend']['revision'],'model_revision':manifest['model']['revision'],
     'backend_source_state':state,
+    'deployment_scope':manifest.get('deployment_scope'),
     'package_installation_performed':False,'inference_validated':False},indent=2)+'\n')
 print('Deployment files and exact Git revisions verified under '+str(ROOT),flush=True)
 '''
@@ -395,6 +465,10 @@ def send(args):
     manifest_path = PACKAGE / "manifest.json"
     raw = manifest_path.read_bytes()
     manifest = json.loads(raw)
+    recorded_scope = manifest.get("deployment_scope", {})
+    expected_scope = deployment_scope(source_stage=recorded_scope.get("kind") == "source_stage")
+    if recorded_scope != expected_scope:
+        raise ValueError("Manifest lacks the current selected-artifact staging scope; rerun prepare")
     allowed = set(ORIGINAL_FILES) | set(verified_model_files()) | {ARCHIVE_SOURCE}
     if manifest.get("destination") != DESTINATION or {item["source"] for item in manifest["files"]} != allowed:
         raise ValueError("Manifest differs from the explicit deployment allowlist; rerun prepare")
@@ -449,7 +523,9 @@ def send(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
-    commands.add_parser("prepare", help="Locally verify files, sanitize Git snapshots and write data/deployment/manifest.json")
+    preparation = commands.add_parser("prepare", help="Locally verify files and create an explicitly scoped deployment manifest")
+    preparation.add_argument("--source-stage", action="store_true",
+        help="Explicitly stage source plus original FP16 checkpoint when selected MLP weights/engines are absent; not service-ready")
     transfer = commands.add_parser("send", help="Explicitly transfer a prepared package into a new dedicated Jetson project")
     transfer.add_argument("--host", required=True)
     transfer.add_argument("--port", type=int, default=22)
@@ -457,7 +533,7 @@ def main():
     transfer.add_argument("--identity-file", required=True)
     args = parser.parse_args()
     try:
-        prepare() if args.action == "prepare" else send(args)
+        prepare(source_stage=args.source_stage) if args.action == "prepare" else send(args)
         return 0
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print("Deployment preparation/transfer failed: " + str(error), file=sys.stderr)

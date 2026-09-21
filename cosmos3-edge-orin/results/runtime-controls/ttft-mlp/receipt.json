@@ -1,0 +1,68 @@
+{
+  "status": "passed",
+  "started_utc": "2026-09-21T18:17:16.306892+00:00",
+  "ended_utc": "2026-09-21T18:17:53.116347+00:00",
+  "backend_id": "cosmos3-edge-mlp-n4",
+  "runtime": {
+    "engine_id": "bdcdecd205664a3a939e3b9e4be38f8b",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1.0,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "warmups": 5,
+  "measured": 30,
+  "request_ids_matched": true,
+  "controls": {
+    "image_sha256": "cd7d1b6208516e5c344c088ceba15527b93f157c62b5e7eabdf6378fbe9f245a",
+    "prompt_sha256": "553fc0416a5a8057c9f002e62636cf9ba2c418105e0053777fa6c9d26dcb8b55",
+    "max_image_tokens_per_image": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "top_k": 1,
+    "concurrency": 1,
+    "clock_policy": "dynamic",
+    "encoder_cache_mode": "default",
+    "encoder_cache_bytes": 0,
+    "text_context_reuse": false
+  },
+  "other_completed_requests_during_run": 1,
+  "other_request_ids": [
+    "f10870ed5a704fc7a14f2279114673d2"
+  ],
+  "server_ttft_ms": {
+    "count": 30,
+    "mean": 239.40216766666666,
+    "p50": 239.318147,
+    "p95": 240.71571125,
+    "minimum": 237.842459,
+    "maximum": 242.630536
+  },
+  "loopback_http_ttft_ms": {
+    "count": 30,
+    "mean": 280.96917249980226,
+    "p50": 261.6707909910474,
+    "p95": 265.38067189540016,
+    "minimum": 257.46873300522566,
+    "maximum": 849.357356026303
+  },
+  "native_total_ms": {
+    "count": 30,
+    "mean": 1006.9399375,
+    "p50": 1008.9662275000001,
+    "p95": 1012.5732816,
+    "minimum": 987.075424,
+    "maximum": 1013.731558
+  },
+  "actual_completion_tokens": [
+    31
+  ],
+  "observed_image_tokens": [
+    256
+  ],
+  "distinct_answers": 1
+}

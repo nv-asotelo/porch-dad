@@ -1,0 +1,47 @@
+{
+  "started_utc": "2026-09-21T18:14:22.160921+00:00",
+  "backend_id": "cosmos3-edge-original-fp16",
+  "runtime": {
+    "engine_id": "509f6183728a487b9a78694b88b679bf",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1.0,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "workload": {
+    "model": "Cosmos3-Edge",
+    "max_tokens": 64,
+    "temperature": 0,
+    "top_p": 1,
+    "prompt": "Describe the shape and color on the left and on the right. Which shape is left of the other?",
+    "image_mime_type": "image/jpeg"
+  },
+  "endpoint": "http://127.0.0.1:8090",
+  "image_path": "benchmarks/fixtures/jpeg/01-left-right.jpg",
+  "image_sha256": "52074a486ce36764d48e86fec209694ade16137318545524a3b51e47a048ca55",
+  "image_bytes": 14931,
+  "warmups": 5,
+  "measured": 30,
+  "concurrency": 1,
+  "primary_boundary": "native_start_to_server_text",
+  "primary_excludes": [
+    "JPEG encoding",
+    "JPEG decoding",
+    "request preparation",
+    "admission queue",
+    "network transport"
+  ],
+  "primary_includes": [
+    "native image processing",
+    "vision encoder",
+    "prefill",
+    "generation to first text",
+    "server consumer scheduling"
+  ],
+  "diagnostic_boundary": "loopback HTTP request start to first nonempty SSE text; includes proxy/JPEG decode",
+  "stop_rule": "Exactly five warmups plus thirty measured requests. Stop on failure; no optimization loop."
+}

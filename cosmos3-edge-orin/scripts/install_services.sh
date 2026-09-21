@@ -35,7 +35,7 @@ if len(values) > 1:
 print(values[0] if values else '0')
 PY
 )"
-for script in run_selected_backend.sh run_backend.sh rtn_backend.py serve_backend.py serve_ui.py \
+for script in run_selected_backend.sh run_backend.sh rtn_backend.py serve_backend.py cosmos_runtime.py serve_ui.py \
   preflight_cosmos_artifacts.py repair_cosmos_runtime_config.py repair_cosmos_chat_template.py build_model_cache.py; do
   [[ -f "$project_dir/scripts/$script" ]] || { printf 'Missing deployment script: %s\n' "$script" >&2; exit 2; }
 done

@@ -37,6 +37,10 @@ for (const reason of ["stop", "length"]) {
   assert.equal(readCompletionEvent({data: JSON.stringify({choices: [{finish_reason: reason}]})}).finishReason, reason);
 }
 assert.equal(readCompletionEvent({data: "[DONE]"}).done, true);
+const serverMetrics = {request_id: "fixture", native_inference_ms: 42.5, server_elapsed_ms: 75,
+  completion_tokens: 5, timing_boundary: "native_inference", timing_source: "server_monotonic"};
+assert.deepEqual(readCompletionEvent({data: JSON.stringify({choices: [], cosmos_metrics: serverMetrics})}).metrics,
+  serverMetrics, "Standalone metrics events without token choices reach the UI");
 assert.throws(() => readCompletionEvent({data: JSON.stringify({error: {message: "transport fixture failure"}})}), /fixture failure/);
 console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, event limit, truncated EOF and failed completion status.");
 
@@ -118,7 +122,8 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
     const cancellation = deferred();
     const pendingRead = deferred();
     const delta = `data: ${JSON.stringify({choices: [{delta: {content: text}}]})}\n\n`;
-    const ending = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    const ending = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      `data: ${JSON.stringify({choices: [], cosmos_metrics: serverMetrics})}\n\ndata: [DONE]\n\n`;
     return {cancellation, signal: null, cancelCalls: 0,
       finish() { pendingRead.resolve({value: new TextEncoder().encode(ending), done: false}); },
       response(signal) {
@@ -191,12 +196,18 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
     async fetch(url, options) {
       if (url === "/health/ready") return {ok: true, json: async () => ({status: "ready"})};
       if (url === "/v1/models") return {ok: true, json: async () => ({data: [{id: "fixture-only"}]})};
+      if (url === "/api/runtime") return {ok: true, json: async () => ({engine_id: "fixture-engine",
+        max_image_tokens_per_image: 320, max_image_tokens_per_image_limit: 512,
+        top_p: 0.95, static_clocks: true, encoder_cache_bytes: 268435456})};
       if (url === "/api/metrics") return {ok: true, json: async () => ({
         sampled_at: new Date().toISOString(), age_ms: 0, status: "ok",
         cpu: {utilization_percent: 25}, gpu: {utilization_percent: 75},
         memory: {used_bytes: 6 * 2**30, total_bytes: 8 * 2**30, utilization_percent: 75, shared: true, measurement: "MemTotal - MemAvailable"}
       })};
       assert.equal(url, "/v1/chat/completions");
+      const body = JSON.parse(options.body);
+      assert.equal(body.max_image_tokens_per_image, 320);
+      assert.equal(body.top_p, 0.95, "top_p is sent for both capture presets, including greedy Lightweight");
       return responses[posts++].response(options.signal);
     }
   };

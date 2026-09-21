@@ -1,0 +1,17 @@
+{
+  "at_utc": "2026-09-21T17:42:35.138708+00:00",
+  "artifacts": {
+    "external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so": {
+      "sha256": "bdfa754505cb368240f5ec909760c34eac9e81bacd814560a505ad71f4ff8f11",
+      "bytes": 24760256
+    },
+    "external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so": {
+      "sha256": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe",
+      "bytes": 18321960
+    }
+  },
+  "power_mode": "NV Power Mode: 25W\n1\n",
+  "clocks": "SOC family:tegra234  Machine:NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super\nOnline CPUs: 0-5, Offline CPUs: \ncpu0:  Governor=schedutil MinFreq=1344000 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=0 c7=0 \ncpu1:  Governor=schedutil MinFreq=1344000 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=0 c7=0 \ncpu2:  Governor=schedutil MinFreq=1344000 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=0 c7=0 \ncpu3:  Governor=schedutil MinFreq=1344000 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=0 c7=0 \ncpu4:  Governor=schedutil MinFreq=1344000 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=0 c7=0 \ncpu5:  Governor=schedutil MinFreq=1344000 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=0 c7=0 \nGPU MinFreq=918000000 MaxFreq=918000000 CurrentFreq=918000000\nActive GPU TPCs: 4\nEMC MinFreq=3199000000 MaxFreq=3199000000 CurrentFreq=3199000000\nFAN Dynamic Speed Control=nvfancontrol hwmon0_pwm1=76\nFAN Dynamic Speed Control=nvfancontrol hwmon0_pwm1_enable=1\nNV Power Mode: 25W\n",
+  "meminfo": "MemTotal:        7727320 kB\nMemFree:          111808 kB\nMemAvailable:    2524248 kB\nBuffers:           23788 kB\nCached:          2570328 kB\nSwapCached:            0 kB\nActive:          1571212 kB\nInactive:        1904024 kB\nActive(anon):      21944 kB\nInactive(anon):   930312 kB\nActive(file):    1549268 kB\nInactive(file):   973712 kB\nUnevictable:       28016 kB\nMlocked:               0 kB\nSwapTotal:             0 kB\nSwapFree:              0 kB\nDirty:                32 kB\nWriteback:           108 kB\nAnonPages:        906120 kB\nMapped:           260568 kB\nShmem:             42724 kB\nKReclaimable:      71292 kB\nSlab:             159284 kB\nSReclaimable:      71292 kB\nSUnreclaim:        87992 kB\nKernelStack:        5292 kB\nPageTables:         9640 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     3863660 kB\nCommitted_AS:    2308808 kB\nVmallocTotal:   133141626880 kB\nVmallocUsed:       45704 kB\nVmallocChunk:          0 kB\nPercpu:             3144 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:    186368 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nCmaTotal:         262144 kB\nCmaFree:           23544 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\n",
+  "swaps": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n"
+}

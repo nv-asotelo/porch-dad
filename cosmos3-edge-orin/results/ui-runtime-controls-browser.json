@@ -1,0 +1,318 @@
+{
+  "at_utc": "2026-09-21T18:18:09.243Z",
+  "origin": "https://192.168.6.252:8443",
+  "scope": "Deployed Orin UI with real TensorRT inference and synthetic browser camera. Functional settings, timing-boundary and responsive checks only; these samples are not a performance benchmark.",
+  "checks": {
+    "first_demo_lightweight_512_image_64_output_top_p_1_cache_0_dynamic_clocks": true,
+    "server_metric_matches_ui_and_transport_delay_is_excluded": true,
+    "server_ttft_matches_ui_and_transport_delay_is_excluded": true,
+    "image_presets_custom_validation_and_output_cap_independence": true,
+    "advanced_changes_reset_timings_without_restarting_camera": true,
+    "manual_and_live_inference_with_preserved_camera": true,
+    "lightweight_frames_original_prompt_and_64_output_tokens": true,
+    "resource_sparklines_remain_active": true,
+    "open_advanced_settings_desktop_mobile_without_overflow": true,
+    "no_browser_errors": true
+  },
+  "requests": [
+    {
+      "index": 1,
+      "max_image_tokens_per_image": 512,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 288
+      },
+      "http_status": 200,
+      "metrics": {
+        "request_id": "b5c0499e5602475faec68c2f7e5713e9",
+        "server_elapsed_ms": 603.9916,
+        "native_inference_ms": 603.9916,
+        "completion_tokens": 14,
+        "prompt_tokens": 179,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 144,
+        "server_first_text_ms": 175.395017,
+        "first_text_timing_boundary": "native_start_to_server_text"
+      },
+      "done": true,
+      "finish_reason": "stop",
+      "output_characters": 53,
+      "observed": true,
+      "ui": {
+        "server_first_text": "175",
+        "last": "604",
+        "average": "604",
+        "timed": 1,
+        "browser_first_text": "302 ms",
+        "browser_round_trip": "737 ms",
+        "completed": "1 completed"
+      }
+    },
+    {
+      "index": 2,
+      "max_image_tokens_per_image": 512,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 288
+      },
+      "http_status": 200,
+      "metrics": {
+        "request_id": "4751d671bb3347328658a03be2f527e8",
+        "server_elapsed_ms": 509.689189,
+        "native_inference_ms": 509.689189,
+        "completion_tokens": 14,
+        "prompt_tokens": 179,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 144,
+        "server_first_text_ms": 156.637815,
+        "first_text_timing_boundary": "native_start_to_server_text"
+      },
+      "done": true,
+      "finish_reason": "stop",
+      "output_characters": 53,
+      "observed": true,
+      "ui": {
+        "server_first_text": "157",
+        "last": "510",
+        "average": "557",
+        "timed": 2,
+        "browser_first_text": "1.33 s",
+        "browser_round_trip": "1.33 s",
+        "completed": "2 completed"
+      }
+    },
+    {
+      "index": 3,
+      "max_image_tokens_per_image": 320,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 288
+      },
+      "http_status": 200,
+      "metrics": {
+        "request_id": "e1324216f282452daceabc31fb0c3626",
+        "server_elapsed_ms": 522.096133,
+        "native_inference_ms": 522.096133,
+        "completion_tokens": 14,
+        "prompt_tokens": 179,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 144,
+        "server_first_text_ms": 175.280705,
+        "first_text_timing_boundary": "native_start_to_server_text"
+      },
+      "done": true,
+      "finish_reason": "stop",
+      "output_characters": 53,
+      "observed": true,
+      "ui": {
+        "server_first_text": "175",
+        "last": "522",
+        "average": "522",
+        "timed": 1,
+        "browser_first_text": "315 ms",
+        "browser_round_trip": "664 ms",
+        "completed": "3 completed"
+      }
+    },
+    {
+      "index": 4,
+      "max_image_tokens_per_image": 384,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 288
+      },
+      "http_status": 200,
+      "metrics": {
+        "request_id": "1b70110ce46349df8a50dfecaf67611b",
+        "server_elapsed_ms": 486.382831,
+        "native_inference_ms": 486.382831,
+        "completion_tokens": 14,
+        "prompt_tokens": 179,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 144,
+        "server_first_text_ms": 153.838752,
+        "first_text_timing_boundary": "native_start_to_server_text"
+      },
+      "done": true,
+      "finish_reason": "stop",
+      "output_characters": 53,
+      "observed": true,
+      "ui": {
+        "server_first_text": "154",
+        "last": "486",
+        "average": "486",
+        "timed": 1,
+        "browser_first_text": "270 ms",
+        "browser_round_trip": "608 ms",
+        "completed": "4 completed"
+      }
+    },
+    {
+      "index": 5,
+      "max_image_tokens_per_image": 384,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 384
+      },
+      "http_status": 200,
+      "metrics": {
+        "request_id": "2f1fe521d62748678948515e4054b7fb",
+        "server_elapsed_ms": 753.837132,
+        "native_inference_ms": 753.837132,
+        "completion_tokens": 20,
+        "prompt_tokens": 227,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 192,
+        "server_first_text_ms": 202.910144,
+        "first_text_timing_boundary": "native_start_to_server_text"
+      },
+      "done": true,
+      "finish_reason": "stop",
+      "output_characters": 94,
+      "observed": true,
+      "ui": {
+        "server_first_text": "203",
+        "last": "754",
+        "average": "620",
+        "timed": 2,
+        "browser_first_text": "315 ms",
+        "browser_round_trip": "865 ms",
+        "completed": "5 completed"
+      }
+    },
+    {
+      "index": 6,
+      "max_image_tokens_per_image": 512,
+      "max_tokens": 64,
+      "top_p": 1,
+      "temperature": 0,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions.",
+      "submitted_frame": {
+        "width": 512,
+        "height": 384
+      },
+      "http_status": 200,
+      "metrics": {
+        "request_id": "13679f9da1d844aa80288d53de6d75eb",
+        "server_elapsed_ms": 687.172832,
+        "native_inference_ms": 687.172832,
+        "completion_tokens": 18,
+        "prompt_tokens": 227,
+        "timing_source": "server_monotonic",
+        "timing_boundary": "native_inference",
+        "cache_state": "disabled",
+        "observed_image_tokens": 192,
+        "server_first_text_ms": 206.678938,
+        "first_text_timing_boundary": "native_start_to_server_text"
+      },
+      "done": true,
+      "finish_reason": "stop",
+      "output_characters": 83,
+      "observed": true,
+      "ui": {
+        "server_first_text": "207",
+        "last": "687",
+        "average": "687",
+        "timed": 1,
+        "browser_first_text": "297 ms",
+        "browser_round_trip": "782 ms",
+        "completed": "6 completed"
+      }
+    }
+  ],
+  "screenshots": [
+    ".qa/runtime-controls-orin-1440.png",
+    ".qa/runtime-controls-orin-390.png",
+    ".qa/runtime-controls-orin-320.png"
+  ],
+  "errors": [],
+  "runtime": {
+    "engine_id": "bdcdecd205664a3a939e3b9e4be38f8b",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "delay_injection": {
+    "requested_hold_ms": 700,
+    "observed_hold_ms": 701.188791,
+    "upstream_native_inference_ms": 509.689189,
+    "upstream_server_first_text_ms": 156.637815,
+    "upstream_metrics": {
+      "request_id": "4751d671bb3347328658a03be2f527e8",
+      "server_elapsed_ms": 509.689189,
+      "native_inference_ms": 509.689189,
+      "completion_tokens": 14,
+      "prompt_tokens": 179,
+      "timing_source": "server_monotonic",
+      "timing_boundary": "native_inference",
+      "cache_state": "disabled",
+      "observed_image_tokens": 144,
+      "server_first_text_ms": 156.637815,
+      "first_text_timing_boundary": "native_start_to_server_text"
+    },
+    "response_bytes": 5238,
+    "request_index": 2,
+    "displayed_native_ms": "510",
+    "displayed_browser_round_trip_ms": 1330,
+    "displayed_server_first_text_ms": "157",
+    "displayed_browser_first_text_ms": 1330,
+    "note": "One real response was buffered and held for 700 ms, then delivered byte-for-byte. This verifies timing isolation, not performance."
+  },
+  "charts": [
+    {
+      "id": "cpuHistory",
+      "width": 566,
+      "css_width": 283.03125,
+      "ink": 1783
+    },
+    {
+      "id": "gpuHistory",
+      "width": 524,
+      "css_width": 262.046875,
+      "ink": 1626
+    },
+    {
+      "id": "memoryHistory",
+      "width": 1132,
+      "css_width": 566.078125,
+      "ink": 13053
+    }
+  ],
+  "status": "passed",
+  "finished_at_utc": "2026-09-21T18:18:20.591Z"
+}

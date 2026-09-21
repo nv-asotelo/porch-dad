@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the pinned public server with its encoder embedding cache off by default.
+"""Launch the pinned public server with a bounded encoder embedding cache.
 
 Invoked by run_backend.sh after its device/checkpoint/template preflight. All other
 arguments are passed to experimental.server unchanged, except optional visual
@@ -35,7 +35,7 @@ def budget_bytes(value):
 def server_arguments(argv):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument(BUDGET_FLAG, type=budget_bytes, default=0,
-                        help="Explicit encoder output cache budget in bytes (default: 0, disabled)")
+                        help="Encoder output cache budget in bytes (default: 0, disabled)")
     args, upstream_args = parser.parse_known_args(argv)
     return args.encoder_embedding_cache_budget_bytes, upstream_args + [
         BUDGET_FLAG, str(args.encoder_embedding_cache_budget_bytes)]
@@ -60,10 +60,10 @@ def configured_model(upstream_args, visual):
     from experimental.server.runtime.engine_build import BuildOptions
     config = parse_server_config(upstream_args)
     context = config.model.context_cache_config
-    if (context.enabled or context.encoder_embedding_cache_budget_bytes != 0
+    if (context.enabled
             or config.api.max_queued_requests != 1 or config.api.reasoning_parser != "none"
             or config.model.clear_engine_cache or config.model.speculative_config):
-        raise ValueError("Compact serving requires context/encoder caches disabled, one queued request, "
+        raise ValueError("Compact serving requires text context reuse disabled, one queued request, "
                          "reasoning-parser none and an existing non-speculative bundle")
     kwargs = config.model.llm_kwargs()
     kwargs["build_options"] = BuildOptions(max_input_len=config.model.max_input_len,
@@ -80,7 +80,7 @@ def serve_visual_profile(upstream_args, visual):
         raise ValueError("Selected compact engine bundle is not ready; prepare it with build_model_cache.py first")
     from experimental.server.runtime.engine import load_model
     from experimental.server.runtime.engine_client import EngineClient
-    from experimental.server.api.app import run_http_server
+    from cosmos_runtime import run_http_server
     logging.basicConfig(level=getattr(logging, config.api.log_level.upper()))
     llm = load_model(**kwargs)
     try:
@@ -112,12 +112,8 @@ def main(argv=None):
     verify_native_binding(_import_runtime(), budget)
     print(f"Requested encoder_embedding_cache_budget_bytes={budget}; independent of text context reuse.",
           file=sys.stderr, flush=True)
-    if any(value is not None for value in visual.values()):
-        serve_visual_profile(upstream_args, visual)
-    else:
-        from experimental.server.cli import main as upstream_main
-        sys.argv = ["experimental.server", *upstream_args]
-        upstream_main()
+    # Even the default profile uses the same native timing/control adapter.
+    serve_visual_profile(upstream_args, visual)
     return 0
 
 

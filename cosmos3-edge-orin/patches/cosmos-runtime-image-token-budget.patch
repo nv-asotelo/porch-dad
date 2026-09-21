@@ -1,0 +1,269 @@
+diff --git a/cpp/runtime/imageUtils.h b/cpp/runtime/imageUtils.h
+--- a/cpp/runtime/imageUtils.h
++++ b/cpp/runtime/imageUtils.h
+@@ -48,6 +48,7 @@
+     int64_t frames{1};                  //!< Number of frames (T); the modality is flagged by isVideo.
+     double fps{1.0};                    //!< Video sample fps for MRoPE timestamps; ignored unless isVideo.
+     bool doResize{true};                //!< When false, the vision runner skips its internal resize.
++    int64_t maxImageTokensPerImage{0};    //!< Optional still-image token cap; zero uses the built profile.
+     bool isVideo{false};                //!< Explicit modality: a single-frame video is still a video.
+     std::vector<double> timestamps;     //!< Optional source timestamps (seconds); empty assumes uniform fps spacing.
+ 
+diff --git a/cpp/runtime/imageUtils.cpp b/cpp/runtime/imageUtils.cpp
+--- a/cpp/runtime/imageUtils.cpp
++++ b/cpp/runtime/imageUtils.cpp
+@@ -61,6 +61,7 @@
+     meta.channels = channels;
+     meta.frames = frames;
+     meta.fps = fps;
++    meta.maxImageTokensPerImage = maxImageTokensPerImage;
+     return meta;
+ }
+ 
+diff --git a/experimental/pybind/edgellm_pybind.cpp b/experimental/pybind/edgellm_pybind.cpp
+--- a/experimental/pybind/edgellm_pybind.cpp
++++ b/experimental/pybind/edgellm_pybind.cpp
+@@ -627,6 +627,8 @@
+         .def("get_total_runs", &metrics::SpecDecodeGenerationMetrics::getTotalRuns);
+ 
+     py::class_<metrics::MultimodalMetrics>(m, "MultimodalMetrics")
++        .def_readonly("observed_image_runs", &metrics::MultimodalMetrics::observedImageRuns)
++        .def_readonly("observed_image_tokens", &metrics::MultimodalMetrics::observedImageTokens)
+         .def_readonly("total_images", &metrics::MultimodalMetrics::totalImages)
+         .def_readonly("total_image_tokens", &metrics::MultimodalMetrics::totalImageTokens)
+         .def("get_total_runs", &metrics::MultimodalMetrics::getTotalRuns);
+@@ -686,7 +688,8 @@
+         .def_readonly("is_video", &imageUtils::ImageData::isVideo)
+         .def_readonly("timestamps", &imageUtils::ImageData::timestamps)
+         .def_readwrite("fps", &imageUtils::ImageData::fps)
+-        .def_readwrite("do_resize", &imageUtils::ImageData::doResize);
++        .def_readwrite("do_resize", &imageUtils::ImageData::doResize)
++        .def_readwrite("max_image_tokens_per_image", &imageUtils::ImageData::maxImageTokensPerImage);
+ 
+     m.def("load_image_from_path", &loadImageFromPath, py::arg("path"), "Load image from file path");
+     m.def("load_image_from_bytes", &loadImageFromBytes, py::arg("data"), "Load image from bytes");
+diff --git a/cpp/multimodal/qwen2/qwenViTRunner.h b/cpp/multimodal/qwen2/qwenViTRunner.h
+--- a/cpp/multimodal/qwen2/qwenViTRunner.h
++++ b/cpp/multimodal/qwen2/qwenViTRunner.h
+@@ -210,7 +210,11 @@
+     //! \return Tuple of (resized_height, resized_width)
+     //! \throws std::runtime_error if aspect ratio is invalid
+     virtual std::tuple<int64_t, int64_t> getResizedImageSize(
+-        int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio = 200);
++        int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio = 200,
++        int64_t maxImageTokensPerImage = 0);
++
++    //! \brief Resolve and validate an image-local token cap without mutating the engine profile.
++    std::tuple<int64_t, int64_t> getImageResizeTarget(rt::imageUtils::ImageData const& image);
+ 
+     //! \brief Preprocess text: expand each vision pad using the spans (in order).
+     //! \param[in] request LLM generation request
+diff --git a/cpp/multimodal/qwen3/qwen3vlViTRunner.h b/cpp/multimodal/qwen3/qwen3vlViTRunner.h
+--- a/cpp/multimodal/qwen3/qwen3vlViTRunner.h
++++ b/cpp/multimodal/qwen3/qwen3vlViTRunner.h
+@@ -52,7 +52,8 @@
+ 
+     //! 3D temporal-aware smart-resize budget (t_bar = ceil(N/TPS)*TPS), vs the base 2D per-frame budget.
+     std::tuple<int64_t, int64_t> getResizedImageSize(
+-        int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio = 200) override;
++        int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio = 200,
++        int64_t maxImageTokensPerImage = 0) override;
+ 
+     //! Adds the Qwen3-VL video path: the <|vision_start|><|video_pad|><|vision_end|> triplet expands to one
+     //! timestamped (<X.X s> + vision_start + pads + vision_end) group per per-frame sub-span; images stay flat.
+diff --git a/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.h b/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.h
+--- a/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.h
++++ b/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.h
+@@ -39,7 +39,8 @@
+ 
+     //! 2D resize budget (unlike Qwen3-VL's 3D) — delegates to the base (Qwen2-VL) getResizedImageSize.
+     std::tuple<int64_t, int64_t> getResizedImageSize(
+-        int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio = 200) override;
++        int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio = 200,
++        int64_t maxImageTokensPerImage = 0) override;
+     bool validateExtraConfig(nlohmann::json const& jsonConfig) override;
+ 
+     //! HF keeps this family's temporal positions in float (`(arange(t) * spg).float() * pips`).
+diff --git a/cpp/multimodal/qwen2/qwenViTRunner.cpp b/cpp/multimodal/qwen2/qwenViTRunner.cpp
+--- a/cpp/multimodal/qwen2/qwenViTRunner.cpp
++++ b/cpp/multimodal/qwen2/qwenViTRunner.cpp
+@@ -400,10 +400,37 @@
+ }
+ 
+ std::tuple<int64_t, int64_t> QwenViTRunner::getResizedImageSize(int64_t const /*numFrames*/, bool const /*isVideo*/,
+-    int64_t const height, int64_t const width, int64_t const maxRatio)
++    int64_t const height, int64_t const width, int64_t const maxRatio, int64_t const maxImageTokensPerImage)
+ {
+     return rt::imageUtils::qwenSmartResize(height, width, mConfig.patchSize, mConfig.mergeSize,
+-        mConfig.minImageTokensPerImage, mConfig.maxImageTokensPerImage, maxRatio);
++        mConfig.minImageTokensPerImage,
++        maxImageTokensPerImage == 0 ? mConfig.maxImageTokensPerImage : maxImageTokensPerImage, maxRatio);
++}
++
++std::tuple<int64_t, int64_t> QwenViTRunner::getImageResizeTarget(rt::imageUtils::ImageData const& image)
++{
++    int64_t const requested = image.maxImageTokensPerImage;
++    ELLM_CHECK(requested == 0
++            || (requested >= mConfig.minImageTokensPerImage && requested <= mConfig.maxImageTokensPerImage),
++        "max_image_tokens_per_image must be zero or within the loaded visual profile ["
++            + std::to_string(mConfig.minImageTokensPerImage) + ", "
++            + std::to_string(mConfig.maxImageTokensPerImage) + "]");
++    ELLM_CHECK(requested == 0 || (!image.isVideo && image.frames == 1),
++        "Per-request image token overrides currently support still images only");
++    auto const target = image.doResize
++        ? getResizedImageSize(image.frames, image.isVideo, image.height, image.width, 200, requested)
++        : std::make_tuple(image.height, image.width);
++    if (requested != 0)
++    {
++        int64_t const factor = mConfig.patchSize * mConfig.mergeSize;
++        auto const [height, width] = target;
++        ELLM_CHECK(height > 0 && width > 0 && height % factor == 0 && width % factor == 0,
++            "An image with a token override must produce positive patch-aligned dimensions");
++        int64_t const tokens = (height / factor) * (width / factor);
++        ELLM_CHECK(tokens >= mConfig.minImageTokensPerImage && tokens <= requested,
++            "Resized image is outside the requested visual token budget");
++    }
++    return target;
+ }
+ 
+ void QwenViTRunner::imagePreprocessSpansOnly(
+@@ -415,11 +442,8 @@
+         size_t const spansBefore = spans.size();
+         for (auto const& image : req.imageBuffers)
+         {
+-            auto const meta = image.doResize
+-                ? image.resizedMeta(
+-                      std::get<0>(getResizedImageSize(image.frames, image.isVideo, image.height, image.width)),
+-                      std::get<1>(getResizedImageSize(image.frames, image.isVideo, image.height, image.width)))
+-                : image.resizedMeta(image.height, image.width);
++            auto const [height, width] = getImageResizeTarget(image);
++            auto const meta = image.resizedMeta(height, width);
+             auto const [seqLen, unused] = computeVisionSpans(meta, totalSeqLength, spans);
+             static_cast<void>(unused);
+             totalSeqLength += seqLen;
+@@ -447,10 +471,9 @@
+         size_t const spansBefore = spans.size();
+         for (auto const& image : req.imageBuffers)
+         {
++            auto const [resizedHeight, resizedWidth] = getImageResizeTarget(image);
+             if (image.doResize)
+             {
+-                auto [resizedHeight, resizedWidth]
+-                    = getResizedImageSize(image.frames, image.isVideo, image.height, image.width);
+                 kernel::copyImageToDeviceAndResize(image.data(), image.frames, image.height, image.width,
+                     image.channels, mRawImageDevice, mResizeTmpDevice, mImageDevice, resizedHeight, resizedWidth,
+                     stream);
+diff --git a/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp b/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp
+--- a/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp
++++ b/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp
+@@ -95,10 +95,13 @@
+ }
+ 
+ std::tuple<int64_t, int64_t> Qwen3VLViTRunner::getResizedImageSize(
+-    int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio)
++    int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio,
++    int64_t maxImageTokensPerImage)
+ {
+     return rt::imageUtils::qwenSmartResize3D(numFrames, isVideo, height, width, mConfig.patchSize, mConfig.mergeSize,
+-        mConfig.minImageTokensPerImage, mConfig.maxImageTokensPerImage, mConfig.temporalPatchSize, maxRatio);
++        mConfig.minImageTokensPerImage,
++        maxImageTokensPerImage == 0 ? mConfig.maxImageTokensPerImage : maxImageTokensPerImage,
++        mConfig.temporalPatchSize, maxRatio);
+ }
+ 
+ std::tuple<int64_t, int64_t> Qwen3VLViTRunner::computeVisionSpans(
+diff --git a/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.cpp b/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.cpp
+--- a/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.cpp
++++ b/cpp/multimodal/qwen3_omni/qwen3omniViTRunner.cpp
+@@ -37,10 +37,12 @@
+ }
+ 
+ std::tuple<int64_t, int64_t> Qwen3OmniViTRunner::getResizedImageSize(
+-    int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio)
++    int64_t numFrames, bool isVideo, int64_t height, int64_t width, int64_t maxRatio,
++    int64_t maxImageTokensPerImage)
+ {
+     // Omni uses the base 2D per-frame budget, NOT Qwen3-VL's 3D.
+-    return QwenViTRunner::getResizedImageSize(numFrames, isVideo, height, width, maxRatio);
++    return QwenViTRunner::getResizedImageSize(
++        numFrames, isVideo, height, width, maxRatio, maxImageTokensPerImage);
+ }
+ 
+ bool Qwen3OmniViTRunner::validateExtraConfig(nlohmann::json const& jsonConfig)
+diff --git a/cpp/runtime/llmRankRuntime.cpp b/cpp/runtime/llmRankRuntime.cpp
+--- a/cpp/runtime/llmRankRuntime.cpp
++++ b/cpp/runtime/llmRankRuntime.cpp
+@@ -1932,7 +1932,18 @@
+                     {
+                         auto const* rawPtr = reinterpret_cast<char const*>(img.data());
+                         size_t const rawBytes = static_cast<size_t>(img.bytesPerFrame()) * img.frames;
+-                        imageHashes.push_back(hashOpaqueIdentity(std::string_view(rawPtr, rawBytes)));
++                        // Pixel content alone is insufficient: the same image can be encoded with
++                        // different request-local resolutions. The engine profile is fixed for this
++                        // cache's lifetime; zero denotes that profile's default cap. Include source
++                        // geometry and resize mode as well, so raw and internally resized media do
++                        // not alias. Hash only the small identity string after hashing pixel bytes.
++                        auto const pixels = hashOpaqueIdentity(std::string_view(rawPtr, rawBytes));
++                        std::string const identity = std::to_string(pixels.hi) + ":" + std::to_string(pixels.lo)
++                            + ":" + std::to_string(img.width) + ":" + std::to_string(img.height)
++                            + ":" + std::to_string(img.frames) + ":" + std::to_string(img.channels)
++                            + ":" + std::to_string(img.doResize) + ":" + std::to_string(img.isVideo)
++                            + ":" + std::to_string(img.maxImageTokensPerImage);
++                        imageHashes.push_back(hashOpaqueIdentity(identity));
+                     }
+                     else
+                     {
+diff --git a/cpp/runtime/contextCacheRequest.cpp b/cpp/runtime/contextCacheRequest.cpp
+--- a/cpp/runtime/contextCacheRequest.cpp
++++ b/cpp/runtime/contextCacheRequest.cpp
+@@ -67,7 +67,13 @@
+     {
+         size_t const totalBytes = static_cast<size_t>(image.bytesPerFrame()) * static_cast<size_t>(image.frames);
+         std::string_view const bytes(reinterpret_cast<char const*>(image.data()), totalBytes);
+-        imageHashes.push_back(hashOpaqueIdentity(bytes));
++        auto const pixels = hashOpaqueIdentity(bytes);
++        std::string const identity = std::to_string(pixels.hi) + ":" + std::to_string(pixels.lo)
++            + ":" + std::to_string(image.width) + ":" + std::to_string(image.height)
++            + ":" + std::to_string(image.frames) + ":" + std::to_string(image.channels)
++            + ":" + std::to_string(image.doResize) + ":" + std::to_string(image.isVideo)
++            + ":" + std::to_string(image.maxImageTokensPerImage);
++        imageHashes.push_back(hashOpaqueIdentity(identity));
+     }
+ 
+     std::vector<Hash128> audioHashes;
+diff --git a/cpp/profiling/metrics.h b/cpp/profiling/metrics.h
+--- a/cpp/profiling/metrics.h
++++ b/cpp/profiling/metrics.h
+@@ -25,7 +25,7 @@
+ 
+ //! \cond INTERNAL
+ //! Thread-local profiling control flag accessors (defined in timer.cpp)
+-//! When false, no profiling data (metrics or timing) will be recorded
++//! When false, profiling metrics/timing are disabled; lightweight diagnostic counters remain.
+ bool getProfilingEnabled() noexcept;
+ void setProfilingEnabled(bool enabled) noexcept;
+ //! \endcond
+@@ -151,6 +151,8 @@
+ class MultimodalMetrics : public BaseMetrics
+ {
+ public:
++    int64_t observedImageRuns{0};   //!< Always-on cache-miss preprocessing runs; no CUDA timing.
++    int64_t observedImageTokens{0}; //!< Always-on tokens processed on those runs.
+     int64_t totalImages{0};      //!< Total number of processed images
+     int64_t totalImageTokens{0}; //!< Total number of image tokens generated
+     int64_t totalAudios{0};      //!< Total number of processed audio clips (Qwen3-Omni)
+@@ -163,6 +165,14 @@
+     //! @param audioTokens Number of audio tokens generated (optional, for Qwen3-Omni)
+     void recordRun(int64_t imageCount, int64_t imageTokens, int64_t audioCount = 0, int64_t audioTokens = 0) noexcept
+     {
++        // Cache-hit span preparation does not call recordRun. These two host
++        // counters expose successful single-image request cache behavior without
++        // enabling CUDA-event profiling. Read before/after serialized inference.
++        if (imageCount > 0)
++        {
++            ++observedImageRuns;
++            observedImageTokens += imageTokens;
++        }
+         if (!getProfilingEnabled())
+         {
+             return;

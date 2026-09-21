@@ -4,6 +4,7 @@
 // FrameCadence decides eligibility only; observing while busy and dropping
 // eligible frames belongs to the application's separate request lifecycle.
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const {CAPTURE_PRESETS, FrameCadence} = require("../web/app.js");
 
 assert.ok(CAPTURE_PRESETS, "web/app.js must export CAPTURE_PRESETS");
@@ -31,6 +32,14 @@ assert.equal(lightweight.maxSide, 512);
 assert.deepEqual(cameraVideo(lightweight).width, {ideal: 640});
 assert.deepEqual(cameraVideo(lightweight).height, {ideal: 480});
 assert.deepEqual(cameraVideo(lightweight).frameRate, {ideal: 15, max: 30});
+const html = fs.readFileSync(require.resolve("../web/index.html"), "utf8");
+assert.match(html, /id="lightweightPreset"[^>]*checked/, "First page load selects Lightweight");
+assert.doesNotMatch(html, /id="liveVlmPreset"[^>]*checked/, "Live VLM remains an optional capture preset");
+assert.match(html, /id="maxTokens"[^>]*value="64"/, "First demo answer limit is 64 output tokens");
+assert.match(html, /<textarea id="prompt"[^>]*>Describe the visible scene in one concise sentence\. Focus on objects and actions\.<\/textarea>/);
+assert.match(html, /<option value="1000" selected>1 second<\/option>/);
+assert.match(html, /<option value="512" selected>512 px<\/option>/);
+assert.doesNotMatch(html, /<select id="(?:interval|resolution)" disabled>/);
 console.log("PASS: live and lightweight capture, sampling and JPEG preset contracts.");
 
 // Eligibility follows presented-frame metadata, independent of wall-clock FPS.

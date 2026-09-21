@@ -1,0 +1,14 @@
+{
+  "status": "interrupted_by_user_steering",
+  "at_utc": "2026-09-21T17:52:43.440888+00:00",
+  "planned_measured": 128,
+  "recorded_measured_responses": 110,
+  "recorded_warmup_responses": 12,
+  "native_log_records": 123,
+  "native_measured_records": 111,
+  "native_only_request_ids": [
+    "6cb19a0d9e73489ba305a30a586877bd"
+  ],
+  "comparison_published": false,
+  "reason": "User requested original lightweight defaults while benchmark was active. Background benchmark can contend with live use; it was stopped. Partial logs are audit evidence, not a completed matched performance comparison."
+}

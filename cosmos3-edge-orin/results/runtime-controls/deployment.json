@@ -1,0 +1,65 @@
+{
+  "at_utc": "2026-09-21T18:19:51.490198+00:00",
+  "status": "passed",
+  "scope": "Final INT4 MLP engine with first-demo Lightweight settings. Matched FP16 baseline measured before engine switch; server TTFT plus separate loopback diagnostics preserved.",
+  "assets": {
+    "web/index.html": {
+      "sha256": "601dcb800441e4fc6315ce4e1739f9c41957783ecbcba5cc46a4e13fd3a54304",
+      "served_sha256": "601dcb800441e4fc6315ce4e1739f9c41957783ecbcba5cc46a4e13fd3a54304"
+    },
+    "web/app.js": {
+      "sha256": "362665b0a55d07a450416a4a966bb9b9e0579062e044b2d606581b2c1cec84a4",
+      "served_sha256": "362665b0a55d07a450416a4a966bb9b9e0579062e044b2d606581b2c1cec84a4"
+    },
+    "web/style.css": {
+      "sha256": "f45f25f61c63290f46e444a07aaf446be608d117f1af6a0920bc7bf401e619a9",
+      "served_sha256": "f45f25f61c63290f46e444a07aaf446be608d117f1af6a0920bc7bf401e619a9"
+    }
+  },
+  "services": {
+    "cosmos-edge-backend": "MainPID=154576\nNRestarts=0\nActiveState=active\nSubState=running",
+    "cosmos-edge-ui": "MainPID=143857\nNRestarts=0\nActiveState=active\nSubState=running"
+  },
+  "selected_candidate_id": "original-lightweight-mlp-n4",
+  "selected_config_sha256": "0453d59390471ddf1058b5eaa1728d05ec8884c646b5a9ef8828edd1244eef10",
+  "selected_env_sha256": "5fa3ef1748cc800970442616da06b0cd80af3c9df01eff1f0a1c209b462f193d",
+  "backend_process_command": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/.venv/bin/python /home/jetson/cosmos-edge/scripts/rtn_backend.py serve --model /home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4 --cache-dir /home/jetson/cosmos-edge/data/engine-cache-mlp-compact --max-input-len 1024 --max-kv-capacity 1664 --host 127.0.0.1 --port 8000 --max-image-tokens 512 --max-image-tokens-per-image 512 --encoder-embedding-cache-budget-bytes 0 ",
+  "health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "runtime": {
+    "engine_id": "bdcdecd205664a3a939e3b9e4be38f8b",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1.0,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "clocks": "SOC family:tegra234  Machine:NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super\nOnline CPUs: 0-5, Offline CPUs: \ncpu0:  Governor=schedutil MinFreq=729600 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=1 c7=1 \ncpu1:  Governor=schedutil MinFreq=729600 MaxFreq=1344000 CurrentFreq=1344000 IdleStates: WFI=1 c7=1 \ncpu2:  Governor=schedutil MinFreq=729600 MaxFreq=1344000 CurrentFreq=1267200 IdleStates: WFI=1 c7=1 \ncpu3:  Governor=schedutil MinFreq=729600 MaxFreq=1344000 CurrentFreq=1267200 IdleStates: WFI=1 c7=1 \ncpu4:  Governor=schedutil MinFreq=729600 MaxFreq=1344000 CurrentFreq=729600 IdleStates: WFI=1 c7=1 \ncpu5:  Governor=schedutil MinFreq=729600 MaxFreq=1344000 CurrentFreq=729600 IdleStates: WFI=1 c7=1 \nGPU MinFreq=306000000 MaxFreq=918000000 CurrentFreq=306000000\nActive GPU TPCs: 4\nEMC MinFreq=204000000 MaxFreq=3199000000 CurrentFreq=2133000000\nFAN Dynamic Speed Control=nvfancontrol hwmon0_pwm1=78\nFAN Dynamic Speed Control=nvfancontrol hwmon0_pwm1_enable=1\nNV Power Mode: 25W\n",
+  "clock_service": "disabled",
+  "clock_restore_note": "Vendor restore emitted optional missing GPU persistence-file warnings; CPU/GPU/EMC dynamic ranges above were independently verified.",
+  "engine_files": {
+    "data/engine-cache-mlp-compact/engines/model-244ac2008d9dca75/i1024-b1-kv1664-none-e20330567a8f/llm.engine": {
+      "sha256": "222b1beaf0e8caf96a62084e72eb8ae77a249d36616b84ad41341368c846a887",
+      "bytes": 16123324,
+      "modified_utc": "2026-09-21T03:57:57.277587+00:00"
+    },
+    "data/engine-cache-mlp-compact/engines/model-244ac2008d9dca75/i1024-b1-kv1664-none-e20330567a8f/visual/visual.engine": {
+      "sha256": "a819b9da3025262ffa332b7d0c871df46cb87312cdb0dfaad0010c9691d3c573",
+      "bytes": 11556340,
+      "modified_utc": "2026-09-21T04:00:23.554674+00:00"
+    }
+  },
+  "native_artifacts": {
+    "external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so": "bdfa754505cb368240f5ec909760c34eac9e81bacd814560a505ad71f4ff8f11",
+    "external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe"
+  },
+  "meminfo": "MemTotal:        7727320 kB\nMemFree:           85300 kB\nMemAvailable:    2527516 kB\nBuffers:           26992 kB\nCached:          2597744 kB\nSwapCached:            0 kB\nActive:           849964 kB\nInactive:        2639336 kB\nActive(anon):      27240 kB\nInactive(anon):   910956 kB\nActive(file):     822724 kB\nInactive(file):  1728380 kB\nUnevictable:       28016 kB\nMlocked:               0 kB\nSwapTotal:             0 kB\nSwapFree:              0 kB\nDirty:                32 kB\nWriteback:             0 kB\nAnonPages:        891504 kB\nMapped:           257464 kB\nShmem:             45520 kB\nKReclaimable:      74596 kB\nSlab:             162008 kB\nSReclaimable:      74596 kB\nSUnreclaim:        87412 kB\nKernelStack:        5168 kB\nPageTables:         9096 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     3863660 kB\nCommitted_AS:    2333056 kB\nVmallocTotal:   133141626880 kB\nVmallocUsed:       45488 kB\nVmallocChunk:          0 kB\nPercpu:             3144 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:    204800 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nCmaTotal:         262144 kB\nCmaFree:            1124 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\n",
+  "swaps": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n",
+  "acceptance": "results/runtime-controls/ttft-mlp/receipt.json"
+}

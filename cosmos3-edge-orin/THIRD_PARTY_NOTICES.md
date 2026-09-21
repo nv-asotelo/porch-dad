@@ -68,3 +68,7 @@ The [final all-boot kernel audit](results/final-service-audit.json) records **ni
 ## Later MLP tuning contribution
 
 `patches/int4-gemv-cosmos-mlp-n4.patch` adjusts launch tiling in the pinned TensorRT-Edge-LLM V1 INT4 GEMV source. That upstream file retains its NVIDIA and MIT HAN Lab copyright/license notices. The task's CUDA diagnostic harness includes the original source from the external checkout without copying or removing its notices. Model weights, RTN storage conventions, TensorRT execution and the underlying GEMV algorithm remain upstream work. Compact capacity selection and the shape-specific launch patch are task-authored integration/tuning. The new measured selection and attribution are documented in `research/mlp-goal.md` and `research/contribution-ledger.md`; the earlier FP16 selection/results above remain historical records.
+
+## Runtime controls and timing contribution
+
+The task-authored `cosmos-runtime-image-token-budget.patch` extends upstream ImageData, Qwen/Cosmos resizing, cache identity and counters; `cosmos-encoder-cache-bypass.patch` supplies a controlled benchmark bypass. Existing NVIDIA copyright and Apache-2.0 notices remain in the upstream source. Native CUDA resizing, encoders, prefill, decoding and model weights remain NVIDIA/upstream work. `scripts/cosmos_runtime.py`, the advanced UI, native request-log instrumentation and fixed-cost/marginal-token comparison tooling are original integration work.
