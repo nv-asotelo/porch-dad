@@ -69,6 +69,19 @@ class FrameCadence {
   }
 }
 
+// Live VLM WebUI reports its last complete-request duration and the arithmetic
+// mean over successful requests, rather than TTFT or a moving average.
+class LatencySummary {
+  constructor() { this.reset(); }
+  reset() { this.count = 0; this.totalMs = 0; this.lastMs = null; }
+  add(milliseconds) {
+    if (!Number.isFinite(milliseconds) || milliseconds < 0) return false;
+    this.count += 1; this.totalMs += milliseconds; this.lastMs = milliseconds;
+    return true;
+  }
+  get averageMs() { return this.count ? this.totalMs / this.count : null; }
+}
+
 // Handles arbitrary UTF-8/network chunk boundaries, LF/CRLF/CR, comments and
 // multiple data lines. The caller supplies a streaming TextDecoder.
 class SSEParser {
@@ -118,6 +131,38 @@ function readCompletionEvent(event) {
   return {text: choice?.delta?.content, finishReason};
 }
 
+// Original history/drawing code; the colored sparklines are inspired by Live VLM WebUI.
+// Points use device sample timestamps. Missing values remain gaps; genuine 0% remains data.
+function appendTelemetrySample(history, sample) {
+  if (!Number.isFinite(sample?.at)) return history.slice();
+  const last = history[history.length - 1];
+  if (last && sample.at === last.at) return history.slice();
+  const backwards = last && sample.at < last.at;
+  const retained = backwards ? [] : history.filter(point => point.at >= sample.at - 60000);
+  const valid = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
+  return [...retained.slice(-119), {at: sample.at, cpu: valid(sample.cpu), gpu: valid(sample.gpu),
+    memory: valid(sample.memory), breakBefore: Boolean(sample.breakBefore || backwards)}];
+}
+
+function telemetrySegments(history, key, windowEnd) {
+  const segments = [];
+  let current = null, previous = null;
+  for (const point of history) {
+    if (point.at < windowEnd - 60000 || point.at > windowEnd) continue;
+    const value = point[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+      current = null; previous = null;
+      continue;
+    }
+    // The sampler runs once a second. A longer interval does not imply observed continuity.
+    if (!current || point.breakBefore || point.at - previous.at > 1500 || point.at <= previous.at) {
+      current = []; segments.push(current);
+    }
+    current.push({at: point.at, value}); previous = point;
+  }
+  return segments;
+}
+
 // Device telemetry is independent of inference and camera request ownership.
 // A failed or stale sample clears the values instead of leaving them looking live.
 function startDeviceTelemetry() {
@@ -125,18 +170,69 @@ function startDeviceTelemetry() {
     "cpuMeter", "gpuMeter", "memoryMeter", "telemetryStatus"].map(id => [id, document.getElementById(id)]));
   if (Object.values(nodes).some(node => !node)) return;
   let active = null, interval = null, lastSample = null;
+  let history = [], clockAnchor = null, gapPending = true;
+  const charts = [
+    {key: "cpu", name: "CPU usage", canvas: document.getElementById("cpuHistory"), scale: document.getElementById("cpuHistoryScale")},
+    {key: "gpu", name: "GPU usage", canvas: document.getElementById("gpuHistory"), scale: document.getElementById("gpuHistoryScale")},
+    {key: "memory", name: "System shared RAM usage", canvas: document.getElementById("memoryHistory"), scale: document.getElementById("memoryHistoryScale")},
+  ];
   const percent = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
   const bytes = value => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  function drawHistories() {
+    const end = clockAnchor ? clockAnchor.at + performance.now() - clockAnchor.receivedAt : 0;
+    history = history.filter(point => point.at >= end - 60000);
+    for (const {key, name, canvas, scale} of charts) {
+      if (!canvas || typeof canvas.getContext !== "function") continue;
+      const context = canvas.getContext("2d");
+      if (!context) continue;
+      const {width, height} = canvas.getBoundingClientRect();
+      if (!width || !height) continue;
+      const ratio = Math.max(1, window.devicePixelRatio || 1);
+      const pixelWidth = Math.round(width * ratio), pixelHeight = Math.round(height * ratio);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth; canvas.height = pixelHeight;
+      }
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context.clearRect(0, 0, width, height);
+      const segments = telemetrySegments(history, key, end);
+      const values = segments.flat().map(point => point.value);
+      const maximum = Math.max(1, ...values);
+      if (scale) scale.textContent = values.length ? `0–${maximum.toFixed(1)}%` : "No samples";
+      const color = getComputedStyle(canvas).color;
+      const bottom = height - 3;
+      const x = point => 3 + (point.at - (end - 60000)) / 60000 * (width - 6);
+      const y = point => bottom - point.value / maximum * (height - 6);
+      context.strokeStyle = color; context.fillStyle = color;
+      context.lineWidth = 1.6; context.lineJoin = "round"; context.lineCap = "round";
+      for (const segment of segments) {
+        context.beginPath(); context.moveTo(x(segment[0]), bottom);
+        for (const point of segment) context.lineTo(x(point), y(point));
+        context.lineTo(x(segment[segment.length - 1]), bottom); context.closePath();
+        context.globalAlpha = 0.14; context.fill(); context.globalAlpha = 1;
+        context.beginPath(); context.moveTo(x(segment[0]), y(segment[0]));
+        for (const point of segment.slice(1)) context.lineTo(x(point), y(point));
+        context.stroke();
+        if (segment.length === 1) {
+          context.beginPath(); context.arc(x(segment[0]), y(segment[0]), 1.8, 0, Math.PI * 2); context.fill();
+        }
+      }
+      canvas.setAttribute("aria-label", `${name}, last 60 seconds. ${values.length
+        ? `Chart scale 0 to ${maximum.toFixed(1)} percent. Observed range ${Math.min(...values).toFixed(1)} to ${Math.max(...values).toFixed(1)} percent. Latest plotted value ${values[values.length - 1].toFixed(1)} percent.`
+        : "No available samples in this period."}`);
+    }
+  }
   function status(message, kind) {
     nodes.telemetryStatus.textContent = message;
     nodes.telemetryStatus.className = `telemetry-status ${kind}`;
   }
   function clear(message, kind = "unavailable") {
     lastSample = null;
+    gapPending = true;
     nodes.cpuUsage.textContent = "—"; nodes.gpuUsage.textContent = "—";
     nodes.memoryAmount.textContent = "—"; nodes.memoryPercent.textContent = "Unavailable";
     for (const name of ["cpuMeter", "gpuMeter", "memoryMeter"]) nodes[name].style.width = "0%";
     status(message, kind);
+    drawHistories();
   }
   async function poll() {
     if (active || document.visibilityState !== "visible") return;
@@ -173,6 +269,12 @@ function startDeviceTelemetry() {
       nodes.gpuMeter.style.width = `${gpu ?? 0}%`;
       nodes.memoryMeter.style.width = `${memoryPercent ?? 0}%`;
       if (cpu === null && gpu === null && !validMemory) { clear("Device metrics unavailable"); return; }
+      const sampledAt = Date.parse(sample.sampled_at);
+      const previousAt = history[history.length - 1]?.at;
+      history = appendTelemetrySample(history, {at: sampledAt, cpu, gpu, memory: memoryPercent, breakBefore: gapPending});
+      if (sampledAt !== previousAt) gapPending = false;
+      clockAnchor = {at: sampledAt + age, receivedAt: performance.now()};
+      drawHistories();
       lastSample = {age, receivedAt: performance.now()};
       const partial = sample.status === "partial" || cpu === null || gpu === null || memoryPercent === null;
       status(partial ? "Partial metrics · some readings unavailable" : "Live · updates every second", partial ? "partial" : "live");
@@ -187,6 +289,7 @@ function startDeviceTelemetry() {
     if (lastSample && lastSample.age + performance.now() - lastSample.receivedAt > 5000) {
       clear("Stale · waiting for fresh metrics", "stale");
     }
+    drawHistories();
     void poll();
   }
   function pause() {
@@ -203,10 +306,15 @@ function startDeviceTelemetry() {
   document.addEventListener("visibilitychange", resume);
   window.addEventListener("pagehide", pause);
   window.addEventListener("pageshow", resume);
+  window.addEventListener("resize", drawHistories);
+  if (typeof ResizeObserver !== "undefined") {
+    const resizeObserver = new ResizeObserver(drawHistories);
+    for (const {canvas} of charts) if (canvas) resizeObserver.observe(canvas);
+  }
   resume();
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -216,15 +324,22 @@ if (typeof document !== "undefined") {
     liveStreaming: true, activeTrigger: null};
   const canvas = document.createElement("canvas");
   const duration = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
-  // Moving only the output panel keeps the live video element and in-flight
-  // stream intact. DOM order matches the reading order in stacked layouts.
+  const latency = new LatencySummary();
+  function renderLatency() {
+    $("latencyValue").textContent = latency.lastMs === null ? "—" : String(Math.round(latency.lastMs));
+    $("avgLatencyValue").textContent = latency.averageMs === null ? "—" : String(Math.round(latency.averageMs));
+    $("countValue").textContent = String(latency.count);
+  }
+  // Move one caption element between docks, keeping both the live video and
+  // active token stream intact. No duplicated or separately updated captions.
   const captionPositions = new Set(["side", "above", "below"]);
   const captionStorageKey = "cosmos3-edge:caption-position";
   function applyCaptionPosition(position, save = true) {
     if (!captionPositions.has(position)) position = "below";
     $("workspace").dataset.captionPosition = position;
-    if (position === "above") $("cameraPanel").before($("captionPanel"));
-    else $("cameraPanel").after($("captionPanel"));
+    const docks = {above: "captionAbove", below: "captionBelow", side: "captionSide"};
+    for (const [name, id] of Object.entries(docks)) $(id).hidden = name !== position;
+    $(docks[position]).append($("answer"));
     for (const input of document.querySelectorAll('input[name="captionPosition"]')) {
       input.checked = input.value === position;
     }
@@ -327,9 +442,12 @@ if (typeof document !== "undefined") {
     const controller = new AbortController();
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
-    $("runStatus").textContent = "Reading frame…"; $("answer").textContent = "";
+    $("runStatus").textContent = "Reading frame…";
     let reader;
     try {
+      // Include canvas capture/JPEG encoding, as upstream times its PIL JPEG
+      // conversion and full API response. The browser/transport still differs.
+      const latencyStarted = performance.now();
       const image = capture(source);
       state.captureAt = image.capturedAt;
       if (state.running && source === $("video")) state.sampled += 1;
@@ -363,6 +481,7 @@ if (typeof document !== "undefined") {
           output += text;
           if (output.length > 65536) throw new Error("Model output exceeded the display limit.");
           $("answer").textContent = output;
+          $("answer").scrollTop = $("answer").scrollHeight;
           $("answer").classList.add("streaming");
           $("runStatus").textContent = "Writing answer…";
         }
@@ -379,6 +498,7 @@ if (typeof document !== "undefined") {
       if (!["stop", "length"].includes(finishReason)) throw new Error("Backend stream did not confirm a successful completion.");
       if (!output.trim()) throw new Error("The backend completed without visible answer text. Try a larger output token limit.");
       $("totalTime").textContent = duration(performance.now() - started);
+      latency.add(performance.now() - latencyStarted); renderLatency();
       $("runStatus").textContent = finishReason === "length" ? "Output token limit reached" : "Answer complete";
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
     } catch (err) {
@@ -438,6 +558,7 @@ if (typeof document !== "undefined") {
       // cleanup must never overwrite the new preset or a restarted request.
       state.abort = null; state.busy = false; state.activeTrigger = null;
       state.completed = 0; state.captureAt = null;
+      latency.reset(); renderLatency();
       $("answer").textContent = "Preset changed. Start the camera or analyze your selected image.";
       $("answer").classList.remove("streaming");
       $("runStatus").textContent = "Waiting for input";

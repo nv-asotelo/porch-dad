@@ -81,6 +81,10 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
     return elements.get(id);
   }
   element("workspace").append(element("cameraPanel"), element("captionPanel"));
+  element("cameraPanel").append(element("captionAbove"), element("captionBelow"));
+  element("captionPanel").append(element("captionSide"));
+  element("captionBelow").append(element("answer"));
+  const panelOrder = element("workspace").children.slice();
   const captionRadios = ["side", "above", "below"].map(value => {
     const radio = element(`caption-${value}`); radio.value = value; return radio;
   });
@@ -216,6 +220,7 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   await settles(element("analyzeButton").handlers.click(), "Completion cleanup waited for an unresolved cancellation");
   checkCapture(0, 512, 384, [0, 0, 512, 384]); // Common 512px 4:3 stays unchanged.
   assert.equal(element("requestCount").textContent, "1 completed");
+  assert.equal(element("countValue").textContent, "1");
   assert.equal(element("analyzeButton").disabled, false);
   assert.equal(completed.cancelCalls, 1);
 
@@ -230,6 +235,7 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   await settles(stopRequest, "Stop cleanup waited for an unresolved cancellation");
   assert.equal(element("runStatus").textContent, "Stopped · partial answer");
   assert.equal(element("requestCount").textContent, "1 completed");
+  assert.equal(element("countValue").textContent, "1", "Canceled requests do not contribute to latency averages");
   assert.equal(element("analyzeButton").disabled, false);
   assert.equal(stopped.signal.aborted, true);
 
@@ -265,6 +271,9 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
 
   element("liveVlmPreset").checked = true;
   element("liveVlmPreset").handlers.change();
+  assert.equal(element("countValue").textContent, "0", "Capture preset changes reset the latency session");
+  assert.equal(element("latencyValue").textContent, "—");
+  assert.equal(element("avgLatencyValue").textContent, "—");
   element("liveToggleButton").handlers.click(); // Live off before opening the preview.
   assert.equal(element("liveToggleButton").getAttribute("aria-pressed"), "false");
   await element("startButton").handlers.click();
@@ -287,7 +296,11 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   const above = captionRadios.find(radio => radio.value === "above");
   above.checked = true; above.handlers.change();
   assert.equal(element("workspace").dataset.captionPosition, "above");
-  assert.deepEqual(element("workspace").children, [element("captionPanel"), element("cameraPanel")]);
+  assert.deepEqual(element("workspace").children, panelOrder, "Caption relocation never moves the panels");
+  assert.equal(element("answer").parentNode, element("captionAbove"));
+  assert.equal(element("captionAbove").hidden, false);
+  assert.equal(element("captionBelow").hidden, true);
+  assert.equal(element("captionSide").hidden, true);
   assert.equal(video.srcObject, media);
   assert.equal(element("answer").textContent, "Manual camera request");
   assert.equal(manualCamera.signal.aborted, false, "Caption movement preserves the manual stream");
@@ -308,12 +321,17 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   assert.equal(element("answer").textContent, "Automatic camera request");
   const side = captionRadios.find(radio => radio.value === "side");
   side.checked = true; side.handlers.change();
-  assert.deepEqual(element("workspace").children, [element("cameraPanel"), element("captionPanel")]);
+  assert.deepEqual(element("workspace").children, panelOrder);
+  assert.equal(element("answer").parentNode, element("captionSide"));
+  assert.equal(element("captionAbove").hidden, true);
+  assert.equal(element("captionBelow").hidden, true);
+  assert.equal(element("captionSide").hidden, false);
   assert.equal(storedPreferences.get("cosmos3-edge:caption-position"), "side");
   assert.equal(automaticCamera.signal.aborted, false, "Caption movement preserves the automatic stream");
   element("liveToggleButton").handlers.click();
   await turn();
   assert.equal(automaticCamera.signal.aborted, true, "Live off cancels the automatic owner");
+  assert.equal(element("countValue").textContent, "1", "Pausing automatic capture retains completed latency history");
   assert.equal(video.srcObject, media, "Live off keeps the same preview stream");
   assert.equal(tracksStopped, 0);
   assert.equal(element("analyzeButton").disabled, false);
@@ -330,6 +348,7 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   assert.equal(tracksStopped, 1, "Stop, unlike Live off, releases the camera");
   assert.equal(frameCallbacks.size, 0);
   assert.equal(video.srcObject, null);
+  assert.equal(element("countValue").textContent, "2", "Stopping the camera retains completed latency history");
   console.log("PASS: Live off preserves camera and manual requests, cancels automatic requests, and blocks new automatic captures; manual/cadence requests share one owner.");
   console.log("PASS: Caption reordering and persistence preserve camera and active manual/automatic streams.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

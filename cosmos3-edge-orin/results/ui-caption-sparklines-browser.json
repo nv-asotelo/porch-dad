@@ -1,0 +1,52 @@
+{
+  "at_utc": "2026-09-21T16:39:29.273Z",
+  "scope": "Deployed Orin UI, real TensorRT inference, synthetic browser camera; functional and display validation only.",
+  "checks": {
+    "closed_caption_below_and_first_latency": true,
+    "cumulative_average_and_caption_retained_while_waiting": true,
+    "positions_move_one_caption_without_reset": true,
+    "three_live_hidpi_sparklines": true,
+    "responsive_caption_and_charts": true,
+    "manual_and_live_stream_preserved": true,
+    "preset_reset_clears_timing_population": true,
+    "no_browser_errors": true
+  },
+  "charts": [
+    {
+      "id": "cpuHistory",
+      "label": "CPU usage, last 60 seconds. Chart scale 0 to 3.5 percent. Observed range 0.3 to 3.5 percent. Latest plotted value 0.7 percent.",
+      "width": 756,
+      "cssWidth": 377.90625,
+      "ink": 2875
+    },
+    {
+      "id": "gpuHistory",
+      "label": "GPU usage, last 60 seconds. Chart scale 0 to 99.7 percent. Observed range 0.0 to 99.7 percent. Latest plotted value 0.0 percent.",
+      "width": 706,
+      "cssWidth": 352.90625,
+      "ink": 2785
+    },
+    {
+      "id": "memoryHistory",
+      "label": "System shared RAM usage, last 60 seconds. Chart scale 0 to 67.8 percent. Observed range 67.7 to 67.8 percent. Latest plotted value 67.8 percent.",
+      "width": 970,
+      "cssWidth": 485.1875,
+      "ink": 4924
+    }
+  ],
+  "status": "passed",
+  "timing_samples": [
+    {
+      "last": 1490,
+      "avg": 1490,
+      "count": 1
+    },
+    {
+      "last": 1048,
+      "avg": 1269,
+      "count": 2
+    }
+  ],
+  "requests": 4,
+  "errors": []
+}

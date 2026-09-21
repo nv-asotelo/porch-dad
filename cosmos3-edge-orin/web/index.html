@@ -11,15 +11,6 @@
 <body>
   <header><div><span class="eyebrow">LOCAL VISION LAB</span><h1>Cosmos3 <span>Edge</span></h1></div><span id="backendStatus" class="badge" role="status">Checking backend…</span></header>
   <main id="workspace" data-caption-position="below">
-    <section class="resources panel" aria-labelledby="resourcesTitle">
-      <div class="resource-heading"><h2 id="resourcesTitle">Orin resources</h2><span id="telemetryStatus" class="telemetry-status unavailable" role="status">Connecting to device metrics…</span></div>
-      <div class="resource-grid">
-        <div class="resource-stat"><span class="resource-label">CPU</span><strong id="cpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="cpuMeter"></span></div></div>
-        <div class="resource-stat"><span class="resource-label">GPU</span><strong id="gpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="gpuMeter"></span></div></div>
-        <div class="resource-stat"><span class="resource-label">VRAM / shared RAM</span><div id="memoryUsage" class="resource-value memory-value"><strong id="memoryAmount">—</strong> <span id="memoryPercent">Unavailable</span></div><div class="resource-meter" aria-hidden="true"><span id="memoryMeter"></span></div></div>
-      </div>
-      <p class="resource-note">Orin CPU and GPU share RAM. Memory includes the OS and applications, not a dedicated GPU allocation.</p>
-    </section>
     <fieldset class="caption-toolbar">
       <legend>Caption position</legend>
       <div class="caption-options">
@@ -30,18 +21,33 @@
     </fieldset>
     <section id="cameraPanel" class="vision panel" aria-label="Camera and image input">
       <div class="panel-heading"><h2>Live view</h2><span id="sourceStatus">No camera running</span></div>
-      <div class="preview"><video id="video" autoplay playsinline muted hidden></video><img id="uploadedImage" alt="Selected image for analysis" hidden><div id="placeholder"><span class="reticle">＋</span><p>Bring the world into view.</p><small>Start your camera, or choose an image.</small></div><span id="liveIndicator" hidden>● LIVE</span></div>
+      <div class="video-frame">
+        <div id="captionAbove" class="caption-dock" hidden></div>
+        <div class="preview"><video id="video" autoplay playsinline muted hidden></video><img id="uploadedImage" alt="Selected image for analysis" hidden><div id="placeholder"><span class="reticle">＋</span><p>Bring the world into view.</p><small>Start your camera, or choose an image.</small></div><span id="liveIndicator" hidden>● LIVE</span></div>
+        <div id="captionBelow" class="caption-dock"><div id="answer" class="answer" aria-live="polite" tabindex="0">Start your camera or choose an image to see captions.</div></div>
+      </div>
       <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="stopButton" disabled>Stop</button><button id="analyzeButton" disabled>Run inference</button><button id="liveToggleButton" aria-pressed="true" aria-describedby="liveToggleHelp">Live streaming: On</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
       <p id="liveToggleHelp" class="hint">Turn live streaming off to keep the camera preview and run one inference at a time. Run inference also works with an uploaded image.</p>
       <p id="cameraHelp" class="hint">Camera stays in your browser. Only sampled frames are sent to the local backend.</p>
       <p class="hint capture-observation"><span id="captureStatus">No frame sent</span><span id="samplingStatus">Every 30 frames · waiting for camera</span></p>
     </section>
     <section id="captionPanel" class="results panel" aria-label="Model output">
-      <div class="panel-heading"><h2>What it sees</h2><span id="runStatus" role="status">Waiting for input</span></div>
-      <div id="answer" class="answer" aria-live="polite">Model output will appear here when the local backend is ready.</div>
+      <div class="panel-heading"><h2>VLM output info</h2><span id="runStatus" role="status">Waiting for input</span></div>
+      <div class="latency-summary" aria-label="Completed inference timing"><div><span>Latency</span><strong id="latencyValue">—</strong><small>ms</small></div><div><span>Average</span><strong id="avgLatencyValue">—</strong><small>ms</small></div><div><span>Count</span><strong id="countValue">0</strong></div></div>
+      <p class="latency-note">Capture to complete answer, including JPEG encoding. Average covers completed requests in this session.</p>
+      <div id="captionSide" hidden></div>
       <p id="error" class="error" role="alert" hidden></p>
-      <div class="metrics"><div><span>First visible token</span><strong id="ttft">—</strong><small>Request → first text</small></div><div><span>Complete answer</span><strong id="totalTime">—</strong><small>Request → stream end</small></div><div><span>Frame age</span><strong id="frameAge">—</strong><small>Since browser capture</small></div></div>
+      <details class="timing-details"><summary>Timing details</summary><div class="metrics"><div><span>First visible token</span><strong id="ttft">—</strong><small>Request → first text</small></div><div><span>Complete answer</span><strong id="totalTime">—</strong><small>Request → stream end</small></div><div><span>Frame age</span><strong id="frameAge">—</strong><small>Since browser capture</small></div></div></details>
       <div class="detail"><span id="modelName">No model connected</span><span id="requestCount">0 completed</span></div>
+    </section>
+    <section class="resources panel" aria-labelledby="resourcesTitle">
+      <div class="resource-heading"><h2 id="resourcesTitle">Orin resources</h2><span id="telemetryStatus" class="telemetry-status unavailable" role="status">Connecting to device metrics…</span></div>
+      <div class="resource-grid">
+        <div class="resource-stat resource-cpu"><span class="resource-label">CPU</span><strong id="cpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="cpuMeter"></span></div><canvas id="cpuHistory" class="resource-history" role="img" aria-label="CPU usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">CPU usage history. Missing readings appear as gaps.</canvas><small id="cpuHistoryScale" class="resource-history-scale">No samples</small></div>
+        <div class="resource-stat resource-gpu"><span class="resource-label">GPU</span><strong id="gpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="gpuMeter"></span></div><canvas id="gpuHistory" class="resource-history" role="img" aria-label="GPU usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">GPU usage history. Missing readings appear as gaps.</canvas><small id="gpuHistoryScale" class="resource-history-scale">No samples</small></div>
+        <div class="resource-stat resource-memory"><span class="resource-label">VRAM / shared RAM</span><div id="memoryUsage" class="resource-value memory-value"><strong id="memoryAmount">—</strong> <span id="memoryPercent">Unavailable</span></div><div class="resource-meter" aria-hidden="true"><span id="memoryMeter"></span></div><canvas id="memoryHistory" class="resource-history" role="img" aria-label="System shared RAM usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">System shared RAM history, including the OS and applications. Missing readings appear as gaps.</canvas><small id="memoryHistoryScale" class="resource-history-scale">No samples</small></div>
+      </div>
+      <p class="resource-note"><span id="resourceHistoryDescription">Last 60 seconds. Each chart auto-scales from 0% to its displayed maximum. Gaps mark unavailable readings.</span> Orin CPU and GPU share RAM. Memory includes the OS and applications, not a dedicated GPU allocation.</p>
     </section>
     <section class="settings panel" aria-label="Inference settings">
       <fieldset class="capture-presets"><legend>Capture preset</legend><div class="preset-options"><label><input type="radio" name="capturePreset" id="liveVlmPreset" value="live-vlm" checked> Live VLM WebUI <span>Default</span></label><label><input type="radio" name="capturePreset" id="lightweightPreset" value="lightweight"> Lightweight</label></div></fieldset>
