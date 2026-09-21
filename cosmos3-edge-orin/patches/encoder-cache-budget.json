@@ -1,0 +1,37 @@
+{
+  "created_utc": "2026-09-20T05:55:57.728785+00:00",
+  "public_source": "https://github.com/NVIDIA/TensorRT-Edge-LLM",
+  "source_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "patch": "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch",
+  "patch_sha256": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+  "license": "Apache-2.0",
+  "files": [
+    {
+      "path": "experimental/pybind/edgellm_pybind.cpp",
+      "before_sha256": "9fadf37eb1b2026b84b1c8c5ed3193a2b7a46bf2b38ef40c79db0ede4e1392fd",
+      "after_sha256": "f55dbe730d8a3ab7cfb055a1546d8c558a7a56e9eddf79e07851c69a8bc82a8c"
+    },
+    {
+      "path": "experimental/server/config.py",
+      "before_sha256": "e0bf1537f0321b12438ae58f4a0bcdf7cd8ec1231cc6e1e4a3d62847746bf089",
+      "after_sha256": "d768fda151590ee0dce7ba64cd774f30603ab8b2816543c706199716be4bc2d9"
+    },
+    {
+      "path": "experimental/server/runtime/engine.py",
+      "before_sha256": "28a850ca461fbf310d446094ebdc8e28ae0ee01b4e0a2e51ffe02b269f8e9841",
+      "after_sha256": "410a2d7bd247fa90c7538bbc8921d1b4b7c2892acd7867ddb749e51a2711cab5"
+    }
+  ],
+  "upstream_default_bytes": 268435456,
+  "original_launcher_default_bytes": 0,
+  "runtime_field": "ContextCacheConfig.encoder_embedding_cache_budget_bytes",
+  "cli_option": "--encoder-embedding-cache-budget-bytes",
+  "applies_independently_of_context_reuse": true,
+  "checks": {
+    "forward_on_pinned_source": "passed",
+    "reverse_on_local_patched_source": "passed",
+    "native_build": "not run",
+    "device_execution": "not run"
+  },
+  "integration": "Apply patch at the exact source revision and rebuild _edgellm_runtime. Invoke scripts/serve_backend.py with the existing server arguments, or pass --encoder-embedding-cache-budget-bytes 0 to the patched upstream CLI. Existing serialized model engines are unchanged by this runtime option."
+}

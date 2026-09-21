@@ -1,0 +1,17 @@
+{
+  "observed_at": "2026-09-19T19:21:48.995467+00:00",
+  "host_os": "Darwin",
+  "host_arch": "arm64",
+  "enumerated_usb_devices": 11,
+  "nvidia_usb_devices": [
+    {
+      "name": "APX",
+      "vendor_id": "0955",
+      "product_id": "7523",
+      "location_id": 34603008
+    }
+  ],
+  "usb_serial_ports": [],
+  "external_physical_disks": [],
+  "device_flash_performed": false
+}

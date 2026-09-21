@@ -1,0 +1,144 @@
+{
+  "audited_at": "2026-09-20T02:10:07.464413+00:00",
+  "release_wheel": {
+    "version": "5.14.1",
+    "wheel": "transformers-5.14.1-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/6f/67/8d85ca2323233ae3c0365a659c4e52ee1f587b440e4bc577e7d8e4416d0f/transformers-5.14.1-py3-none-any.whl",
+    "size": 11625234,
+    "sha256": "9db974c4079ede2d1a3ea7ca5a240df33f2cc26fc2b36ba64c5f2a4f43b6e725",
+    "verified": true,
+    "cosmos_filenames": [
+      "transformers/models/cosmos3_omni/__init__.py",
+      "transformers/models/cosmos3_omni/configuration_cosmos3_omni.py",
+      "transformers/models/cosmos3_omni/modeling_cosmos3_omni.py",
+      "transformers/models/cosmos3_omni/modular_cosmos3_omni.py"
+    ],
+    "cosmos3_source_files": [
+      "transformers/conversion_mapping.py",
+      "transformers/models/__init__.py",
+      "transformers/models/auto/auto_mappings.py",
+      "transformers/models/auto/image_processing_auto.py",
+      "transformers/models/auto/modeling_auto.py",
+      "transformers/models/auto/tokenization_auto.py",
+      "transformers/models/auto/video_processing_auto.py",
+      "transformers/models/cosmos3_omni/__init__.py",
+      "transformers/models/cosmos3_omni/configuration_cosmos3_omni.py",
+      "transformers/models/cosmos3_omni/modeling_cosmos3_omni.py",
+      "transformers/models/cosmos3_omni/modular_cosmos3_omni.py"
+    ],
+    "installed": false,
+    "python_files_scanned": 2556,
+    "edge_symbol_hits": {
+      "cosmos3_edge": [],
+      "Cosmos3EdgeConfig": [],
+      "Cosmos3EdgeForConditionalGeneration": [],
+      "Cosmos3EdgeProcessor": []
+    },
+    "stock_cosmos3_edge_support": false
+  },
+  "official_development_source": {
+    "repository": "https://github.com/huggingface/transformers",
+    "commit": "c587bc884db2c2e31fc2b8102314656b17aa07b1",
+    "commit_date": "2026-09-18T20:31:36Z",
+    "files": [
+      {
+        "path": "src/transformers/models/cosmos3_edge/configuration_cosmos3_edge.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/cosmos3_edge/configuration_cosmos3_edge.py",
+        "sha256": "33844ce6ec77ba81bc3845268f91b35b48b42b94b8562138f843760cff027af9",
+        "size": 7887
+      },
+      {
+        "path": "src/transformers/models/cosmos3_edge/modeling_cosmos3_edge.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/cosmos3_edge/modeling_cosmos3_edge.py",
+        "sha256": "f68f9fa7eaa4e05fcec0e526f798cda5036046f860772a0820c68c04f3e453bf",
+        "size": 66429
+      },
+      {
+        "path": "src/transformers/models/cosmos3_edge/processing_cosmos3_edge.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/cosmos3_edge/processing_cosmos3_edge.py",
+        "sha256": "1d87354c1c773b6ef26001588c4c048ac729e32e1120348d4c427d7fe6e1c611",
+        "size": 11229
+      },
+      {
+        "path": "src/transformers/models/cosmos3_edge/image_processing_cosmos3_edge.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/cosmos3_edge/image_processing_cosmos3_edge.py",
+        "sha256": "3b97a86df032303c4502b151bfe68c6d369f1e8b4155e194f0c4cd04516244cb",
+        "size": 10806
+      },
+      {
+        "path": "src/transformers/models/auto/auto_mappings.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/auto/auto_mappings.py",
+        "sha256": "ba798201fac45d0d1293dd8ccc2dfa7bf37d378b82dd69be55d89e0aeb1ed9e7",
+        "size": 66683
+      },
+      {
+        "path": "src/transformers/models/auto/modeling_auto.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/auto/modeling_auto.py",
+        "sha256": "805f8f592a59e1ac144bdc03ec3714b59896adc5782d0892d77b47eb69ad39c0",
+        "size": 113146
+      },
+      {
+        "path": "src/transformers/models/auto/processing_auto.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/models/auto/processing_auto.py",
+        "sha256": "2ac6d6c9837e25eda9184c7a619708187aa564fcea96baf13ea7ff260e197517",
+        "size": 18125
+      },
+      {
+        "path": "src/transformers/__init__.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/__init__.py",
+        "sha256": "3cf42b5874497465a3b0a2f6838a45943c9b06916e0643c80fa8777e53bf646b",
+        "size": 42011
+      },
+      {
+        "path": "pyproject.toml",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/pyproject.toml",
+        "sha256": "664853c1634a81a724b796beb78c93ec35bea93347d74ded440425df630c02e4",
+        "size": 6238
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/LICENSE",
+        "sha256": "77fd4710def9ec3c0f6225800e0235f15a425abd4a8b03559127fcd782612049",
+        "size": 11418
+      },
+      {
+        "path": "docs/source/en/model_doc/cosmos3_edge.md",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/docs/source/en/model_doc/cosmos3_edge.md",
+        "sha256": "e50cc949f337b92c942e28d0fcc2830d5fbc34cc16df928799b10e869438195e",
+        "size": 3649
+      },
+      {
+        "path": "setup.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/setup.py",
+        "sha256": "83d421abe39c0cbca26017e3b92e257d8193005c14143ab275ba2e260a4bdfb9",
+        "size": 13137
+      },
+      {
+        "path": "src/transformers/dependency_versions_table.py",
+        "url": "https://raw.githubusercontent.com/huggingface/transformers/c587bc884db2c2e31fc2b8102314656b17aa07b1/src/transformers/dependency_versions_table.py",
+        "sha256": "f49531dcb5ade35692226eea29941fc151161e258f7904a16dde724d7821d51d",
+        "size": 3180
+      }
+    ],
+    "installed": false,
+    "package_version": "5.18.0.dev0",
+    "license": "Apache-2.0",
+    "code_copyright": "2026 NVIDIA Corporation and The HuggingFace Inc. team"
+  },
+  "official_nvidia_guidance": {
+    "commit": "b0e54e88c322695dab188e6ed160c4d6d071c39d",
+    "url": "https://raw.githubusercontent.com/NVIDIA/cosmos/b0e54e88c322695dab188e6ed160c4d6d071c39d/README.md",
+    "sha256": "b467f991c02107a6f0b66ee98536fdebf1df0ba64820d83d58a206a76340422f"
+  },
+  "remote_access_performed": false,
+  "packages_installed": false,
+  "gpu_operation_performed": false,
+  "source_verified_conclusions": [
+    "Transformers5.14.1 wheel lacks cosmos3_edge and Cosmos3Edge model/config/processor symbols.",
+    "Official Transformers immutable commit c587bc884db2c2e31fc2b8102314656b17aa07b1 supplies Edge mappings and implementations.",
+    "Development version5.18.0.dev0 conflicts with pinned EdgeLLM export/tools/server-tools Transformers==5.14.1 constraint.",
+    "Ordinary resident server image requests use native preprocessing, not AutoProcessor.",
+    "Engine artifact generation needs AutoTokenizer for this snapshot, otherwise writes generic fallback template.",
+    "Release AutoTokenizer catches unknown AutoConfig and falls back to generic config/tokenizer metadata; actual tokenizer/template extraction remains unexecuted."
+  ]
+}

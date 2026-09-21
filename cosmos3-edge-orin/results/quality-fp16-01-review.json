@@ -1,0 +1,71 @@
+{
+  "candidate": "fp16-repaired-metadata",
+  "suite_id": "original-geometric-quality-v1-jpeg-v1",
+  "raw_results": "results/raw/quality-fp16-01.jsonl",
+  "raw_sha256": "5a7bcb89865c1ba17e1196b571660851d7278df5db2772fe11dc70eed24d6a64",
+  "reviewer": "Codex semantic review against frozen answer key",
+  "required_facts": 19,
+  "correct_facts": 7,
+  "passed": false,
+  "false_added_claims": true,
+  "transport_successes": 6,
+  "completed_without_token_truncation": 5,
+  "cases": [
+    {
+      "case_id": "01-left-right",
+      "fact_scores": [
+        0,
+        0,
+        0
+      ],
+      "review": "Required colors omitted; right square called rectangle."
+    },
+    {
+      "case_id": "02-counts",
+      "fact_scores": [
+        1,
+        1,
+        0
+      ],
+      "review": "Counts correct; total omitted at token limit; added repeating-pattern claim unsupported."
+    },
+    {
+      "case_id": "03-above-below",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present."
+    },
+    {
+      "case_id": "04-inside-outside",
+      "fact_scores": [
+        0,
+        0,
+        0
+      ],
+      "review": "Containment reversed; right-side assertion says inside, not to right of square."
+    },
+    {
+      "case_id": "05-relative-size",
+      "fact_scores": [
+        1,
+        0,
+        1
+      ],
+      "review": "Both circular and left larger correct; purple called gray."
+    },
+    {
+      "case_id": "06-quadrants",
+      "fact_scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "review": "Shapes and quadrants correct, but all colors replaced by false black/white stripes."
+    }
+  ],
+  "note": "Diagnostic quality screen, not a performance candidate. Prompts/answer key unchanged."
+}

@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-20T23:47:39.035Z",
+  "entry_url": "http://192.168.6.252:8090",
+  "expected_url": "https://192.168.6.252:8443/",
+  "checks": {
+    "same_host_temporary_redirect": true,
+    "http_health_preserved": true,
+    "no_https_redirect_loop": true,
+    "camera_api_available_after_redirect": true,
+    "latest_ui_and_live_preset_loaded": true,
+    "redirect_to_camera_to_real_inference_and_stop": true,
+    "localhost_tunnel_camera_context_preserved": true
+  },
+  "limitations": [
+    "Physical camera not tested; browser camera is synthetic",
+    "The user must accept the local certificate warning and grant camera permission",
+    "The successful camera test accepts the device certificate only in its isolated QA browser context; no client trust store changed"
+  ],
+  "fresh_browser_certificate_error": "page.goto: net::ERR_CERT_AUTHORITY_INVALID at http://192.168.6.252:8090/",
+  "output": "A bright green progress bar fills the screen, with the top left corner displaying a timer.",
+  "sent_frame": "Sent 1280×720 · Live VLM WebUI",
+  "status": "passed",
+  "browser_errors": []
+}

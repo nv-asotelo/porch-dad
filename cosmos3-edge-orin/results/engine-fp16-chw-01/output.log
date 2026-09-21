@@ -1,0 +1,233 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[transformers] You are using a model of type `cosmos3_edge` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+Checkpoint validated structurally; TensorRT 10.16.2.10.
+2026-09-20 06:01:41,621 INFO experimental.builder.core.builder: Loaded plugin library build/libNvInfer_edgellm_plugin.so
+2026-09-20 06:01:41,622 INFO experimental.builder: Building 2 engines for cosmos3_edge: llm, visual
+2026-09-20 06:01:41,622 INFO experimental.builder: Building component llm
+2026-09-20 06:01:41,623 INFO experimental.builder.core.builder: model_type=cosmos3_edge_text layers=28 hidden=2048 experts=0 quant=fp16
+2026-09-20 06:01:41,692 INFO experimental.builder.core.builder: [TRT] [MemUsageChange] Init CUDA: CPU +12, GPU +0, now: CPU 42, GPU 1794 (MiB)
+2026-09-20 06:01:42,160 INFO experimental.builder.core.builder: Externalizing int4_ffn, int4_moe, nvfp4_moe, nvfp4_tp, lm_head, fp16, embedding
+2026-09-20 06:01:42,277 INFO experimental.builder.core.builder: Detected CUDA device 0 with compute capability 8.7
+[06:02:07.926] [INFO] [pluginJitCompiler.cpp:138:compilePluginJitKernel] Compiled XQA kernel for SM87, dtype=1, kv_dtype=1, head_dim=128, q_heads_per_kv=2, tokens_per_page=128, sliding_window=0, spec_decode=0 with NVRTC (99744 bytes, 25621 ms)
+2026-09-20 06:02:08,372 INFO experimental.builder.core.artifacts.external_weights: Recorded 227 runtime checkpoint binding(s) (source layouts: fp16=227; destination dtypes: F16=227)
+2026-09-20 06:02:12,778 INFO experimental.builder.core.builder: Building serialized engine (this may take several minutes)...
+2026-09-20 06:02:13,674 INFO experimental.builder.core.builder: [TRT] [MemUsageChange] Init builder kernel library: CPU +143, GPU +174, now: CPU 454, GPU 2219 (MiB)
+2026-09-20 06:02:13,935 INFO experimental.builder.core.builder: [TRT] Local timing cache in use. Profiling results in this builder pass will not be stored.
+2026-09-20 06:02:13,984 INFO experimental.builder.core.builder: [TRT] Compiler backend is used during engine build.
+2026-09-20 06:03:04,844 INFO experimental.builder.core.builder: [TRT] [GraphReduction] The approximate region cut reduction algorithm is called.
+2026-09-20 06:03:04,850 INFO experimental.builder.core.builder: [TRT] Detected 260 inputs and 29 output network tensors.
+2026-09-20 06:03:06,425 INFO experimental.builder.core.builder: [TRT] Total Host Persistent Memory: 39952 bytes
+2026-09-20 06:03:06,426 INFO experimental.builder.core.builder: [TRT] Total Device Persistent Memory: 0 bytes
+2026-09-20 06:03:06,426 INFO experimental.builder.core.builder: [TRT] Max Scratch Memory: 50331648 bytes
+2026-09-20 06:03:06,427 INFO experimental.builder.core.builder: [TRT] [BlockAssignment] Started assigning block shifts. This will take 144 steps to complete.
+2026-09-20 06:03:06,434 INFO experimental.builder.core.builder: [TRT] [BlockAssignment] Algorithm ShiftNTopDown took 7.08583ms to assign 9 blocks to 144 nodes requiring 71305216 bytes.
+2026-09-20 06:03:06,434 INFO experimental.builder.core.builder: [TRT] Total Activation Memory: 71305216 bytes
+2026-09-20 06:03:28,696 INFO experimental.builder.core.builder: [TRT] [GraphReduction] The approximate region cut reduction algorithm is called.
+2026-09-20 06:03:28,702 INFO experimental.builder.core.builder: [TRT] Detected 260 inputs and 29 output network tensors.
+2026-09-20 06:03:29,709 INFO experimental.builder.core.builder: [TRT] Total Host Persistent Memory: 39952 bytes
+2026-09-20 06:03:29,710 INFO experimental.builder.core.builder: [TRT] Total Device Persistent Memory: 0 bytes
+2026-09-20 06:03:29,710 INFO experimental.builder.core.builder: [TRT] Max Scratch Memory: 8397312 bytes
+2026-09-20 06:03:29,710 INFO experimental.builder.core.builder: [TRT] [BlockAssignment] Started assigning block shifts. This will take 144 steps to complete.
+2026-09-20 06:03:29,718 INFO experimental.builder.core.builder: [TRT] [BlockAssignment] Algorithm ShiftNTopDown took 7.70051ms to assign 9 blocks to 144 nodes requiring 8419840 bytes.
+2026-09-20 06:03:29,718 INFO experimental.builder.core.builder: [TRT] Total Activation Memory: 8419840 bytes
+2026-09-20 06:03:29,797 INFO experimental.builder.core.builder: [TRT] Total Weights Memory: 132 bytes
+2026-09-20 06:03:29,805 INFO experimental.builder.core.builder: [TRT] Compiler backend is used during engine execution.
+2026-09-20 06:03:29,807 INFO experimental.builder.core.builder: [TRT] Engine generation completed in 75.8723 seconds.
+2026-09-20 06:03:29,808 INFO experimental.builder.core.builder: [TRT] [MemUsageStats] Peak memory usage of TRT CPU/GPU memory allocators: CPU 0 MiB, GPU 515 MiB
+2026-09-20 06:03:29,852 INFO experimental.builder.core.builder: Engine written to /home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/.building-ubv2fct3/llm.engine (10445036 bytes)
+2026-09-20 06:03:29,852 INFO experimental.builder.core.builder: Build completed in 108.229 s (checkpoint identity 4.400 s, TensorRT 77.061 s, frontend and serialization 26.768 s)
+2026-09-20 06:03:30,683 INFO experimental.builder.core.artifacts.runtime_artifacts: Wrote config.json
+2026-09-20 06:03:30,684 INFO experimental.builder.core.artifacts.runtime_artifacts: Embedding stays in the checkpoint; the runtime loads it through its checkpoint binding
+2026-09-20 06:03:30,700 INFO experimental.builder.core.artifacts.tokenizer: Copied tokenizer.json
+2026-09-20 06:03:30,701 INFO experimental.builder.core.artifacts.tokenizer: Copied tokenizer_config.json
+2026-09-20 06:03:30,701 INFO experimental.builder.core.artifacts.tokenizer: Copied special_tokens_map.json
+2026-09-20 06:03:30,702 INFO experimental.builder.core.artifacts.tokenizer: Copied chat_template.jinja
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[transformers] You are using a model of type `cosmos3_edge` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+2026-09-20 06:03:36,241 INFO experimental.builder.core.artifacts.chat_template: Chat template saved to /home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/.building-ubv2fct3/processed_chat_template.json
+2026-09-20 06:03:36,341 INFO experimental.builder: Building component visual
+2026-09-20 06:03:36,341 INFO experimental.builder.core.builder: root_model_type=cosmos3_edge component=visual
+2026-09-20 06:03:36,342 INFO experimental.builder.core.builder: Externalizing int4_ffn, int4_moe, nvfp4_moe, nvfp4_tp, lm_head, fp16; keeping embedding in the engine
+2026-09-20 06:03:36,343 INFO experimental.builder.core.builder: Detected CUDA device 0 with compute capability 8.7
+2026-09-20 06:03:37,451 INFO experimental.builder.core.artifacts.external_weights: Recorded 440 runtime checkpoint binding(s) (source layouts: fp16=440; destination dtypes: F16=440)
+2026-09-20 06:03:37,490 INFO experimental.builder.core.builder: Building serialized engine (this may take several minutes)...
+2026-09-20 06:03:38,188 INFO experimental.builder.core.builder: [TRT] [MemUsageChange] Init builder kernel library: CPU -191, GPU -1, now: CPU 3484, GPU 3843 (MiB)
+2026-09-20 06:03:38,579 INFO experimental.builder.core.builder: [TRT] Local timing cache in use. Profiling results in this builder pass will not be stored.
+2026-09-20 06:03:38,626 INFO experimental.builder.core.builder: [TRT] Compiler backend is used during engine build.
+2026-09-20 06:06:02,881 INFO experimental.builder.core.builder: [TRT] [GraphReduction] The approximate region cut reduction algorithm is called.
+2026-09-20 06:06:02,890 INFO experimental.builder.core.builder: [TRT] Detected 445 inputs and 1 output network tensors.
+2026-09-20 06:06:04,574 INFO experimental.builder.core.builder: [TRT] Total Host Persistent Memory: 29456 bytes
+2026-09-20 06:06:04,575 INFO experimental.builder.core.builder: [TRT] Total Device Persistent Memory: 0 bytes
+2026-09-20 06:06:04,575 INFO experimental.builder.core.builder: [TRT] Max Scratch Memory: 63569920 bytes
+2026-09-20 06:06:04,575 INFO experimental.builder.core.builder: [TRT] [BlockAssignment] Started assigning block shifts. This will take 165 steps to complete.
+2026-09-20 06:06:04,582 INFO experimental.builder.core.builder: [TRT] [BlockAssignment] Algorithm ShiftNTopDown took 6.1514ms to assign 9 blocks to 165 nodes requiring 120194048 bytes.
+2026-09-20 06:06:04,582 INFO experimental.builder.core.builder: [TRT] Total Activation Memory: 120193024 bytes
+2026-09-20 06:06:04,643 INFO experimental.builder.core.builder: [TRT] Total Weights Memory: 2361988 bytes
+2026-09-20 06:06:04,655 INFO experimental.builder.core.builder: [TRT] Compiler backend is used during engine execution.
+2026-09-20 06:06:04,656 INFO experimental.builder.core.builder: [TRT] Engine generation completed in 146.079 seconds.
+2026-09-20 06:06:04,658 INFO experimental.builder.core.builder: [TRT] [MemUsageStats] Peak memory usage of TRT CPU/GPU memory allocators: CPU 0 MiB, GPU 515 MiB
+2026-09-20 06:06:04,706 INFO experimental.builder.core.builder: Engine written to /home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/.building-ubv2fct3/visual/visual.engine (14007508 bytes)
+2026-09-20 06:06:04,707 INFO experimental.builder.core.builder: Build completed in 148.366 s (checkpoint identity 0.017 s, TensorRT 147.200 s, frontend and serialization 1.149 s)
+Engine outputs:
+  llm: /home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/.building-ubv2fct3/llm.engine (10445036 bytes)
+  visual: /home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/.building-ubv2fct3/visual/visual.engine (14007508 bytes)
+{
+  "started_utc": "2026-09-20T06:01:26.949961+00:00",
+  "completed_utc": "2026-09-20T06:06:05.909429+00:00",
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+  "cache_dir": "/home/jetson/cosmos-edge/data/engine-cache-chw",
+  "build_mode": "unquantized FP16 reasoner baseline",
+  "build_options": {
+    "spec_type": "none",
+    "draft_model_dir": "",
+    "max_input_len": 1024,
+    "max_kv_cache_capacity": 2048,
+    "max_batch_size": 1,
+    "max_image_tokens": null,
+    "max_image_tokens_per_image": null,
+    "tp_size": null,
+    "plugin_path": "",
+    "tree_base": false
+  },
+  "max_cache_size_bytes": 12884901888,
+  "published_cache_bytes": 42068826,
+  "prepared_model": {
+    "bundle_dir": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc",
+    "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+    "draft_model_dir": "",
+    "built": true
+  },
+  "server_started": false,
+  "inference_validated": false,
+  "compatibility_repairs": [
+    {
+      "created_utc": "2026-09-20T06:06:05.645100+00:00",
+      "status": "applied",
+      "source_config": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner/config.json",
+      "source_config_sha256": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+      "source_reference": "nvidia/Cosmos3-Edge",
+      "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "artifact": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/visual/config.json",
+      "before_sha256": "63b0e6354095652207ab4bec815977cf0303391619d319e40c55ced3df83e911",
+      "after_sha256": "380e4b9881bac8caf9ce549460cd0fedfcebcf2242910b6721700df529752a07",
+      "additions": {
+        "text_config.rope_theta": 100000000,
+        "text_config.rope_scaling": {
+          "mrope_section": [
+            24,
+            20,
+            20
+          ],
+          "rope_theta": 100000000,
+          "rope_type": "default",
+          "type": "default"
+        }
+      },
+      "engine_files_modified": false,
+      "note": "Only config aliases are normalized. No engine rebuild or inference validation is performed.",
+      "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260920T060605Z-8ca56dee13b040178cf0f0e9aeba5586.visual-config.before.json",
+      "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260920T060605Z-8ca56dee13b040178cf0f0e9aeba5586.receipt.json",
+      "applied_utc": "2026-09-20T06:06:05.650437+00:00"
+    },
+    {
+      "created_utc": "2026-09-20T06:06:05.803225+00:00",
+      "status": "applied",
+      "source_model": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+      "source_reference": "nvidia/Cosmos3-Edge",
+      "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "source_sha256": {
+        "config.json": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+        "chat_template.jinja": "7120ee6666468d4e9b2dc11e133ac5c2fa765fa5907706bf0f906270aa5510c8",
+        "tokenizer_config.json": "85577f01be64ea03ee9aacc0536088e47b96971e4aff21e0aa604900b1410386"
+      },
+      "special_tokens": {
+        "video_token_id": {
+          "id": 18,
+          "token": "<|video_pad|>"
+        },
+        "image_token_id": {
+          "id": 19,
+          "token": "<|image_pad|>"
+        },
+        "vision_start_token_id": {
+          "id": 20,
+          "token": "<|vision_start|>"
+        },
+        "vision_end_token_id": {
+          "id": 21,
+          "token": "<|vision_end|>"
+        }
+      },
+      "artifact": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/processed_chat_template.json",
+      "before_sha256": "59a43b58bb7bf65fca33bfd53bbb13e4bf1255f3c3c0c420184aa26612257d8d",
+      "after_sha256": "f76712a886b6f983bd0e911cf604ee8158bdb8afa65aa3c9eabf2c3e5389ae3f",
+      "additions": {
+        "content_types.image.format": "<|vision_start|><|image_pad|><|vision_end|>",
+        "content_types.video.format": "<|vision_start|><|video_pad|><|vision_end|>"
+      },
+      "previous_values": {
+        "content_types.image.format": {
+          "present": false,
+          "value": null
+        },
+        "content_types.video.format": {
+          "present": false,
+          "value": null
+        }
+      },
+      "engine_files_modified": false,
+      "note": "Formats match the pinned Jinja with add_vision_id disabled. Roles/generation prompts are preserved. No inference validation is performed.",
+      "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-media-20260920T060605Z-0e95b3a67dbc47e9a07f431a8dbbb9ab.processed-template.before.json",
+      "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-media-20260920T060605Z-0e95b3a67dbc47e9a07f431a8dbbb9ab.receipt.json",
+      "applied_utc": "2026-09-20T06:06:05.807025+00:00"
+    }
+  ],
+  "build_provenance": {
+    "before": {
+      "tensorrt_version": "10.16.2.10",
+      "cupy_version": "13.6.0",
+      "cuda_driver_version": 13020,
+      "cuda_runtime_version": 13000,
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "backend_tracked_diff": {
+        "sha256": "b2e032c300fc78a5f96a391f9f10ab64104d98586333daf8258e6bba4a958c69",
+        "size_bytes": 8964,
+        "dirty": true,
+        "base": "HEAD",
+        "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+      },
+      "built_plugin": {
+        "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+        "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+        "size_bytes": 18255824
+      },
+      "plugin_environment_override": null
+    },
+    "after": {
+      "tensorrt_version": "10.16.2.10",
+      "cupy_version": "13.6.0",
+      "cuda_driver_version": 13020,
+      "cuda_runtime_version": 13000,
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "backend_tracked_diff": {
+        "sha256": "b2e032c300fc78a5f96a391f9f10ab64104d98586333daf8258e6bba4a958c69",
+        "size_bytes": 8964,
+        "dirty": true,
+        "base": "HEAD",
+        "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+      },
+      "built_plugin": {
+        "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+        "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+        "size_bytes": 18255824
+      },
+      "plugin_environment_override": null
+    },
+    "changed_during_prepare": false,
+    "note": "Versions use CUDA integer encoding. built_plugin identifies the source-build artifact; any EDGELLM_PLUGIN_PATH override is recorded separately. On a cache hit (built=false), these observations do not establish the original engine build environment."
+  },
+  "note": "The 12 GiB limit concerns published engine files, not GPU memory or temporary compiler disk usage."
+}
+Engine-cache process exited successfully. Receipt: /home/jetson/cosmos-edge/results/model-cache-20260920T060126Z-5973645f.json
+Start the server separately with the same absolute model/cache paths and input/KV limits. Inference remains unvalidated.

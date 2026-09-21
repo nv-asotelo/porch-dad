@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-09-20T02:24:16.036548+00:00",
+  "state": "flash_succeeded",
+  "path": "USB-C native SSH + NFS tunnel to prepared official package",
+  "command": "USER=root /mnt/cosmos-flash/l4t_flash_from_kernel.sh --no-reboot",
+  "target": "nvme0n1 + QSPI",
+  "nvme_model": "WD_BLACK SN7100 1TB",
+  "nvme_bytes": 1000204886016,
+  "preflight_empty_nvme": true,
+  "checksums_passed": true,
+  "no_reboot": true,
+  "persistent_storage_write_started": true,
+  "completed_at": "2026-09-20T02:28:02.432351+00:00",
+  "exit_code": 0,
+  "flashing_success_marker": true
+}

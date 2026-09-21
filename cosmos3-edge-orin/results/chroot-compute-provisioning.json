@@ -1,0 +1,19 @@
+{
+  "observed_at": "2026-09-20T03:14:17.679615+00:00",
+  "state": "compute_apply_succeeded",
+  "rootfs": "/dev/nvme0n1p1 mounted at /mnt/cosmos-installed",
+  "native_arm64_chroot": true,
+  "bind_mounts": [
+    "proc",
+    "sys",
+    "dev"
+  ],
+  "temporary_policy_rc_d": true,
+  "loopback_proxy_port": 8888,
+  "public_https_verified": true,
+  "normal_boot_verified": false,
+  "compute_install_started": true,
+  "proc_sys_bind_readonly": true,
+  "plan_exit_code": 0,
+  "apply_exit_code": 0
+}

@@ -1,0 +1,9 @@
+{
+  "source_url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
+  "resolved_url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
+  "path": "data/flash-host/jammy-server-cloudimg-amd64.img",
+  "size_bytes": 735465984,
+  "sha256": "48c7e1ab2005bff1c5450bd6c74d0f38482f0d750e14f320367e3e1c795035f9",
+  "publisher_checksum_verified": true,
+  "complete": true
+}

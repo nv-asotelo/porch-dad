@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-09-20T05:37:56.023715+00:00",
+  "phase": "first_resident_runtime_initialization",
+  "success": false,
+  "exception": "[json.exception.type_error.302] type must be number, but is null",
+  "last_successful_stage": "442 visual external weight bindings loaded and bound",
+  "root_cause": "Generated visual text_config preserves rope_parameters but omits normalized rope_theta and rope_scaling expected by QwenViTRunner.cpp:109-125",
+  "memory_failure_documented": false,
+  "inference_validated": false,
+  "evidence": [
+    "results/backend-fp16-launch/output.log",
+    "results/first-runtime-config/visual/config.json"
+  ]
+}

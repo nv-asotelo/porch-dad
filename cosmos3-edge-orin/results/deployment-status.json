@@ -1,0 +1,56 @@
+{
+  "status": "compute_install_running_in_nvme_chroot",
+  "last_verified_date": "2026-09-19",
+  "jetpack_installed": false,
+  "device_identified": true,
+  "engine_built": false,
+  "real_image_inference_verified": false,
+  "served_on_jetson": false,
+  "jetson_url": null,
+  "measured_latency_ms": null,
+  "measured_peak_gpu_allocation_bytes": null,
+  "measured_peak_unified_ram_bytes": null,
+  "blocking_evidence": null,
+  "next_required_input": "Remove FC REC to GND jumper before normal reboot",
+  "optimization_budget": {
+    "warmup_requests": 5,
+    "minimum_measured_requests": 30,
+    "maximum_candidates_including_baseline": 12,
+    "maximum_consecutive_non_improvements": 3,
+    "minimum_relative_improvement": 0.05,
+    "maximum_counterpart_or_p95_regression": 0.05
+  },
+  "installer_download_complete": true,
+  "installer_evidence": "results/installer-download.json",
+  "consecutive_goal_turns_with_same_blocker": 0,
+  "usb_recovery_device": [
+    {
+      "name": "APX",
+      "vendor_id": "0955",
+      "product_id": "7523",
+      "location_id": 34603008
+    }
+  ],
+  "installation_image_prepared": true,
+  "installation_image_evidence": "results/prepared-rootfs.json",
+  "last_verified_at": "2026-09-20T02:52:22.073378+00:00",
+  "physical_reset_confirmed_by_user": true,
+  "physical_reset_confirmation_observed_at": "2026-09-20T01:20:45.185486+00:00",
+  "model_download_complete": true,
+  "ram_recovery_image_uploaded": true,
+  "ram_recovery_usb_identity": {
+    "vendor_id": "0955",
+    "product_id": "7035",
+    "name": "Linux for Tegra"
+  },
+  "persistent_device_writes": true,
+  "storage_identified": true,
+  "storage_evidence": "results/jetson-storage.json",
+  "native_usb_ssh_working": true,
+  "nfs_over_ssh_readonly_mount_verified": true,
+  "os_flash_succeeded": true,
+  "flash_evidence": "results/jetpack-flash-status.json",
+  "rootfs_validation_evidence": "results/flashed-rootfs-validation.json",
+  "compute_plan_review": "results/compute-plan-review.json",
+  "compute_provisioning": "results/chroot-compute-provisioning.json"
+}

@@ -1,0 +1,11 @@
+{
+  "observed_at": "2026-09-20T03:35:08.620333+00:00",
+  "live_ssh_target": "RAM recovery rootfs",
+  "rootfs": "rootfs / rootfs rw",
+  "persistent_install_exit_code": 0,
+  "python_setup_exit_code": 0,
+  "installed_rootfs_mounted": false,
+  "jumper_removal_confirmed": false,
+  "official_procedure": "https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/howto.html",
+  "normal_boot_verified": false
+}

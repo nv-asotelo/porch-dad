@@ -1,0 +1,77 @@
+{
+  "validated_utc": "2026-09-20T06:18:25.137753+00:00",
+  "scope": "CPU conversion, source provenance, safetensors headers, actual pinned quantization parser and V1/V2 packing only; no GPU execution or model answer quality measurement",
+  "checkpoint": {
+    "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+    "source_shards": {
+      "transformer/diffusion_pytorch_model-00001-of-00002.safetensors": {
+        "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00001-of-00002.safetensors?download=true",
+        "expected_size_bytes": 5000040072,
+        "published_lfs_sha256": "116134e5492c514df79a2f07214e577c397aa961387dbe1c5dda488e7994ff6b",
+        "published_git_blob_sha1": "0428010516216042739b4a81a33373696eaeaf23",
+        "verified": true,
+        "size_bytes": 5000040072,
+        "sha256": "116134e5492c514df79a2f07214e577c397aa961387dbe1c5dda488e7994ff6b",
+        "git_blob_sha1": null,
+        "verified_against": "Hugging Face LFS SHA256"
+      },
+      "transformer/diffusion_pytorch_model-00002-of-00002.safetensors": {
+        "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00002-of-00002.safetensors?download=true",
+        "expected_size_bytes": 1739335512,
+        "published_lfs_sha256": "3b4c0aafe2705c900ac7bc743085a8e9e09c906624331bc2baa21e172e5d48e4",
+        "published_git_blob_sha1": "9fdd75623bcbb8ac13b3d4bf77de04d7f646b8c9",
+        "verified": true,
+        "size_bytes": 1739335512,
+        "sha256": "3b4c0aafe2705c900ac7bc743085a8e9e09c906624331bc2baa21e172e5d48e4",
+        "git_blob_sha1": null,
+        "verified_against": "Hugging Face LFS SHA256"
+      },
+      "vision_encoder/model.safetensors": {
+        "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/vision_encoder/model.safetensors?download=true",
+        "expected_size_bytes": 978739880,
+        "published_lfs_sha256": "2180ad739ecc96b5c1e9386892d3c5c08bfa42b9cdab9aabc53b028671db89b3",
+        "published_git_blob_sha1": "2fcc1c37e9977c106cdd52733a0751774bb12821",
+        "verified": true,
+        "size_bytes": 978739880,
+        "sha256": "2180ad739ecc96b5c1e9386892d3c5c08bfa42b9cdab9aabc53b028671db89b3",
+        "git_blob_sha1": null,
+        "verified_against": "Hugging Face LFS SHA256"
+      }
+    },
+    "algorithm": "round_to_nearest",
+    "calibration": null,
+    "candidate_shard": {
+      "path": "/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/models/cosmos3-edge-rtn-int4/model.safetensors",
+      "sha256": "f106c50251c625335d8ca8053f29c50685e9e825c0ca0cebf85c1680d24442aa",
+      "size_bytes": 2387544224
+    },
+    "metadata_sha256": {
+      "config.json": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+      "hf_quant_config.json": "5f272e2b534ffd3241306f28723c26a45f68223f05f6e36b44bfd71402f96bf4",
+      "model.safetensors.index.json": "374ca3a0dfcad247e11a0ea7176445e62a6901a82fad0e2d632cf69783c30aab",
+      "rtn-conversion.json": "d9d8dc320d4e187c12161f4821a36bcfe2dd38d62b9e53a72877cccd9159b6d8"
+    }
+  },
+  "conversion_elapsed_seconds": 27.54902612499427,
+  "conversion_peak_process_rss_bytes": 1117650944,
+  "packed_modules": 169,
+  "unpacked_weight_modules": 308,
+  "output_tensor_count": 1036,
+  "source_tensor_payload_bytes": 4871240160,
+  "candidate_tensor_payload_bytes": 2387425760,
+  "relative_l2_all_quantized_weights": 0.12221230213135632,
+  "maximum_error_in_stored_scale_units": 0.5,
+  "original_config_byte_equal": true,
+  "tests": {
+    "command": ".qa/transformers-registration/venv/bin/python -m unittest discover -s tests -p test_rtn*.py -v",
+    "count": 5,
+    "passed": true
+  },
+  "scripts_sha256": {
+    "scripts/quantize_cosmos3_rtn.py": "36ebfb21846759c4691401aa86330487a117d59d464b04818f31a6c28a75321d",
+    "scripts/rtn_backend.py": "1b7a705d9bfbacf2c0970381fd0e7818e4a0d394d10816c6f9a550c57a764931",
+    "scripts/preflight_cosmos_artifacts.py": "3386ffa58fab3dca9afbdf259f00734ab19d5f254e29cfa91ed23fca7792eb6b"
+  },
+  "device_build_complete": false,
+  "inference_validated": false
+}

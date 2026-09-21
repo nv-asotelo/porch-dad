@@ -1,0 +1,48 @@
+{
+  "created_utc": "2026-09-20T06:29:10.175699+00:00",
+  "id": "reference-equivalent-quality-v1",
+  "frozen_before_int4_device_inference": true,
+  "strict_screen_unchanged": true,
+  "strict_screen_required_facts": 19,
+  "fp16_strict_score": 18,
+  "fp16_strict_pass": false,
+  "reason": "The official unmodified Transformers model reproduced the entire remaining sphere answer exactly for the same input. The user requested deployment and bounded performance optimization of this model, not retraining away its reference behavior.",
+  "reference_evidence": "results/reference-official-05.json",
+  "reference_sha256": "a9599036fec5ee718d18545aca6dac87e940477f7eaebce05250e8af65195e9c",
+  "required_fact_scores": {
+    "01-left-right": [
+      1,
+      1,
+      1
+    ],
+    "02-counts": [
+      1,
+      1,
+      1
+    ],
+    "03-above-below": [
+      1,
+      1,
+      1
+    ],
+    "04-inside-outside": [
+      1,
+      1,
+      1
+    ],
+    "05-relative-size": [
+      0,
+      1,
+      1
+    ],
+    "06-quadrants": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "only_permitted_reference_error": "Case05 may call the two flat circles spheres, as both the corrected FP16 backend and official reference do. Calling them circles is better and also accepted.",
+  "acceptance": "All18 previously correct facts must remain correct, every response must complete, and no materially false added claim is allowed except the precise documented case05 sphere classification. A score18 with a different error fails.",
+  "measurement_note": "Absolute19/19screen status is reported separately from optimization equivalence; neither is a general accuracy guarantee."
+}

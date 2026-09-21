@@ -1,0 +1,17 @@
+{
+  "checked_at": "2026-09-19T18:08:43.122Z",
+  "type": "synthetic_browser_transport_contract",
+  "model_inference_performed": false,
+  "gpu_used": false,
+  "performance_measurements": [],
+  "checks": {
+    "upload_to_incremental_dom_before_done": true,
+    "successful_stream_increments_counter": true,
+    "stop_cancels_upstream_without_counting_completion": true,
+    "new_request_after_stop_completes": true,
+    "no_browser_javascript_errors": true
+  },
+  "fixture_label": "SYNTHETIC-TRANSPORT-FIXTURE-NO-INFERENCE",
+  "services_stopped": true,
+  "status": "passed"
+}

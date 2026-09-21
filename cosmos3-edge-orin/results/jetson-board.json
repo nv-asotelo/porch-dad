@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-09-20T01:21:54.410580+00:00",
+  "source": "Successful NVIDIA R39.2.1 readinfocmd.txt after user cold recovery reset",
+  "board_id": "3767",
+  "fab": "300",
+  "board_sku": "0005",
+  "chip_sku": "00:00:00:D5",
+  "ramcode_id": 2,
+  "product": "Jetson Orin Nano 8GB developer-kit module",
+  "eeprom_read_succeeded": true,
+  "bulk_upload_succeeded": true,
+  "storage_identified": false,
+  "persistent_storage_written": false
+}

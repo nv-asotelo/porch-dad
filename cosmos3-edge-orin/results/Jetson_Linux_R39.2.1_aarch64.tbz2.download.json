@@ -1,0 +1,9 @@
+{
+  "source_url": "https://developer.nvidia.com/downloads/embedded/L4T/r39_Release_v2.1/release/Jetson_Linux_R39.2.1_aarch64.tbz2",
+  "resolved_url": "https://developer.download.nvidia.com/embedded/L4T/r39_Release_v2.1/release/Jetson_Linux_R39.2.1_aarch64.tbz2",
+  "path": "downloads/Jetson_Linux_R39.2.1_aarch64.tbz2",
+  "size_bytes": 1287223769,
+  "sha256": "2e5619088ba88e85dab25247f033d70659b6f676ff835176a07766dcb0fdbe6b",
+  "publisher_checksum_verified": false,
+  "complete": true
+}

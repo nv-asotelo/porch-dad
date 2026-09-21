@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-09-20T04:43:33.967766+00:00",
+  "state": "partition_and_ext4_expanded_successfully",
+  "partition": "/dev/nvme0n1p1",
+  "partition_bytes": 998601301504,
+  "partition_start_and_guid_preserved": true,
+  "auxiliary_partitions_unchanged": true,
+  "gpt_verified_after": true,
+  "ext4_blocks": 243799145,
+  "ext4_block_bytes": 4096,
+  "reported_available_gib": 845,
+  "backup_directory": "results/storage-resize"
+}

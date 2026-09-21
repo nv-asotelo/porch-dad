@@ -1,0 +1,50 @@
+{
+  "created_utc": "2026-09-21T00:49:44.870Z",
+  "source_recording_sha256": "6f4b66d3572edf2faffa617baa77b1d448635354f1874d4960e2c7c87238b438",
+  "method": "Camera preview crops from user-provided screen recording, resized to 1280x720 and encoded by Chromium canvas JPEG quality 0.75. Not original sensor frames or exact historical inference inputs. Full evidence PNGs remain unchanged.",
+  "browser": "151.0.7922.34",
+  "crop": {
+    "x": 294,
+    "y": 459,
+    "width": 1348,
+    "height": 758
+  },
+  "width": 1280,
+  "height": 720,
+  "jpeg_quality": 0.75,
+  "fixtures": [
+    {
+      "file": "01-action-camera.jpg",
+      "sha256": "4a4035cd049f02280e3b9248a869e62e30d9aaab827d2c6a9f7c9a8d9e7c3963",
+      "size_bytes": 66152,
+      "source_png": "02-before-05.808s-action-camera.png",
+      "source_png_sha256": "143cbe45bf59be10c9c2196c82255e64dec10e9aaf237c4f2484480428453858",
+      "source_pts_seconds": "5.808333",
+      "reference_facts": [
+        "A person holds a small action camera close to their face."
+      ]
+    },
+    {
+      "file": "02-pen.jpg",
+      "sha256": "a9e59c6d32c8782e9964571275a4134ee1dedff8b1da7e47ccac73a828932dfa",
+      "size_bytes": 67216,
+      "source_png": "03-before-09.842s-pen.png",
+      "source_png_sha256": "30e1fe37f77e24a1feab8f4ca0ffbcc468e27ed61635613fe85248a85ba3606e",
+      "source_pts_seconds": "9.841667",
+      "reference_facts": [
+        "A person holds a pen near their face; intended use is not established."
+      ]
+    },
+    {
+      "file": "03-scissors.jpg",
+      "sha256": "7cbd556058ecc1bd2036e4d89b20d18e3562ab20fb7a35bb85c1d5356369768b",
+      "size_bytes": 69078,
+      "source_png": "06-before-33.947s-scissors.png",
+      "source_png_sha256": "b2b5709b5880b01910bb949f93831b596940cd97f6d5415fae02b32b61d1d501",
+      "source_pts_seconds": "33.946667",
+      "reference_facts": [
+        "A person holds scissors."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "observed_at": "2026-09-20T04:47:19.393166+00:00",
+  "static_ui_served_on": "Jetson Orin at 192.168.6.252",
+  "target_listener": "127.0.0.1:8090",
+  "local_tunnel_url": "http://localhost:8090",
+  "static_html_reachable": true,
+  "backend_ready": false,
+  "inference_verified": false
+}

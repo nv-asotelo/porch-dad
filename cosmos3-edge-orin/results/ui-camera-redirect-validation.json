@@ -1,0 +1,12 @@
+{
+  "observed_utc": "2026-09-20T23:48:20.377643+00:00",
+  "status": "passed",
+  "python_proxy_tests": 16,
+  "browser_receipt": "results/browser-ui-camera-redirect.json",
+  "deployment_receipt": "results/ui-camera-redirect-deployment.json",
+  "camera_certificate_boundary": "Fresh clients require certificate acceptance and camera permission; no client trust store changed. Camera QA uses synthetic media and accepts the certificate only in its isolated context.",
+  "sha256": {
+    "scripts/serve_ui.py": "47f167f661cae1ef090b1c3e8b40bc66680f3aef8f892a63bf957a0bd8f1a300",
+    "tests/test_serve_ui.py": "d8d2b358b704d9af87e49a2a560e7a5aa7d2f48346b8a9805f0846b706154d6e"
+  }
+}

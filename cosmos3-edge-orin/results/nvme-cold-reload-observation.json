@@ -1,0 +1,16 @@
+{
+  "observed_utc": "2026-09-20T07:11:46.449924+00:00",
+  "event": "nvme0 I/O tag129 QID3 timeout, completion polled",
+  "kernel_uptime_seconds": 9550.525721,
+  "phase": "cold FP16 backend reload, before six-image screen and benchmark",
+  "kernel_log_excerpt": "[9550.525721] nvme nvme0: I/O tag 129 (f081) QID 3 timeout, completion polled",
+  "backend_pid": 25825,
+  "backend_reached_ready": true,
+  "subsequent_six_image_requests": 6,
+  "subsequent_request_errors": 0,
+  "subsequent_outputs_exactly_match_baseline": true,
+  "evidence_log": ".qa/startup-device-diagnostic.log",
+  "root_cause": "Not established; earlier30-minute no-recurrence window did not rule out later cold-reload occurrences.",
+  "mitigation": "No kernel/NVMe power-management change applied. Resident backend avoids normal per-request checkpoint reads.",
+  "not_inference_latency_sample": true
+}

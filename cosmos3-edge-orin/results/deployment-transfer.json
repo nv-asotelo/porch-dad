@@ -1,0 +1,20 @@
+{
+  "status": "files_verified",
+  "observed_at": "2026-09-20T03:04:26.467268+00:00",
+  "file_count": 68,
+  "transfer_bytes": 7823658686,
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+  "reconstructed_empty_git_directories": [
+    "external/TensorRT-Edge-LLM/3rdParty/NVTX/.git/refs",
+    "external/TensorRT-Edge-LLM/3rdParty/googletest/.git/refs",
+    "external/TensorRT-Edge-LLM/3rdParty/nlohmannJson/.git/refs"
+  ],
+  "all_file_sha256_match": true,
+  "all_git_revisions_match": true,
+  "normal_boot_verified": false,
+  "inference_validated": false,
+  "state": "transferred_and_verified",
+  "transport": "Native USB SSH into NVMe rootfs chroot; validation as installed jetson user",
+  "destination": "/home/jetson/cosmos-edge"
+}

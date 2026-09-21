@@ -1,0 +1,7 @@
+{
+  "libusb_init": 0,
+  "apx_open_succeeded": true,
+  "purpose": "Host USB access test; no device payload or storage write",
+  "interface_0_claim_result": 0,
+  "release_result": 0
+}

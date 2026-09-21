@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Cosmos3 Edge · Live vision</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><div><span class="eyebrow">LOCAL VISION LAB</span><h1>Cosmos3 <span>Edge</span></h1></div><span id="backendStatus" class="badge" role="status">Checking backend…</span></header>
+  <main>
+    <section class="resources panel" aria-labelledby="resourcesTitle">
+      <div class="resource-heading"><h2 id="resourcesTitle">Orin resources</h2><span id="telemetryStatus" class="telemetry-status unavailable" role="status">Connecting to device metrics…</span></div>
+      <div class="resource-grid">
+        <div class="resource-stat"><span class="resource-label">CPU</span><strong id="cpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="cpuMeter"></span></div></div>
+        <div class="resource-stat"><span class="resource-label">GPU</span><strong id="gpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="gpuMeter"></span></div></div>
+        <div class="resource-stat"><span class="resource-label">VRAM / shared RAM</span><div id="memoryUsage" class="resource-value memory-value"><strong id="memoryAmount">—</strong> <span id="memoryPercent">Unavailable</span></div><div class="resource-meter" aria-hidden="true"><span id="memoryMeter"></span></div></div>
+      </div>
+      <p class="resource-note">Orin CPU and GPU share RAM. Memory includes the OS and applications, not a dedicated GPU allocation.</p>
+    </section>
+    <section class="vision panel" aria-label="Camera and image input">
+      <div class="panel-heading"><h2>Live view</h2><span id="sourceStatus">No camera running</span></div>
+      <div class="preview"><video id="video" autoplay playsinline muted hidden></video><img id="uploadedImage" alt="Selected image for analysis" hidden><div id="placeholder"><span class="reticle">＋</span><p>Bring the world into view.</p><small>Start your camera, or choose an image.</small></div><span id="liveIndicator" hidden>● LIVE</span></div>
+      <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="stopButton" disabled>Stop</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label><button id="analyzeButton" disabled>Analyze image</button></div>
+      <p id="cameraHelp" class="hint">Camera stays in your browser. Only sampled frames are sent to the local backend.</p>
+      <p class="hint capture-observation"><span id="captureStatus">No frame sent</span><span id="samplingStatus">Every 30 frames · waiting for camera</span></p>
+    </section>
+    <section class="results panel" aria-label="Model output">
+      <div class="panel-heading"><h2>What it sees</h2><span id="runStatus" role="status">Waiting for input</span></div>
+      <div id="answer" class="answer" aria-live="polite">Model output will appear here when the local backend is ready.</div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div class="metrics"><div><span>First visible token</span><strong id="ttft">—</strong><small>Request → first text</small></div><div><span>Complete answer</span><strong id="totalTime">—</strong><small>Request → stream end</small></div><div><span>Frame age</span><strong id="frameAge">—</strong><small>Since browser capture</small></div></div>
+      <div class="detail"><span id="modelName">No model connected</span><span id="requestCount">0 completed</span></div>
+    </section>
+    <section class="settings panel" aria-label="Inference settings">
+      <fieldset class="capture-presets"><legend>Capture preset</legend><div class="preset-options"><label><input type="radio" name="capturePreset" id="liveVlmPreset" value="live-vlm" checked> Live VLM WebUI <span>Default</span></label><label><input type="radio" name="capturePreset" id="lightweightPreset" value="lightweight"> Lightweight</label></div></fieldset>
+      <p id="presetDescription" class="hint preset-description">Requests a 1280×720 camera with no FPS cap. Sends full-size frames every 30 video frames and skips samples while busy. Temperature 0.7.</p>
+      <label for="prompt">Your prompt<textarea id="prompt" maxlength="2000" rows="3">Describe what you see in this image in one sentence.</textarea></label>
+      <div class="setting-row"><label for="maxTokens">Output token limit<input id="maxTokens" type="number" value="512" min="1" max="512"></label><label for="interval">Capture interval<select id="interval" disabled><option value="frames30" selected disabled>Every 30 video frames</option><option value="0">As soon as ready</option><option value="500">0.5 seconds</option><option value="1000">1 second</option><option value="2000">2 seconds</option></select></label><label for="resolution">Frame longest side<select id="resolution" disabled><option value="native" selected disabled>Full source size</option><option value="384">384 px</option><option value="512">512 px</option><option value="768">768 px</option></select></label></div>
+      <p class="hint">Changing preset stops the current request and clears timings. Your prompt and token limit stay the same. One inference runs at a time and conversation history does not grow. Small or very narrow images are padded for this model.</p>
+      <details class="comparison-details"><summary>About the comparison</summary><p>The Live VLM WebUI preset matches its camera request, frame interval, default prompt, token limit and temperature. Actual camera resolution and FPS depend on your device. This interface counts browser video frames and streams tokens; upstream counts frames after WebRTC and returns complete answers. JPEG encoders also differ. Compare complete-answer time using the same source and model; this is not an identical transport benchmark.</p></details>
+    </section>
+  </main>
+  <footer>TensorRT-Edge-LLM backend · Original lightweight camera and streaming interface · Inspired by <a href="https://github.com/NVIDIA-AI-IOT/live-vlm-webui" target="_blank" rel="noreferrer">NVIDIA Live VLM WebUI</a><br><span>Resource readings come from the Jetson. Response timings are measured in your browser.</span></footer>
+</body>
+</html>

@@ -1,0 +1,158 @@
+{
+  "started_utc": "2026-09-20T06:01:26.949961+00:00",
+  "completed_utc": "2026-09-20T06:06:05.909429+00:00",
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+  "cache_dir": "/home/jetson/cosmos-edge/data/engine-cache-chw",
+  "build_mode": "unquantized FP16 reasoner baseline",
+  "build_options": {
+    "spec_type": "none",
+    "draft_model_dir": "",
+    "max_input_len": 1024,
+    "max_kv_cache_capacity": 2048,
+    "max_batch_size": 1,
+    "max_image_tokens": null,
+    "max_image_tokens_per_image": null,
+    "tp_size": null,
+    "plugin_path": "",
+    "tree_base": false
+  },
+  "max_cache_size_bytes": 12884901888,
+  "published_cache_bytes": 42068826,
+  "prepared_model": {
+    "bundle_dir": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc",
+    "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+    "draft_model_dir": "",
+    "built": true
+  },
+  "server_started": false,
+  "inference_validated": false,
+  "compatibility_repairs": [
+    {
+      "created_utc": "2026-09-20T06:06:05.645100+00:00",
+      "status": "applied",
+      "source_config": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner/config.json",
+      "source_config_sha256": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+      "source_reference": "nvidia/Cosmos3-Edge",
+      "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "artifact": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/visual/config.json",
+      "before_sha256": "63b0e6354095652207ab4bec815977cf0303391619d319e40c55ced3df83e911",
+      "after_sha256": "380e4b9881bac8caf9ce549460cd0fedfcebcf2242910b6721700df529752a07",
+      "additions": {
+        "text_config.rope_theta": 100000000,
+        "text_config.rope_scaling": {
+          "mrope_section": [
+            24,
+            20,
+            20
+          ],
+          "rope_theta": 100000000,
+          "rope_type": "default",
+          "type": "default"
+        }
+      },
+      "engine_files_modified": false,
+      "note": "Only config aliases are normalized. No engine rebuild or inference validation is performed.",
+      "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260920T060605Z-8ca56dee13b040178cf0f0e9aeba5586.visual-config.before.json",
+      "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260920T060605Z-8ca56dee13b040178cf0f0e9aeba5586.receipt.json",
+      "applied_utc": "2026-09-20T06:06:05.650437+00:00"
+    },
+    {
+      "created_utc": "2026-09-20T06:06:05.803225+00:00",
+      "status": "applied",
+      "source_model": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+      "source_reference": "nvidia/Cosmos3-Edge",
+      "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "source_sha256": {
+        "config.json": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+        "chat_template.jinja": "7120ee6666468d4e9b2dc11e133ac5c2fa765fa5907706bf0f906270aa5510c8",
+        "tokenizer_config.json": "85577f01be64ea03ee9aacc0536088e47b96971e4aff21e0aa604900b1410386"
+      },
+      "special_tokens": {
+        "video_token_id": {
+          "id": 18,
+          "token": "<|video_pad|>"
+        },
+        "image_token_id": {
+          "id": 19,
+          "token": "<|image_pad|>"
+        },
+        "vision_start_token_id": {
+          "id": 20,
+          "token": "<|vision_start|>"
+        },
+        "vision_end_token_id": {
+          "id": 21,
+          "token": "<|vision_end|>"
+        }
+      },
+      "artifact": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/processed_chat_template.json",
+      "before_sha256": "59a43b58bb7bf65fca33bfd53bbb13e4bf1255f3c3c0c420184aa26612257d8d",
+      "after_sha256": "f76712a886b6f983bd0e911cf604ee8158bdb8afa65aa3c9eabf2c3e5389ae3f",
+      "additions": {
+        "content_types.image.format": "<|vision_start|><|image_pad|><|vision_end|>",
+        "content_types.video.format": "<|vision_start|><|video_pad|><|vision_end|>"
+      },
+      "previous_values": {
+        "content_types.image.format": {
+          "present": false,
+          "value": null
+        },
+        "content_types.video.format": {
+          "present": false,
+          "value": null
+        }
+      },
+      "engine_files_modified": false,
+      "note": "Formats match the pinned Jinja with add_vision_id disabled. Roles/generation prompts are preserved. No inference validation is performed.",
+      "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-media-20260920T060605Z-0e95b3a67dbc47e9a07f431a8dbbb9ab.processed-template.before.json",
+      "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-media-20260920T060605Z-0e95b3a67dbc47e9a07f431a8dbbb9ab.receipt.json",
+      "applied_utc": "2026-09-20T06:06:05.807025+00:00"
+    }
+  ],
+  "build_provenance": {
+    "before": {
+      "tensorrt_version": "10.16.2.10",
+      "cupy_version": "13.6.0",
+      "cuda_driver_version": 13020,
+      "cuda_runtime_version": 13000,
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "backend_tracked_diff": {
+        "sha256": "b2e032c300fc78a5f96a391f9f10ab64104d98586333daf8258e6bba4a958c69",
+        "size_bytes": 8964,
+        "dirty": true,
+        "base": "HEAD",
+        "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+      },
+      "built_plugin": {
+        "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+        "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+        "size_bytes": 18255824
+      },
+      "plugin_environment_override": null
+    },
+    "after": {
+      "tensorrt_version": "10.16.2.10",
+      "cupy_version": "13.6.0",
+      "cuda_driver_version": 13020,
+      "cuda_runtime_version": 13000,
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "backend_tracked_diff": {
+        "sha256": "b2e032c300fc78a5f96a391f9f10ab64104d98586333daf8258e6bba4a958c69",
+        "size_bytes": 8964,
+        "dirty": true,
+        "base": "HEAD",
+        "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+      },
+      "built_plugin": {
+        "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+        "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+        "size_bytes": 18255824
+      },
+      "plugin_environment_override": null
+    },
+    "changed_during_prepare": false,
+    "note": "Versions use CUDA integer encoding. built_plugin identifies the source-build artifact; any EDGELLM_PLUGIN_PATH override is recorded separately. On a cache hit (built=false), these observations do not establish the original engine build environment."
+  },
+  "note": "The 12 GiB limit concerns published engine files, not GPU memory or temporary compiler disk usage."
+}

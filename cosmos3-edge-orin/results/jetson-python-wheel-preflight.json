@@ -1,0 +1,90 @@
+{
+  "observed_at": "2026-09-20T02:07:15.449100+00:00",
+  "installed_on_target": false,
+  "packages": [
+    {
+      "package": "cupy-cuda13x",
+      "version": "13.6.0",
+      "source": "https://pypi.org/pypi/cupy-cuda13x/13.6.0/json",
+      "requires_python": ">=3.9",
+      "requires_dist": [
+        "numpy<2.6,>=1.22",
+        "fastrlock>=0.5",
+        "scipy<1.17,>=1.7; extra == \"all\"",
+        "Cython>=3; extra == \"all\"",
+        "optuna>=2.0; extra == \"all\"",
+        "packaging; extra == \"test\"",
+        "pytest>=7.2; extra == \"test\"",
+        "hypothesis<6.55.0,>=6.37.2; extra == \"test\"",
+        "mpmath; extra == \"test\""
+      ],
+      "candidate_arm64_python312_wheels": [
+        {
+          "filename": "cupy_cuda13x-13.6.0-cp312-cp312-manylinux2014_aarch64.whl",
+          "size": 66330291,
+          "sha256": "a3bb49fb023757bfaf0b82c5a1740739a2108ea46d944d699bcff92963c7b87f",
+          "url": "https://files.pythonhosted.org/packages/55/73/68a35a4c027be4c24844585441176635d814ada7d1330c771e410bad9816/cupy_cuda13x-13.6.0-cp312-cp312-manylinux2014_aarch64.whl"
+        }
+      ]
+    },
+    {
+      "package": "nvidia-cutlass-dsl",
+      "version": "4.7.0",
+      "source": "https://pypi.org/pypi/nvidia-cutlass-dsl/4.7.0/json",
+      "requires_python": ">=3.10",
+      "requires_dist": [
+        "nvidia-cutlass-dsl-libs-base==4.7.0",
+        "nvidia-cutlass-dsl-libs-cu12==4.7.0",
+        "nvidia-cutlass-dsl-libs-cu13==4.7.0; extra == \"cu13\""
+      ],
+      "candidate_arm64_python312_wheels": [
+        {
+          "filename": "nvidia_cutlass_dsl-4.7.0-py3-none-any.whl",
+          "size": 10459,
+          "sha256": "f96e35c1393a8afa9a20cada1aa08fdca16d673852f3274144e3e81693f13a14",
+          "url": "https://files.pythonhosted.org/packages/a3/a7/597b08f293989c3774621f668918bfb6c6c308510cad000abd8ee674f2d4/nvidia_cutlass_dsl-4.7.0-py3-none-any.whl"
+        }
+      ]
+    },
+    {
+      "package": "nvidia-cutlass-dsl-libs-cu13",
+      "version": "4.7.0",
+      "source": "https://pypi.org/pypi/nvidia-cutlass-dsl-libs-cu13/4.7.0/json",
+      "requires_python": ">=3.10",
+      "requires_dist": [
+        "numpy",
+        "typing-extensions>=4.10.0",
+        "cuda-python>=12.8",
+        "backports.strenum; python_version < \"3.11\"",
+        "protobuf<7,>=6.30.2",
+        "nvidia-cuda-nvdisasm<14,>=13.3",
+        "nvidia-cutlass-dsl-libs-base==4.7.0"
+      ],
+      "candidate_arm64_python312_wheels": [
+        {
+          "filename": "nvidia_cutlass_dsl_libs_cu13-4.7.0-cp312-cp312-manylinux_2_28_aarch64.whl",
+          "size": 86972936,
+          "sha256": "b037afbba54ba3a1d96502ea70048bee57ab598c63df5158ebc9f0d5b1c0790a",
+          "url": "https://files.pythonhosted.org/packages/85/30/ef2f0f30a27bc0fe1303242c213c278dcb8cdffa9eec72e3ccef2c3c294c/nvidia_cutlass_dsl_libs_cu13-4.7.0-cp312-cp312-manylinux_2_28_aarch64.whl"
+        }
+      ]
+    },
+    {
+      "package": "pybind11",
+      "version": "3.0.4",
+      "source": "https://pypi.org/pypi/pybind11/3.0.4/json",
+      "requires_python": ">=3.8",
+      "requires_dist": [
+        "pybind11-global==3.0.4; extra == \"global\""
+      ],
+      "candidate_arm64_python312_wheels": [
+        {
+          "filename": "pybind11-3.0.4-py3-none-any.whl",
+          "size": 314166,
+          "sha256": "961720ee652da51d531b7b2451a6bd2bc042b0106e6d9baa48ecb7d58034ce63",
+          "url": "https://files.pythonhosted.org/packages/b3/06/c3a23c9a0263b136c519f033a58d4641e73065fefc7754e9667ec206d992/pybind11-3.0.4-py3-none-any.whl"
+        }
+      ]
+    }
+  ]
+}

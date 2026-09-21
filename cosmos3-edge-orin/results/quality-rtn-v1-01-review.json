@@ -1,0 +1,70 @@
+{
+  "candidate": "rtn-v1-i1024-kv2048",
+  "raw_results": "results/raw/quality-rtn-v1-01.jsonl",
+  "raw_sha256": "d11d7992e0bc4a8df228e5c1834f811df699d18b612e0577039585bf0fe90050",
+  "reviewer": "Codex semantic review against frozen answer key and reference-equivalence policy",
+  "required_facts": 19,
+  "correct_facts": 13,
+  "strict_pass": false,
+  "optimization_equivalent": false,
+  "policy": "results/optimization-quality-policy.json",
+  "transport_successes": 6,
+  "completed_without_token_truncation": 5,
+  "cases": [
+    {
+      "case_id": "01-left-right",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "Left/right descriptions entail required relation; extra shape descriptions are accurate."
+    },
+    {
+      "case_id": "02-counts",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All counts correct."
+    },
+    {
+      "case_id": "03-above-below",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All facts correct."
+    },
+    {
+      "case_id": "04-inside-outside",
+      "fact_scores": [
+        1,
+        1,
+        0
+      ],
+      "review": "Omits requested right-side relation."
+    },
+    {
+      "case_id": "05-relative-size",
+      "fact_scores": [
+        0,
+        1,
+        1
+      ],
+      "review": "Same permitted sphereclassificationerrorasreference;purpleandlargercorrect."
+    },
+    {
+      "case_id": "06-quadrants",
+      "fact_scores": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "review": "Unrequested incomplete bounding-box JSON gives no required shape-position facts, truncated at64tokens."
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "candidate": "fp16-chw-halfpixel-cacheoff",
+  "suite_id": "original-geometric-quality-v1-jpeg-v1",
+  "raw_results": "results/raw/quality-fp16-corrected-01.jsonl",
+  "raw_sha256": "5c16dc3ec85c80f9316fb20145d68e3ba0ea37d58baecb19428fc806f8376193",
+  "reviewer": "Codex semantic review against frozen answer key",
+  "required_facts": 19,
+  "correct_facts": 18,
+  "passed": false,
+  "false_added_claims": true,
+  "transport_successes": 6,
+  "completed_without_token_truncation": 6,
+  "cases": [
+    {
+      "case_id": "01-left-right",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "02-counts",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "03-above-below",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "04-inside-outside",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "05-relative-size",
+      "fact_scores": [
+        0,
+        1,
+        1
+      ],
+      "review": "Purple and left-larger relations correct. Flat circles are called spheres: shape fact fails and added 3D claim prevents overall pass."
+    },
+    {
+      "case_id": "06-quadrants",
+      "fact_scores": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    }
+  ],
+  "note": "Same original JPEGs, prompts, sampling settings and 64-token ceiling. No acceptance threshold changed."
+}

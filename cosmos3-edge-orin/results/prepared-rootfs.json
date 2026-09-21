@@ -1,0 +1,19 @@
+{
+  "rootfs_user": "jetson",
+  "hostname": "cosmos-edge",
+  "ssh_public_key_installed": true,
+  "boot_target": "multi-user.target",
+  "scope": "Guest installation image only; no Jetson storage write",
+  "apply_binaries_exit_code": 0,
+  "device_flashed": false,
+  "verified_at": "2026-09-19T20:13:56.088956+00:00",
+  "jetson_linux_release": "39.2.1",
+  "arm_chroot_package_audit": "No findings (empty audit output)",
+  "kernel_image_present": true,
+  "ssh_directory_mode": "0700",
+  "ssh_authorized_keys_mode": "0600",
+  "ssh_owner_uid": 1000,
+  "ssh_owner_gid": 1000,
+  "default_target_verified": "multi-user.target",
+  "first_boot_ssh_host_key_service": "nvfb-ssh-keygen.service enabled; Before=ssh.service"
+}

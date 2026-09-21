@@ -1,0 +1,91 @@
+{
+  "status": "prepared_not_used",
+  "created_at_utc": "2026-09-20T03:06:36.102954+00:00",
+  "purpose": "one_optional_awq_calibration_candidate_only",
+  "model_run": false,
+  "quantization_run": false,
+  "device_access": false,
+  "quality_evaluation": false,
+  "signs_of_life_evidence": false,
+  "manifest": "data/calibration/images.jsonl",
+  "manifest_sha256": "d808b2897ba8148017ae62a208d47d466c408258b7ea8cc48b9b30dd31d26229",
+  "manifest_count": 32,
+  "unique_sha256_count": 32,
+  "total_image_bytes": 4984558,
+  "image_licenses": {
+    "CC-BY-2.0": 32
+  },
+  "historical_coco_license_ids": [
+    4
+  ],
+  "current_flickr_license_ids": [
+    4
+  ],
+  "dataset": "COCO val2017",
+  "dataset_license_note": "COCO annotations are CC BY 4.0; images have their own recorded CC BY 2.0 licenses. Annotation licensing was not used as image permission.",
+  "selection_rule": "Ascending COCO val2017 image ID; historical COCO license 4 AND current Flickr oEmbed license 4; title/creator/page attribution required; stop at first 32.",
+  "selected_coco_image_ids": [
+    785,
+    885,
+    1000,
+    1268,
+    1993,
+    2473,
+    5001,
+    6012,
+    6818,
+    7281,
+    7991,
+    8762,
+    9483,
+    11149,
+    12062,
+    12280,
+    12667,
+    13004,
+    13291,
+    13348,
+    13659,
+    14439,
+    15272,
+    15517,
+    15746,
+    17182,
+    19402,
+    20247,
+    20553,
+    21167,
+    22705,
+    23666
+  ],
+  "metadata_candidate_count": 44,
+  "metadata_exclusions": {
+    "excluded_current_license_not_4": 3,
+    "excluded_lookup_failed": 6
+  },
+  "verified": {
+    "existing_corpus_rows_schema": true,
+    "sha256": true,
+    "unique_image_bytes": true,
+    "full_jpeg_decode": true,
+    "dimensions_match_annotations": true,
+    "creator_title_source_license_per_row": true,
+    "no_exact_byte_overlap_with_heldout_fixture_pngs": true,
+    "exactly_32_downloaded_image_files": true
+  },
+  "attribution": "data/calibration/ATTRIBUTION.md",
+  "provenance_directory": "data/calibration/metadata",
+  "annotation_entry_sha256": "afe3b30e403dd7f228e2373023abbd60042a6e10ec6874d3652df034d289ebb9",
+  "image_modifications": "None. Optional calibration runner resizes only an in-memory copy.",
+  "limitations": [
+    "Small bounded calibration sample, not a representative video benchmark.",
+    "No quality claim or performance conclusion follows from corpus preparation.",
+    "Flickr rights/attribution metadata checked at manifest timestamps; frozen evidence defines selection.",
+    "SHA-256 values are locally observed integrity digests, not publisher-signed image hashes."
+  ],
+  "sources": [
+    "https://cocodataset.org/#download",
+    "https://cocodataset.org/#termsofuse",
+    "https://creativecommons.org/licenses/by/2.0/"
+  ]
+}

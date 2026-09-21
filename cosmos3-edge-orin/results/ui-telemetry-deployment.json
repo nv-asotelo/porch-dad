@@ -1,0 +1,26 @@
+{
+  "observed_utc": "2026-09-20T18:12:25.379301+00:00",
+  "backend_pid_before": "27246",
+  "backend_pid_after": "27246",
+  "ui_restart_at_idle": true,
+  "metrics": {
+    "sampled_at": "2026-09-20T18:12:25.268583+00:00",
+    "status": "ok",
+    "cpu": {
+      "utilization_percent": 1.0
+    },
+    "gpu": {
+      "utilization_percent": 0.0
+    },
+    "memory": {
+      "used_bytes": 6858309632,
+      "total_bytes": 7912775680,
+      "utilization_percent": 86.7,
+      "shared": true,
+      "measurement": "MemTotal - MemAvailable"
+    },
+    "age_ms": 99,
+    "sample_interval_ms": 1000
+  },
+  "ui_service": "MainPID=46810\nActiveState=active\nUnitFileState=enabled\n"
+}

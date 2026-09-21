@@ -1,0 +1,34 @@
+{
+  "observed_utc": "2026-09-20T23:37:51.949333+00:00",
+  "backend_pid_before": "27246",
+  "backend_pid_after": "27246",
+  "ui_restart_at_idle": true,
+  "http_url": "http://192.168.6.252:8090",
+  "https_url": "https://192.168.6.252:8443",
+  "secure_health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "metrics": {
+    "sampled_at": "2026-09-20T23:37:51.824876+00:00",
+    "status": "ok",
+    "cpu": {
+      "utilization_percent": 0.5
+    },
+    "gpu": {
+      "utilization_percent": 0.0
+    },
+    "memory": {
+      "used_bytes": 6868606976,
+      "total_bytes": 7912775680,
+      "utilization_percent": 86.8,
+      "shared": true,
+      "measurement": "MemTotal - MemAvailable"
+    },
+    "age_ms": 87,
+    "sample_interval_ms": 1000
+  },
+  "ui_service": "MainPID=83953\nActiveState=active\nUnitFileState=enabled\n",
+  "default_preset": "live-vlm"
+}

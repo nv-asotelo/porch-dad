@@ -1,0 +1,66 @@
+{
+  "observed_at": "2026-09-20T23:41:02.069Z",
+  "url": "https://192.168.6.252:8443",
+  "checks": {
+    "default_and_live_sampling_request": true,
+    "real_1280x720_camera_inference_and_stop": true,
+    "lightweight_camera_and_request": true,
+    "busy_samples_skipped_and_switch_aborts_without_stale_output": true,
+    "common_prompt_and_limit_preserved": true,
+    "mobile_no_overflow": true,
+    "reload_defaults_to_live_vlm": true
+  },
+  "real_outputs": [
+    {
+      "preset": "live-vlm",
+      "source": "uploaded fixture",
+      "output": "There is a red circle and a blue square on a white background.",
+      "sent_dimensions": [
+        512,
+        512
+      ]
+    },
+    {
+      "preset": "live-vlm",
+      "source": "synthetic browser camera",
+      "output": "A bright green progress bar fills the screen, indicating that something is currently being loaded or processed.",
+      "sent_dimensions": [
+        1280,
+        720
+      ]
+    },
+    {
+      "preset": "lightweight",
+      "source": "synthetic browser camera",
+      "output": "A green pie chart with a time of 0:00:00:050 is displayed on a dark green background.",
+      "sent_dimensions": [
+        512,
+        384
+      ]
+    }
+  ],
+  "limits": [
+    "Synthetic browser camera, not a physical camera",
+    "QA accepts the device certificate only in this isolated browser context",
+    "These few live requests are functionality checks, not a performance benchmark"
+  ],
+  "live_camera": {
+    "constraints": {
+      "audio": false,
+      "video": {
+        "width": {
+          "ideal": 1280
+        },
+        "height": {
+          "ideal": 720
+        }
+      }
+    },
+    "actual": "Sent 1280×720 · Live VLM WebUI",
+    "sampling": "2 frames sent · 1 skipped while busy"
+  },
+  "status": "passed",
+  "browser_errors": [],
+  "metrics_samples": 18,
+  "sampled_peak_system_ram_unavailable_bytes": 6851584000
+}

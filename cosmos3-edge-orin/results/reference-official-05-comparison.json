@@ -1,0 +1,13 @@
+{
+  "reference_result": "results/reference-official-05.json",
+  "orin_result": "results/raw/quality-fp16-corrected-01.jsonl",
+  "case_id": "05-relative-size",
+  "identical_image_sha256": true,
+  "identical_prompt": true,
+  "identical_output_text": true,
+  "reference_generated_token_count": 28,
+  "orin_completion_tokens": 28,
+  "reference_prompt_tokens": 294,
+  "orin_prompt_tokens": 294,
+  "conclusion": "The official reference reproduces the sphere label verbatim on the same request. This isolates the remaining observed05 wording failure to behavior shared with the official model path, not evidence of a remaining TensorRT-specific correctness defect. The frozen quality requirement remains unmet."
+}

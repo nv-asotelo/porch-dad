@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "timestamp_utc": "2026-09-20T02:03:00Z",
+  "timestamp_precision": "approximate minute",
+  "evidence_source": "Live execution reported by the coordinating agent in this task; this artifact was recorded without performing further live commands.",
+  "execution_session_id": 46157,
+  "helper": {
+    "path": "scripts/ssh_nfs_bridge.py",
+    "sha256_at_evidence_recording": "5e024c8854dfe877e3bf358c06ecfb259aa6eee71e5478ba212b292e7d2a443c",
+    "mode": "foreground"
+  },
+  "authentication": {
+    "host_keys": "Explicit pinned task known-hosts files on both SSH legs",
+    "guest": "Task private key",
+    "target": "Protected password file",
+    "credential_values_recorded": false
+  },
+  "route": {
+    "guest_ssh": {
+      "host": "127.0.0.1",
+      "port": 2222
+    },
+    "target_ssh": {
+      "host": "fe80::1%en8",
+      "port": 22,
+      "link": "native USB link-local IPv6"
+    },
+    "target_nfs_listener": {
+      "host": "127.0.0.1",
+      "port": 20490
+    },
+    "guest_nfs_destination": {
+      "host": "127.0.0.1",
+      "port": 2049
+    }
+  },
+  "mount": {
+    "source": "127.0.0.1:/",
+    "mountpoint": "/mnt/cosmos-bridge-check",
+    "options": [
+      "ro",
+      "nosuid",
+      "nodev",
+      "nosharecache",
+      "vers=4.1",
+      "proto=tcp",
+      "port=20490"
+    ],
+    "read_only": true,
+    "successful": true
+  },
+  "integrity_check": {
+    "relative_path": "internal/flash.idx",
+    "algorithm": "SHA-256",
+    "vm_source_sha256": "7da3dfcfd6835028f247d254d7780dd59b7abbd6ff29616f3c9e966859a18496",
+    "jetson_nfs_read_sha256": "7da3dfcfd6835028f247d254d7780dd59b7abbd6ff29616f3c9e966859a18496",
+    "exact_match": true
+  },
+  "cleanup": {
+    "unmount_exit_code": 0,
+    "test_helper_stop": "Ctrl-C",
+    "test_helper_exit_code": 130,
+    "original_target_port_2049_bridge_untouched": true
+  },
+  "prior_offline_validation": {
+    "guard_checks_passed": 23,
+    "syntax_and_help_checks_passed": true
+  },
+  "scope": "Validates the reusable bridge, a read-only NFSv4.1 mount, matching file content, clean unmount and helper shutdown.",
+  "limitations": [
+    "This check does not establish a completed flash or installed JetPack.",
+    "This check does not measure model inference, latency, memory use or NFS throughput.",
+    "The USB interface scope and pinned host keys must be reverified after reconnecting."
+  ]
+}

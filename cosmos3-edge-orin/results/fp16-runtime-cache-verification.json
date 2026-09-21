@@ -1,0 +1,10 @@
+{
+  "observed_utc": "2026-09-20T06:34:38.459700+00:00",
+  "pid": 17624,
+  "log_sha256": "26c0bc7f8d476210bc0ea27f2515bd125e3871a509e0f4ff0bc6c1324bb5495c",
+  "requested_encoder_cache_zero": true,
+  "encoder_embedding_cache_hits": 0,
+  "health_ready_seen": true,
+  "post_requests_logged": 54,
+  "scope": "Resident run includes fixed35request performance reference plus browser checks; cachedisabled means repeatedJPEGs still executevision."
+}

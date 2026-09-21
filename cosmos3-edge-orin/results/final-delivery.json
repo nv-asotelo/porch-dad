@@ -1,0 +1,50 @@
+{
+  "completed_utc": "2026-09-20T07:36:17.597617+00:00",
+  "ui_url": "http://localhost:8090",
+  "presentation": "output/cosmos3-edge-findings-2026-09-20T07-33-43-203Z.pptx",
+  "selected_candidate": "fp16-corrected-i1024-kv2048",
+  "source_sync_receipt": "results/final-source-sync.json",
+  "final_file_sync": [
+    {
+      "file": "README.md",
+      "bytes": 9867,
+      "sha256": "f96fe5010a6e17bd18c287cf0d44afdbdad3964f3e8e823fcb05db3e95f1a931"
+    },
+    {
+      "file": "GOAL.md",
+      "bytes": 10919,
+      "sha256": "d6ad2d58f1af45682efd1a1705835b348072c3b0d9ea72e0880c7e6302af4786"
+    },
+    {
+      "file": "results/final-presentation.json",
+      "bytes": 6033,
+      "sha256": "1432965a5f9c4eaabcb16dd394b07dea66f375766223713b5184a0e54bd0108d"
+    },
+    {
+      "file": "results/final-source-sync.json",
+      "bytes": 24288,
+      "sha256": "657d443afb0b68a1adac24474504769f9954bd1456b73e4a731b3b8de306a4f4"
+    },
+    {
+      "file": "output/cosmos3-edge-findings-2026-09-20T07-33-43-203Z.pptx",
+      "bytes": 182226,
+      "sha256": "e6cc252c56d60aee321a5c37ee86d2b1c1e295f29d8eca365e3b582b17e2beaf"
+    }
+  ],
+  "benchmark": "results/raw/benchmark-final-service-01.jsonl",
+  "soak": "results/raw/soak-final-service-01.summary.json",
+  "service_audit": "results/final-service-audit.json",
+  "web_access": "results/final-web-access.json",
+  "quality_reviews": [
+    "results/quality-final-service-01-review.json",
+    "results/natural-smoke-final-01-review.json"
+  ],
+  "limitations": [
+    "Synthetic strict18/19 not19/19",
+    "Natural3photos5/9partialcredit,4/9strict,0/3complete;officialreferencealsofails",
+    "NVMe cold-load completion-polled timeouts unresolved",
+    "Physical reboot after service installation not tested",
+    "Camera transport checked with synthetic moving Chromium camera, not physical camera accuracy",
+    "Shared system RAM unavailable is not dedicated VRAM; CUDA allocator peak unavailable"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "created_utc": "2026-09-20T06:06:05.645100+00:00",
+  "status": "applied",
+  "source_config": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner/config.json",
+  "source_config_sha256": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+  "source_reference": "nvidia/Cosmos3-Edge",
+  "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+  "artifact": "/home/jetson/cosmos-edge/data/engine-cache-chw/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/visual/config.json",
+  "before_sha256": "63b0e6354095652207ab4bec815977cf0303391619d319e40c55ced3df83e911",
+  "after_sha256": "380e4b9881bac8caf9ce549460cd0fedfcebcf2242910b6721700df529752a07",
+  "additions": {
+    "text_config.rope_theta": 100000000,
+    "text_config.rope_scaling": {
+      "mrope_section": [
+        24,
+        20,
+        20
+      ],
+      "rope_theta": 100000000,
+      "rope_type": "default",
+      "type": "default"
+    }
+  },
+  "engine_files_modified": false,
+  "note": "Only config aliases are normalized. No engine rebuild or inference validation is performed.",
+  "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260920T060605Z-8ca56dee13b040178cf0f0e9aeba5586.visual-config.before.json",
+  "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260920T060605Z-8ca56dee13b040178cf0f0e9aeba5586.receipt.json",
+  "applied_utc": "2026-09-20T06:06:05.650437+00:00"
+}

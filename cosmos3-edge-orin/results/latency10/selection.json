@@ -1,0 +1,19 @@
+{
+  "created_utc": "2026-09-21T01:15:53.827345+00:00",
+  "status": "complete_at_stopping_rule",
+  "selected": "live-vlm-fp16-baseline",
+  "tested_candidate": "live-vlm-fp16-retained-topk",
+  "acceptance_threshold_percent": 10,
+  "observed_complete_answer_reduction_percent": 0.47909923507989394,
+  "comparison": "results/latency10/comparison.json",
+  "stop_reason": "First measured candidate missed the frozen 10 percent whole-answer threshold; no further optimization trial.",
+  "restoration": "results/latency10/restoration.json",
+  "verification": "results/latency10/restoration-verification.json",
+  "web_url": "https://192.168.6.252:8443",
+  "presentation": {
+    "path": "output/cosmos3-edge-findings-with-latency-goal-2026-09-21T01-13-52-175Z.pptx",
+    "sha256": "751d79fa70c4f07d2f0fe166c730ff1f4e6fdc409d701f7964dc0c5ef4b3ee10",
+    "slides": 28
+  },
+  "caveat": "Bounded search; no claim of global optimality. Small observed latency difference is not presented as a robust general improvement."
+}

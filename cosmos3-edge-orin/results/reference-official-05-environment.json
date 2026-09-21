@@ -1,0 +1,61 @@
+{
+  "observed_utc": "2026-09-20T06:26:39.935920+00:00",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "processor": "Apple M3 Pro",
+  "system_memory_bytes": 38654705664,
+  "python": "3.12.14",
+  "pip_check": "No broken requirements found.",
+  "transformers_direct_url": {
+    "archive_info": {
+      "hash": "sha256=12fd16fcf433c28dd732bfa2669526f141254d050f8674a2f7cd3b43d9391b9e",
+      "hashes": {
+        "sha256": "12fd16fcf433c28dd732bfa2669526f141254d050f8674a2f7cd3b43d9391b9e"
+      }
+    },
+    "url": "https://github.com/huggingface/transformers/archive/c587bc884db2c2e31fc2b8102314656b17aa07b1.zip"
+  },
+  "installed_reference_source_files": {
+    "models/cosmos3_edge/modeling_cosmos3_edge.py": {
+      "sha256": "f68f9fa7eaa4e05fcec0e526f798cda5036046f860772a0820c68c04f3e453bf",
+      "bytes": 66429
+    },
+    "models/cosmos3_edge/image_processing_cosmos3_edge.py": {
+      "sha256": "3b97a86df032303c4502b151bfe68c6d369f1e8b4155e194f0c4cd04516244cb",
+      "bytes": 10806
+    },
+    "models/cosmos3_edge/processing_cosmos3_edge.py": {
+      "sha256": "1d87354c1c773b6ef26001588c4c048ac729e32e1120348d4c427d7fe6e1c611",
+      "bytes": 11229
+    },
+    "models/cosmos3_edge/configuration_cosmos3_edge.py": {
+      "sha256": "33844ce6ec77ba81bc3845268f91b35b48b42b94b8562138f843760cff027af9",
+      "bytes": 7887
+    },
+    "conversion_mapping.py": {
+      "sha256": "67deef358d7d09df8eb579ef5b7e79f6a4e42137f4d1cdba63891bfb85c3b187",
+      "bytes": 112649
+    }
+  },
+  "environment_policy": {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "HF_HUB_DISABLE_TELEMETRY": "1",
+    "TOKENIZERS_PARALLELISM": "false",
+    "PYTORCH_ENABLE_MPS_FALLBACK": "1",
+    "torch_num_threads": 4,
+    "cache_locations": ".qa/reference-run/{hf-cache,torch-cache,xdg-cache,tmp}"
+  },
+  "first_attempt": "Model loading/preprocessing finished but the original diagnostic logger could not serialize Transformers loading-info sets. Fixed receipt serialization; no model source/weights changed. Only the retry reached model.generate.",
+  "runs": {
+    "completed_generations": 1,
+    "model_compatibility_patches": 0,
+    "diagnostic_logger_fixes": 1
+  },
+  "scope_limits": [
+    "One fixed05 JPEG/prompt; no general VLM accuracy claim",
+    "Same output text is not a proof of intermediate/logit bitwise parity",
+    "Mac MPS timing is not comparable to warmed Orin measurements",
+    "System RSS and MPS allocated/driver counters overlap; do not sum them",
+    "CPU fallback for unsupported MPS operators was enabled; no such fallback warning observed in the saved successful log"
+  ]
+}

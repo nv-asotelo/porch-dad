@@ -1,0 +1,9 @@
+{
+  "source_url": "https://developer.download.nvidia.com/embedded/L4T/r39_Release_v2.1/ISO/jetsoninstaller-r39.2.1-2026-08-07-18-30-47-arm64.iso",
+  "path": "downloads/jetsoninstaller-r39.2.1-arm64.iso",
+  "size_bytes": 5035601920,
+  "sha256": "f31cf35023cd072707dfc46ef23ed71318449516333055fe3bb9455a615395d0",
+  "complete": true,
+  "publisher_checksum_verified": false,
+  "note": "SHA-256 records the downloaded file; it is not a publisher-provided checksum."
+}

@@ -1,0 +1,27 @@
+{
+  "completed_utc": "2026-09-20T18:14:01.772799+00:00",
+  "deployment": "results/ui-telemetry-deployment.json",
+  "browser_validation": "results/browser-ui-telemetry.json",
+  "unit_tests": {
+    "proxy_and_telemetry": 14,
+    "status": "passed",
+    "javascript_sse_capture_cancellation": "passed"
+  },
+  "visual_review": {
+    "desktop": "passed",
+    "mobile_390px": "passed"
+  },
+  "default_prompt": "Describe what you see in this image in one sentence.",
+  "default_max_tokens": 512,
+  "upstream_default_source": "https://github.com/NVIDIA-AI-IOT/live-vlm-webui/blob/2fd5ba0b334c334d24bf0f9439d8742b243d22be/src/live_vlm_webui/vlm_service.py#L42",
+  "telemetry_interval_ms": 1000,
+  "memory_definition": "MemTotal - MemAvailable; shared system RAM, not a dedicated VRAM allocation",
+  "file_sha256": {
+    "scripts/serve_ui.py": "c133c10cfdbc0eb76473f985ef242ac1fc2dfd41a2eb8da5a4396e7aa9feab44",
+    "web/app.js": "d930742c11c832e346806cb9a32e0d8331802d00a3db199b2ea12cf2cef85667",
+    "web/index.html": "1a3a2fd4a8fd4a66c8bcb069f71f73b8a219fd6c9a8b0223739ff35b7b0fb55d",
+    "web/style.css": "98f08becf60bc65e65bb4bd48579c4aff1e697beabec9061458080e2bdcd8a5a",
+    "tests/test_serve_ui.py": "135af903982557bfb7bcec865840075c44a874f92a6bc460a59ccf38d4c47ce3",
+    "tests/test_sse.js": "008e2ac28ba9a4c154a6aa151bbd9de53730933cbb84f5251462061681e3030d"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "observed_at": "2026-09-20T04:58:24.909041+00:00",
+  "host": "192.168.5.192",
+  "ssh_reachable": true,
+  "authentication_succeeded": false,
+  "workspace_created": false,
+  "remote_files_created": false,
+  "other_directories_accessed": false,
+  "requested_isolation": "Use only one newly created task directory; keep all files, environments, models, caches, temp and outputs there; do not access other user/projects or make global changes.",
+  "status": "authentication_rejected_after_password_reconfirmation",
+  "interactive_user_login_observed": true,
+  "task_directory_created": false,
+  "credentials_reconfirmation_requested": false,
+  "native_openssh_also_rejected": true,
+  "credentials_reconfirmed": true,
+  "interactive_tty_also_rejected": true,
+  "awaiting_fresh_user_login_check": true
+}

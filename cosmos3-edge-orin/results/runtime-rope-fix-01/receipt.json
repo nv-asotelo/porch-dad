@@ -1,0 +1,27 @@
+{
+  "observed_at": "2026-09-20T05:39:16.094594+00:00",
+  "path": "/home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/visual/config.json",
+  "action": "Normalize generated visual text_config RoPE aliases using original source values, following generic builder artifact normalization",
+  "additions": {
+    "rope_theta": 100000000,
+    "rope_scaling": {
+      "mrope_section": [
+        24,
+        20,
+        20
+      ],
+      "rope_theta": 100000000,
+      "rope_type": "default",
+      "type": "default"
+    }
+  },
+  "before_sha256": "e6fd5e248e5bfe8c79c1860a5365e765c86eaee7123175964019e292235331e5",
+  "after_sha256": "917c28d2a39cd56c4a0622b47677f4d7c228be8058fcb0033a089bf0981dc5e4",
+  "source_config_sha256": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+  "source_config_unchanged": true,
+  "engine_hashes_unchanged": {
+    "llm.engine": "b09d03bde86fbe0ccd627e17785c6916fd4aa6cdefe7b9272b0be42873c70df5",
+    "visual/visual.engine": "9b553e50fdd1706a005f224661e97b5f3118cedf55248304a40416aaa644f9b3"
+  },
+  "inference_validated": false
+}

@@ -1,0 +1,36 @@
+{
+  "created_utc": "2026-09-21T00:50:30Z",
+  "status": "frozen before baseline and candidate measurement",
+  "objective": "Reduce inference complete-answer latency by at least 10 percent per accepted step. Stop at the first measured candidate that does not meet the acceptance gates.",
+  "baseline_candidate": "live-vlm-fp16-baseline",
+  "fixtures": "benchmarks/live-vlm-1280/manifest.json",
+  "prompt": "Describe what you see in this image in one sentence.",
+  "max_tokens": 512,
+  "temperature": 0.7,
+  "top_p_request": "omitted",
+  "top_k_request": "omitted",
+  "backend_resolved_top_p": 0.9,
+  "backend_resolved_top_k": 50,
+  "warmups_per_fixture": 5,
+  "measured_requests_per_fixture": 30,
+  "fixture_order": ["01-action-camera.jpg", "02-pen.jpg", "03-scissors.jpg"],
+  "transport": "serial streaming requests through Orin-local UI proxy, no camera capture interval in the isolated inference benchmark",
+  "primary_metric": "geometric mean of per-fixture median complete-answer latency; equal image weighting, compared with last accepted candidate",
+  "acceptance": [
+    "at least 10 percent reduction of the primary metric",
+    "no per-fixture p95 or median latency regression greater than 5 percent",
+    "byte-identical output text, completion token count and normal stop reason for every measured request, relative to repeatable baseline; otherwise investigate and do not accept as equivalent",
+    "no errors, OOM, swap I/O or queue backlog; at least 512 MiB available shared RAM",
+    "same images, prompt, token ceiling, sampling, power mode, dynamic clock policy and engine shapes",
+    "publish TTFT, completion tokens, all per-fixture latency summaries, system shared RAM and process RSS separately"
+  ],
+  "tie_or_noise_policy": "Repeat matched baseline/candidate once only when the 10 percent threshold or equivalence is ambiguous. A confirmed failure ends this search and restores the last accepted candidate.",
+  "candidate_hypothesis": "Reduce redundant work in the native top-K sampler while preserving partition, comparator, arithmetic, output and RNG semantics; profile first. Other candidates are considered only after an accepted improvement.",
+  "limits": [
+    "screen-recording-derived camera crops, not raw original camera inputs",
+    "three examples are a controlled workload, not a representative accuracy benchmark",
+    "baseline mistakes remain mistakes even when byte-identical",
+    "historical 512x512, 64-token, greedy results are not a comparison denominator",
+    "timings exclude browser capture/encoding and Wi-Fi, but include image decode, inference and local proxy streaming"
+  ]
+}

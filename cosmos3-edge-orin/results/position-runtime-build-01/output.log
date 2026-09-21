@@ -1,0 +1,18 @@
+[  6%] Built target edgellmBuilder
+[  6%] Building CUDA object cpp/CMakeFiles/edgellmCore.dir/kernels/preprocessKernels/imageUtilKernels.cu.o
+nvcc warning : Resource usage is not shown as the final resource allocation is not done.
+[  6%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/common/multimodalRunner.cpp.o
+[  6%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/cosmos3/cosmos3EdgeViTRunner.cpp.o
+[  6%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/gemma4/gemma4UnifiedVisionRunner.cpp.o
+[  6%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/gemma4/gemma4ViTRunner.cpp.o
+[  8%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/internvl/internViTRunner.cpp.o
+[  8%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/nemotron_omni/nemotronOmniViTRunner.cpp.o
+[ 10%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/phi4mm/phi4mmViTRunner.cpp.o
+[ 10%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/qwen2/qwenViTRunner.cpp.o
+[ 11%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/qwen3/qwen3vlViTRunner.cpp.o
+[ 11%] Building CXX object cpp/CMakeFiles/edgellmCore.dir/multimodal/qwen3_omni/qwen3omniViTRunner.cpp.o
+[ 13%] Linking CXX static library libedgellmCore.a
+[ 98%] Built target edgellmCore
+[ 98%] Linking CUDA device code CMakeFiles/_edgellm_runtime.dir/cmake_device_link.o
+[ 98%] Linking CXX shared module ../../pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so
+[100%] Built target _edgellm_runtime

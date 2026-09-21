@@ -1,0 +1,179 @@
+{
+  "observed_at": "2026-09-20T18:13:00.682Z",
+  "url": "http://localhost:8090",
+  "checks": {
+    "upstream_defaults": true,
+    "real_inference_with_new_defaults": true,
+    "live_orin_readings": true,
+    "mobile_no_overflow": true,
+    "failed_sample_clears_readings": true,
+    "stale_sample_clears_readings": true,
+    "hidden_page_stops_polling": true,
+    "visible_page_resumes": true,
+    "no_overlapping_polling": true,
+    "no_browser_errors": true
+  },
+  "samples": [
+    {
+      "sampled_at": "2026-09-20T18:13:00.328759+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 0.7
+      },
+      "gpu": {
+        "utilization_percent": 0
+      },
+      "memory": {
+        "used_bytes": 6826070016,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 593,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:01.330343+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 0.5
+      },
+      "gpu": {
+        "utilization_percent": 0
+      },
+      "memory": {
+        "used_bytes": 6827790336,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 631,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:02.331914+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 2
+      },
+      "gpu": {
+        "utilization_percent": 82.5
+      },
+      "memory": {
+        "used_bytes": 6828564480,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 641,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:03.333500+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 2.8
+      },
+      "gpu": {
+        "utilization_percent": 82.6
+      },
+      "memory": {
+        "used_bytes": 6828564480,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 659,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:04.335080+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 2.3
+      },
+      "gpu": {
+        "utilization_percent": 99.7
+      },
+      "memory": {
+        "used_bytes": 6829076480,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 627,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:06.338237+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 2.7
+      },
+      "gpu": {
+        "utilization_percent": 81.2
+      },
+      "memory": {
+        "used_bytes": 6829555712,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 656,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:08.341337+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 2.2
+      },
+      "gpu": {
+        "utilization_percent": 0
+      },
+      "memory": {
+        "used_bytes": 6829555712,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 618,
+      "sample_interval_ms": 1000
+    },
+    {
+      "sampled_at": "2026-09-20T18:13:11.346879+00:00",
+      "status": "ok",
+      "cpu": {
+        "utilization_percent": 1.2
+      },
+      "gpu": {
+        "utilization_percent": 0
+      },
+      "memory": {
+        "used_bytes": 6829551616,
+        "total_bytes": 7912775680,
+        "utilization_percent": 86.3,
+        "shared": true,
+        "measurement": "MemTotal - MemAvailable"
+      },
+      "age_ms": 7,
+      "sample_interval_ms": 1000
+    }
+  ],
+  "default_request": {
+    "max_tokens": 512,
+    "prompt": "Describe what you see in this image in one sentence.",
+    "output": "There's a red circle and a blue square side by side on a white background."
+  },
+  "visible": "CPU\n2.3%\nGPU\n99.7%\nVRAM / shared RAM\n6.36 / 7.37 GiB\n86.3%",
+  "maximum_metrics_requests_in_flight": 1,
+  "status": "passed",
+  "browser_errors": []
+}

@@ -1,0 +1,89 @@
+{
+  "algorithm": "round_to_nearest",
+  "dispatch_identifier": "RTN_GPTQ",
+  "checkpoint_format": "gptq",
+  "calibration": null,
+  "group_size": 128,
+  "rounding": "nearest_even",
+  "signed_range": [
+    -7,
+    7
+  ],
+  "source": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+  "output": "/home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4",
+  "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+  "source_shards": {
+    "transformer/diffusion_pytorch_model-00001-of-00002.safetensors": {
+      "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00001-of-00002.safetensors?download=true",
+      "expected_size_bytes": 5000040072,
+      "published_lfs_sha256": "116134e5492c514df79a2f07214e577c397aa961387dbe1c5dda488e7994ff6b",
+      "published_git_blob_sha1": "0428010516216042739b4a81a33373696eaeaf23",
+      "verified": true,
+      "size_bytes": 5000040072,
+      "sha256": "116134e5492c514df79a2f07214e577c397aa961387dbe1c5dda488e7994ff6b",
+      "git_blob_sha1": null,
+      "verified_against": "Hugging Face LFS SHA256"
+    },
+    "transformer/diffusion_pytorch_model-00002-of-00002.safetensors": {
+      "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00002-of-00002.safetensors?download=true",
+      "expected_size_bytes": 1739335512,
+      "published_lfs_sha256": "3b4c0aafe2705c900ac7bc743085a8e9e09c906624331bc2baa21e172e5d48e4",
+      "published_git_blob_sha1": "9fdd75623bcbb8ac13b3d4bf77de04d7f646b8c9",
+      "verified": true,
+      "size_bytes": 1739335512,
+      "sha256": "3b4c0aafe2705c900ac7bc743085a8e9e09c906624331bc2baa21e172e5d48e4",
+      "git_blob_sha1": null,
+      "verified_against": "Hugging Face LFS SHA256"
+    },
+    "vision_encoder/model.safetensors": {
+      "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/vision_encoder/model.safetensors?download=true",
+      "expected_size_bytes": 978739880,
+      "published_lfs_sha256": "2180ad739ecc96b5c1e9386892d3c5c08bfa42b9cdab9aabc53b028671db89b3",
+      "published_git_blob_sha1": "2fcc1c37e9977c106cdd52733a0751774bb12821",
+      "verified": true,
+      "size_bytes": 978739880,
+      "sha256": "2180ad739ecc96b5c1e9386892d3c5c08bfa42b9cdab9aabc53b028671db89b3",
+      "git_blob_sha1": null,
+      "verified_against": "Hugging Face LFS SHA256"
+    }
+  },
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "numpy_version": "2.2.6",
+  "source_tensor_count": 698,
+  "quantization_scope": "mlp-only",
+  "quantized_linear_count": 56,
+  "output_tensor_count": 810,
+  "output_tensor_payload_bytes": 3306437088,
+  "block_elements_limit": 1048576,
+  "complete": false,
+  "inference_validated": false,
+  "note": "Weight reconstruction error is not model answer quality. GPU fit and latency are unmeasured."
+}
+Converted 25/698 tensors
+Converted 50/698 tensors
+Converted 75/698 tensors
+Converted 100/698 tensors
+Converted 125/698 tensors
+Converted 150/698 tensors
+Converted 175/698 tensors
+Converted 200/698 tensors
+Converted 225/698 tensors
+Converted 250/698 tensors
+Converted 275/698 tensors
+Converted 300/698 tensors
+Converted 325/698 tensors
+Converted 350/698 tensors
+Converted 375/698 tensors
+Converted 400/698 tensors
+Converted 425/698 tensors
+Converted 450/698 tensors
+Converted 475/698 tensors
+Converted 500/698 tensors
+Converted 525/698 tensors
+Converted 550/698 tensors
+Converted 575/698 tensors
+Converted 600/698 tensors
+Converted 625/698 tensors
+Converted 650/698 tensors
+Converted 675/698 tensors
+CPU conversion complete: /home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4; GPU inference remains unvalidated.

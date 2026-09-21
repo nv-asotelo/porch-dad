@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-09-20T04:41:50.230199+00:00",
+  "gpu": "Orin",
+  "compute_capability": [
+    8,
+    7
+  ],
+  "cuda_runtime": 13000,
+  "tensorrt": "10.16.2.10",
+  "cuda_array_sum_passed": true,
+  "model_inference_verified": false
+}

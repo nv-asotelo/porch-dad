@@ -1,0 +1,157 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+binutils is already the newest version (2.42-4ubuntu2.10).
+binutils set to manually installed.
+git is already the newest version (1:2.43.0-1ubuntu7.3).
+ca-certificates is already the newest version (20260601~24.04.1).
+ca-certificates set to manually installed.
+python3-venv is already the newest version (3.12.3-0ubuntu2.1).
+The following additional packages will be installed:
+  cmake-data cuda-cccl-13-2 cuda-crt-13-2 cuda-cudart-13-2
+  cuda-culibos-dev-13-2 cuda-nvrtc-13-2 cuda-toolkit-13-2-config-common
+  cuda-toolkit-13-config-common cuda-toolkit-config-common dpkg-dev g++ g++-13
+  g++-13-aarch64-linux-gnu g++-aarch64-linux-gnu libcurand-13-2 libexpat1-dev
+  libjs-sphinxdoc libjs-underscore libnvinfer-headers-dev
+  libnvinfer-headers-plugin-dev libnvinfer-plugin10
+  libnvinfer-safe-headers-dev libnvinfer-vc-plugin10 libnvinfer10
+  libnvonnxparsers10 libnvptxcompiler-13-2 libnvvm-13-2 libpython3-dev
+  libpython3.12-dev libpython3.12-minimal libpython3.12-stdlib
+  libpython3.12t64 librhash0 libstdc++-13-dev lto-disabled-list python3.12
+  python3.12-dev python3.12-minimal python3.12-venv
+Suggested packages:
+  cmake-doc cmake-format elpa-cmake-mode ninja-build debian-keyring gcc-13-doc
+  libstdc++-13-doc python3.12-doc binfmt-support
+Recommended packages:
+  fakeroot libalgorithm-merge-perl javascript-common
+The following NEW packages will be installed:
+  build-essential cmake cmake-data cuda-cccl-13-2 cuda-crt-13-2
+  cuda-cudart-13-2 cuda-cudart-dev-13-2 cuda-culibos-dev-13-2
+  cuda-driver-dev-13-2 cuda-nvcc-13-2 cuda-nvrtc-13-2 cuda-nvrtc-dev-13-2
+  cuda-toolkit-13-2-config-common cuda-toolkit-13-config-common
+  cuda-toolkit-config-common dpkg-dev g++ g++-13 g++-13-aarch64-linux-gnu
+  g++-aarch64-linux-gnu libcublas-13-2 libcufft-13-2 libcurand-13-2
+  libcurand-dev-13-2 libcusolver-13-2 libcusparse-13-2 libexpat1-dev
+  libjs-sphinxdoc libjs-underscore libnvinfer-dev libnvinfer-headers-dev
+  libnvinfer-headers-plugin-dev libnvinfer-plugin-dev libnvinfer-plugin10
+  libnvinfer-safe-headers-dev libnvinfer-vc-plugin10 libnvinfer10
+  libnvjitlink-13-2 libnvonnxparsers-dev libnvonnxparsers10
+  libnvptxcompiler-13-2 libnvvm-13-2 libpython3-dev libpython3.12-dev
+  librhash0 libstdc++-13-dev lto-disabled-list python3-dev python3-libnvinfer
+  python3.12-dev
+The following packages will be upgraded:
+  libpython3.12-minimal libpython3.12-stdlib libpython3.12t64 python3.12
+  python3.12-minimal python3.12-venv
+6 upgraded, 50 newly installed, 0 to remove and 289 not upgraded.
+Inst python3.12-venv [3.12.3-1ubuntu0.15] (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64]) []
+Inst libpython3.12t64 [3.12.3-1ubuntu0.15] (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64]) []
+Inst python3.12 [3.12.3-1ubuntu0.15] (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64]) []
+Inst libpython3.12-stdlib [3.12.3-1ubuntu0.15] (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64]) []
+Inst python3.12-minimal [3.12.3-1ubuntu0.15] (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64]) []
+Inst libpython3.12-minimal [3.12.3-1ubuntu0.15] (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst libstdc++-13-dev (13.3.0-6ubuntu2~24.04.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst g++-13-aarch64-linux-gnu (13.3.0-6ubuntu2~24.04.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst g++-13 (13.3.0-6ubuntu2~24.04.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst g++-aarch64-linux-gnu (4:13.2.0-7ubuntu1 Ubuntu:24.04/noble [arm64])
+Inst g++ (4:13.2.0-7ubuntu1 Ubuntu:24.04/noble [arm64])
+Inst lto-disabled-list (47 Ubuntu:24.04/noble [all])
+Inst dpkg-dev (1.22.6ubuntu6.6 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [all])
+Inst build-essential (12.10ubuntu1 Ubuntu:24.04/noble [arm64])
+Inst librhash0 (1.4.3-3build1 Ubuntu:24.04/noble [arm64])
+Inst cmake-data (3.28.3-1build7 Ubuntu:24.04/noble [all])
+Inst cmake (3.28.3-1build7 Ubuntu:24.04/noble [arm64])
+Inst cuda-cccl-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-toolkit-config-common (13.2.86-1 L4T Jetson:stable [all])
+Inst cuda-toolkit-13-config-common (13.2.86-1 L4T Jetson:stable [all])
+Inst cuda-toolkit-13-2-config-common (13.2.86-1 L4T Jetson:stable [all])
+Inst cuda-cudart-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-culibos-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-driver-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-cudart-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-crt-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst libnvvm-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst libnvptxcompiler-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-nvcc-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-nvrtc-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst cuda-nvrtc-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst libcublas-13-2 (13.4.1.3-1 L4T Jetson:stable [arm64])
+Inst libcufft-13-2 (12.2.0.57-1 L4T Jetson:stable [arm64])
+Inst libcurand-13-2 (10.4.2.66-1 L4T Jetson:stable [arm64])
+Inst libcurand-dev-13-2 (10.4.2.66-1 L4T Jetson:stable [arm64])
+Inst libcusolver-13-2 (12.2.0.11-1 L4T Jetson:stable [arm64])
+Inst libcusparse-13-2 (12.7.10.12-1 L4T Jetson:stable [arm64])
+Inst libexpat1-dev (2.6.1-2ubuntu0.4 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst libjs-underscore (1.13.4~dfsg+~1.11.4-3 Ubuntu:24.04/noble [all])
+Inst libjs-sphinxdoc (7.2.6-6 Ubuntu:24.04/noble [all])
+Inst libnvinfer-headers-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer-safe-headers-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer-headers-plugin-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer-plugin10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer-plugin-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvinfer-vc-plugin10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvjitlink-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Inst libnvonnxparsers10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libnvonnxparsers-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Inst libpython3.12-dev (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst libpython3-dev (3.12.3-0ubuntu2.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst python3.12-dev (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst python3-dev (3.12.3-0ubuntu2.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Inst python3-libnvinfer (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf python3.12-venv (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libpython3.12t64 (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf python3.12 (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libpython3.12-stdlib (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf python3.12-minimal (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libpython3.12-minimal (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libstdc++-13-dev (13.3.0-6ubuntu2~24.04.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf g++-13-aarch64-linux-gnu (13.3.0-6ubuntu2~24.04.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf g++-13 (13.3.0-6ubuntu2~24.04.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf g++-aarch64-linux-gnu (4:13.2.0-7ubuntu1 Ubuntu:24.04/noble [arm64])
+Conf g++ (4:13.2.0-7ubuntu1 Ubuntu:24.04/noble [arm64])
+Conf lto-disabled-list (47 Ubuntu:24.04/noble [all])
+Conf dpkg-dev (1.22.6ubuntu6.6 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [all])
+Conf build-essential (12.10ubuntu1 Ubuntu:24.04/noble [arm64])
+Conf librhash0 (1.4.3-3build1 Ubuntu:24.04/noble [arm64])
+Conf cmake-data (3.28.3-1build7 Ubuntu:24.04/noble [all])
+Conf cmake (3.28.3-1build7 Ubuntu:24.04/noble [arm64])
+Conf cuda-cccl-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-toolkit-config-common (13.2.86-1 L4T Jetson:stable [all])
+Conf cuda-toolkit-13-config-common (13.2.86-1 L4T Jetson:stable [all])
+Conf cuda-toolkit-13-2-config-common (13.2.86-1 L4T Jetson:stable [all])
+Conf cuda-cudart-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-culibos-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-driver-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-cudart-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-crt-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf libnvvm-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf libnvptxcompiler-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-nvcc-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-nvrtc-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf cuda-nvrtc-dev-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf libcublas-13-2 (13.4.1.3-1 L4T Jetson:stable [arm64])
+Conf libcufft-13-2 (12.2.0.57-1 L4T Jetson:stable [arm64])
+Conf libcurand-13-2 (10.4.2.66-1 L4T Jetson:stable [arm64])
+Conf libcurand-dev-13-2 (10.4.2.66-1 L4T Jetson:stable [arm64])
+Conf libcusolver-13-2 (12.2.0.11-1 L4T Jetson:stable [arm64])
+Conf libcusparse-13-2 (12.7.10.12-1 L4T Jetson:stable [arm64])
+Conf libexpat1-dev (2.6.1-2ubuntu0.4 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libjs-underscore (1.13.4~dfsg+~1.11.4-3 Ubuntu:24.04/noble [all])
+Conf libjs-sphinxdoc (7.2.6-6 Ubuntu:24.04/noble [all])
+Conf libnvinfer-headers-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer-safe-headers-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer-headers-plugin-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer-plugin10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer-plugin-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvinfer-vc-plugin10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvjitlink-13-2 (13.2.86-1 L4T Jetson:stable [arm64])
+Conf libnvonnxparsers10 (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libnvonnxparsers-dev (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])
+Conf libpython3.12-dev (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf libpython3-dev (3.12.3-0ubuntu2.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf python3.12-dev (3.12.3-1ubuntu0.17 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf python3-dev (3.12.3-0ubuntu2.1 Ubuntu:24.04/noble-updates, Ubuntu:24.04/noble-security [arm64])
+Conf python3-libnvinfer (10.16.2.10-1+cuda13.2 L4T Jetson:stable [arm64])

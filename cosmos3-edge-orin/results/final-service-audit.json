@@ -1,0 +1,48 @@
+{
+  "observed_utc": "2026-09-20T07:29:29.188080+00:00",
+  "services": {
+    "cosmos-edge-backend": {
+      "MainPID": "27246",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Sun 2026-09-20 07:16:37 UTC",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/etc/systemd/system/cosmos-edge-backend.service",
+      "UnitFileState": "enabled"
+    },
+    "cosmos-edge-ui": {
+      "MainPID": "27247",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Sun 2026-09-20 07:16:37 UTC",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/etc/systemd/system/cosmos-edge-ui.service",
+      "UnitFileState": "enabled"
+    }
+  },
+  "health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "swap_table": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n",
+  "kernel_nvme_warnings_all_boot": [
+    "[   36.593037] nvme nvme0: I/O tag 449 (91c1) QID 4 timeout, completion polled",
+    "[   68.593005] nvme nvme0: I/O tag 451 (21c3) QID 4 timeout, completion polled",
+    "[  518.407859] nvme nvme0: I/O tag 771 (b303) QID 1 timeout, completion polled",
+    "[  550.375268] nvme nvme0: I/O tag 706 (a2c2) QID 3 timeout, completion polled",
+    "[  580.582783] nvme nvme0: I/O tag 707 (c2c3) QID 3 timeout, completion polled",
+    "[ 7844.086093] nvme nvme0: I/O tag 898 (9382) QID 2 timeout, completion polled",
+    "[ 8375.013149] nvme nvme0: I/O tag 161 (b0a1) QID 1 timeout, completion polled",
+    "[ 9550.525721] nvme nvme0: I/O tag 129 (f081) QID 3 timeout, completion polled",
+    "[10025.646445] nvme nvme0: I/O tag 202 (d0ca) QID 1 timeout, completion polled"
+  ],
+  "kernel_oom_lines_all_boot": [],
+  "encoder_cache_log_lines": [
+    "Requested encoder_embedding_cache_budget_bytes=0; independent of text context reuse."
+  ],
+  "selected_config_sha256": "f8f0f6636bfb4c63e2a2e2558b45f27679af058dee91ec5f005a5a02acd2ccb2",
+  "selected_env_sha256": "2cac07baf2d63a16b3d6934adb06f9d17a92c967ae9469ab24a2469f110a292d",
+  "reboot_after_service_install_tested": false,
+  "note": "Units started and exercised continuously after installation; enabled-at-boot configuration checked, post-install physical reboot not performed."
+}

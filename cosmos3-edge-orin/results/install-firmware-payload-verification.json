@@ -1,0 +1,260 @@
+{
+  "observed_at": "2026-09-20T02:22:43.650062+00:00",
+  "source": "Jetson native wc and sha1sum over read-only NFS on USB SSH bridge",
+  "files": [
+    {
+      "file": "internal/br_bct_BR.bct",
+      "expected_bytes": 8192,
+      "sha1": "063ef50bfb883fd1bb8daece5ac01e9302f778a0",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/mb1_t234_prod_aligned_sigheader.bin.encrypt",
+      "expected_bytes": 287584,
+      "sha1": "503aa1bc1e442cc060350b03fa46e68e63ec6480",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/psc_bl1_t234_prod_aligned_sigheader.bin.encrypt",
+      "expected_bytes": 139264,
+      "sha1": "c0540c053b714b23145606672b02b9ae6234ca08",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/mb1_cold_boot_bct_MB1_sigheader.bct.encrypt",
+      "expected_bytes": 17600,
+      "sha1": "2a7ee8cc574531d298ec1e51ee2cb521a1baba04",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/mem_coldboot_sigheader.bct.encrypt",
+      "expected_bytes": 243712,
+      "sha1": "2b3e17979426b98e62bcb2651f9d80d3cf0ee146",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/tsec_t234_sigheader.bin.encrypt",
+      "expected_bytes": 192512,
+      "sha1": "d05893854082187cc7bfe24013678ad69c00d6f7",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/nvdec_t234_prod_sigheader.fw.encrypt",
+      "expected_bytes": 294912,
+      "sha1": "8b011b2b2ca407693637fbcc2d4161c952536ad3",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/mb2_t234_with_mb2_cold_boot_bct_MB2_sigheader.bin.encrypt",
+      "expected_bytes": 439312,
+      "sha1": "b7a51bcc938b57f0643acc5a91bed1857f000080",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/xusb_t234_prod_sigheader.bin.encrypt",
+      "expected_bytes": 164864,
+      "sha1": "10aa8aa90eba73b76c6f3f8d5859835881a56a4c",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/bpmp_t234-TE950M-A1_prod_sigheader.bin.encrypt",
+      "expected_bytes": 1027072,
+      "sha1": "9983b47a99c631566e6f69a9118af501deb88979",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/tegra234-bpmp-3767-0003-3768-super_with_odm_sigheader.dtb.encrypt",
+      "expected_bytes": 384256,
+      "sha1": "c449800859168219df68413d4d9719899f299d27",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/pscfw_t234_prod_sigheader.bin.encrypt",
+      "expected_bytes": 342336,
+      "sha1": "52a1257d2a6d59a560600cc992b3dd52dfb625b0",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/mce_flash_o10_cr_prod_sigheader.bin.encrypt",
+      "expected_bytes": 187328,
+      "sha1": "91b69831a5a4ab0b1b87b14392186d84d9664cfb",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/sc7_t234_prod_sigheader.bin.encrypt",
+      "expected_bytes": 193120,
+      "sha1": "4edd07c19d8cb00a57d2ef6d230665478e6dfc9a",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/psc_rf_t234_prod_sigheader.bin.encrypt",
+      "expected_bytes": 139264,
+      "sha1": "17b5f906f6525f15f218e69c6d45965bceee2dc8",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/mb2rf_t234_sigheader.bin.encrypt",
+      "expected_bytes": 117792,
+      "sha1": "2b6cd1b9580b366ae9cf0fa103be3c56c27e24ad",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/uefi_t23x_general_with_dtb_aligned_blob_w_bin_sigheader.bin.encrypt",
+      "expected_bytes": 3113520,
+      "sha1": "5c6418fbb275d7d1adb135f0b5c79caadaadcef2",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/tos-optee_t234_sigheader.img.encrypt",
+      "expected_bytes": 1899072,
+      "sha1": "0cabd2dc3efb5a0a2f6a7c543f53674363790ead",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/eks_t234_sigheader.img.encrypt",
+      "expected_bytes": 9232,
+      "sha1": "8e228d0e6d971e859573abfe0b05f86cf3f308ab",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/display-t234-dce_with_kernel_tegra234-p3768-0000+p3767-0005-nv-super_aligned_blob_w_bin_sigheader.bin.encrypt",
+      "expected_bytes": 1081376,
+      "sha1": "fa70aa7dd4c47d3c49cb600fc1a52c6047afcf09",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/spe_t234_sigheader.bin.encrypt",
+      "expected_bytes": 270336,
+      "sha1": "cc48f36776d9b7ce8ac83e63baa21a2f0bffb661",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/camera-rtcpu-t234-rce_sigheader.img.encrypt",
+      "expected_bytes": 699616,
+      "sha1": "754be1f869cae111dc0a51ede2b0f7e1e3103605",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/adsp-fw_sigheader.bin.encrypt",
+      "expected_bytes": 420272,
+      "sha1": "b165dfb9ed066bbc5a426711815131f63b055e62",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/nvpva_020_aligned_blob_w_bin_sigheader.fw.encrypt",
+      "expected_bytes": 77424,
+      "sha1": "8368026a6249e7595253b76bba0041c7e43ac2ab",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/bct_backup.img",
+      "expected_bytes": 32768,
+      "sha1": "8fb9ce4aeb347f3e346e94f203196e3cc101efd5",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/gpt_backup_secondary_3_0.bin",
+      "expected_bytes": 16896,
+      "sha1": "2003f779ff3cdf9281176ae30380e2c097e27481",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/qspi_bootblob_ver.txt",
+      "expected_bytes": 109,
+      "sha1": "9b0b09f91a57f946151bfab40c8b979cc8ac2fde",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "internal/gpt_secondary_3_0.bin",
+      "expected_bytes": 16896,
+      "sha1": "9ee8df4d5940a410d7446877d5f349b3b07a2d89",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/mbr_9_0.bin",
+      "expected_bytes": 512,
+      "sha1": "694898d1c345bdb31b377790ed7fc0b0db184bf7",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/gpt_primary_9_0.bin",
+      "expected_bytes": 16896,
+      "sha1": "54dc8ab500c698a142104f26aba289e8b2b45250",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/boot.img",
+      "expected_bytes": 64849920,
+      "sha1": "0f8ee7d6606c8342052423fc31c002069589eaf6",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/kernel_tegra234-p3768-0000+p3767-0005-nv-super.dtb",
+      "expected_bytes": 209893,
+      "sha1": "7c99b7ebe83a8daac012d74234c4ab6c6b4e894b",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/recovery.img",
+      "expected_bytes": 70492160,
+      "sha1": "5dc8a820b43ba644599f469b191011d26964d408",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/tegra234-p3768-0000+p3767-0005-nv-super.dtb.rec",
+      "expected_bytes": 209893,
+      "sha1": "7c99b7ebe83a8daac012d74234c4ab6c6b4e894b",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/esp.img",
+      "expected_bytes": 67108864,
+      "sha1": "6a75da48599157a747efbc3fe461f8fd13047a0a",
+      "matches": true,
+      "exit_code": 0
+    },
+    {
+      "file": "external/gpt_secondary_9_0.bin",
+      "expected_bytes": 16896,
+      "sha1": "c14807f09358e97a0dfbbd7a901bf354cb8ffefc",
+      "matches": true,
+      "exit_code": 0
+    }
+  ],
+  "all_match": true,
+  "persistent_storage_written": false
+}

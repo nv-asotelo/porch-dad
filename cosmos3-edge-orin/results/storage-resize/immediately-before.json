@@ -1,0 +1,119 @@
+{
+   "partitiontable": {
+      "label": "gpt",
+      "id": "296259CF-0EC9-4797-BEB9-4D631D3B7164",
+      "device": "/dev/nvme0n1",
+      "unit": "sectors",
+      "firstlba": 40,
+      "lastlba": 1953525134,
+      "sectorsize": 512,
+      "partitions": [
+         {
+            "node": "/dev/nvme0n1p1",
+            "start": 3131968,
+            "size": 115343360,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "C2A0D8D7-619E-48D6-8DF9-F90BE94BAEE2",
+            "name": "APP"
+         },{
+            "node": "/dev/nvme0n1p2",
+            "start": 40,
+            "size": 262144,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "5D41D891-1DE0-45B4-A0FB-CF004DD0475B",
+            "name": "A_kernel"
+         },{
+            "node": "/dev/nvme0n1p3",
+            "start": 262184,
+            "size": 1536,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "4089AE65-CB83-432B-8825-191B322CEC6F",
+            "name": "A_kernel-dtb"
+         },{
+            "node": "/dev/nvme0n1p4",
+            "start": 263720,
+            "size": 64768,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "31009991-EF29-42D5-BA0E-897ABE652933",
+            "name": "A_reserved_on_user"
+         },{
+            "node": "/dev/nvme0n1p5",
+            "start": 328488,
+            "size": 262144,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "0CF59996-6A8F-4FCA-9ECB-1E649F621953",
+            "name": "B_kernel"
+         },{
+            "node": "/dev/nvme0n1p6",
+            "start": 590632,
+            "size": 1536,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "277FB392-FF8D-4AE6-9B2D-4139389FFA56",
+            "name": "B_kernel-dtb"
+         },{
+            "node": "/dev/nvme0n1p7",
+            "start": 592168,
+            "size": 64768,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "5E6FBCA3-DA25-47DA-8A87-FF3FA1DB3701",
+            "name": "B_reserved_on_user"
+         },{
+            "node": "/dev/nvme0n1p8",
+            "start": 656936,
+            "size": 204800,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "62F53155-16A8-4880-9277-D12CBD13DC5B",
+            "name": "recovery"
+         },{
+            "node": "/dev/nvme0n1p9",
+            "start": 861736,
+            "size": 1024,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "5A141305-955B-4901-9BFA-EC6097EB5537",
+            "name": "recovery-dtb"
+         },{
+            "node": "/dev/nvme0n1p10",
+            "start": 862760,
+            "size": 131072,
+            "type": "C12A7328-F81F-11D2-BA4B-00A0C93EC93B",
+            "uuid": "5EB5B33B-F5BC-41BC-A4BB-9D12A0613F1F",
+            "name": "esp"
+         },{
+            "node": "/dev/nvme0n1p11",
+            "start": 993832,
+            "size": 204800,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "44E8C13F-E1AC-4DB6-938D-2B0FD05AE975",
+            "name": "recovery_alt"
+         },{
+            "node": "/dev/nvme0n1p12",
+            "start": 1198632,
+            "size": 1024,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "708CD0D5-9C8D-49B4-8EC0-12296B6A827D",
+            "name": "recovery-dtb_alt"
+         },{
+            "node": "/dev/nvme0n1p13",
+            "start": 1199656,
+            "size": 131072,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "197F071D-8C6C-4D31-8ACD-9B50AFBAFE40",
+            "name": "esp_alt"
+         },{
+            "node": "/dev/nvme0n1p14",
+            "start": 1330752,
+            "size": 819200,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "68188BFA-FAA6-49DC-A859-F9179D488846",
+            "name": "UDA"
+         },{
+            "node": "/dev/nvme0n1p15",
+            "start": 2149952,
+            "size": 982016,
+            "type": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            "uuid": "71B7D4CB-E172-47F8-BE24-C0472106AD54",
+            "name": "reserved"
+         }
+      ]
+   }
+}

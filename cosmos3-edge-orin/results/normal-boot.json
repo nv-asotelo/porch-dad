@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-09-20T04:38:33.660508+00:00",
+  "state": "normal_nvme_boot_verified",
+  "endpoint": "192.168.6.252",
+  "discovery": "cosmos-edge.local via mDNS",
+  "host_key_fingerprint": "SHA256:D9w0EECNwsUdR120C17MvcZVm38HKHtGcaYiw2T3G5o",
+  "host_key_bootstrap": "First-boot TOFU after documented cloud-init key deletion; authenticated only with the task-specific deployment key, then matched the exact saved preboot deployment receipt and verified aarch64 NVMe ext4 root.",
+  "deployment_receipt_sha256": "578c0e12fc8f8de80455f6effc345e53765d79604981e5f0e82ffc4c66bccb22",
+  "gpu_execution_verified": true,
+  "cuda_evidence": "results/cuda-preflight.json",
+  "systemd_failed_units": 0
+}

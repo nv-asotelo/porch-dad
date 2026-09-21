@@ -1,0 +1,46 @@
+{
+  "image_processor": {
+    "do_resize": true,
+    "image_mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "image_processor_type": "Cosmos3EdgeImageProcessor",
+    "image_std": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "merge_size": 2,
+    "patch_size": 16,
+    "processor_class": "Cosmos3EdgeProcessor",
+    "size": {
+      "longest_edge": 16777216,
+      "shortest_edge": 65536
+    }
+  },
+  "processor_class": "Cosmos3EdgeProcessor",
+  "video_processor": {
+    "image_mean": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "image_std": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "merge_size": 2,
+    "patch_size": 16,
+    "processor_class": "Cosmos3EdgeProcessor",
+    "return_metadata": true,
+    "size": {
+      "longest_edge": 25165824,
+      "shortest_edge": 4096
+    },
+    "temporal_patch_size": 1,
+    "video_processor_type": "Cosmos3EdgeVideoProcessor"
+  }
+}

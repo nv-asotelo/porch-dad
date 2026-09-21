@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "gpu_or_tensorrt_imported": false,
+  "server_launched": false,
+  "model_modified": false,
+  "checks": [
+    {
+      "name": "actual checkpoint plus server-tools accepted before TensorRT import",
+      "passed": true,
+      "exit_code": 0
+    },
+    {
+      "name": "missing Transformers rejects actual upstream generic fallback",
+      "passed": true,
+      "exit_code": 1
+    },
+    {
+      "name": "stale generic Cosmos3 cache rejected",
+      "passed": true,
+      "exit_code": 1
+    },
+    {
+      "name": "valid cached template accepted",
+      "passed": true,
+      "exit_code": 0
+    },
+    {
+      "name": "valid supplied processed metadata works without Transformers",
+      "passed": true,
+      "exit_code": 0
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "observed_at": "2026-09-20T04:39:55.912536+00:00",
+  "state": "copied_and_verified",
+  "files": [
+    {
+      "path": "scripts/build_backend.sh",
+      "sha256": "5febb12a38f54ac8b4d514bc14c7d1165b106cf6d304a7a19c5d29f749f6b5df",
+      "bytes": 4098
+    },
+    {
+      "path": "docs/backend-build.md",
+      "sha256": "bec591ee8d9391fa6e94082e331574b4865af8bbac981f742dfd77217093828b",
+      "bytes": 17579
+    },
+    {
+      "path": "scripts/deploy_transfer.py",
+      "sha256": "ce6f8f80b0be2688f396db492686e2dc9eaef42fab5b8a4cc3eebc3383723905",
+      "bytes": 20111
+    },
+    {
+      "path": "research/python-system-site-compatibility.md",
+      "sha256": "de96fd4a54801c48a388e8738f1bf72267c39c459a351c16bd38fdc460e87699",
+      "bytes": 2538
+    },
+    {
+      "path": "benchmarks/fixtures/convert_jpeg.py",
+      "sha256": "6b33c8cc878770a059970eb815774a27eab88d4195dc8f86f9e747df4e257c04",
+      "bytes": 4513
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg-manifest.json",
+      "sha256": "39b1257e9f56b08965aa294ab99239c4881ce683c58ed550b702540e8c816085",
+      "bytes": 7540
+    },
+    {
+      "path": "docs/quality-workload.md",
+      "sha256": "bd997d20739eff8f1d323c8489739bacd11b0b88f05f3bfac973c0c7b7e121e5",
+      "bytes": 4554
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg/01-left-right.jpg",
+      "sha256": "52074a486ce36764d48e86fec209694ade16137318545524a3b51e47a048ca55",
+      "bytes": 14931
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg/02-counts.jpg",
+      "sha256": "592d4cda8d1d18c7df278cbb596b2de5beee63b854fd626969f27637e8f9767d",
+      "bytes": 19136
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg/03-above-below.jpg",
+      "sha256": "3932dc6c6268340cce9dbfa1d19a166580d32255e2ba76cfea9e47a552e8fc35",
+      "bytes": 15193
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg/04-inside-outside.jpg",
+      "sha256": "fa9419a7d96fd1f1e59dfd79148000c18065c6c7545211aea7eda0356d78e448",
+      "bytes": 18532
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg/05-relative-size.jpg",
+      "sha256": "f1e76656b44bd8cbd9c25f98b9915d9ca9f0916127f81aeebc97aa64f420ae6d",
+      "bytes": 14974
+    },
+    {
+      "path": "benchmarks/fixtures/jpeg/06-quadrants.jpg",
+      "sha256": "5d4ddc870748ae093b94d54488f28ec8be7b798164995507acb42363df4636e4",
+      "bytes": 20334
+    },
+    {
+      "path": "scripts/build_model_cache.py",
+      "sha256": "0361d0457f7ba13584dbac68061050293619fbdfdd2d96d97797cf4c91e6a493",
+      "bytes": 6802
+    },
+    {
+      "path": "scripts/run_backend.sh",
+      "sha256": "8a7d9ef91046787f6193e506e7098793523f83fe53156a08130c39969182ac4a",
+      "bytes": 8133
+    },
+    {
+      "path": "results/normal-boot.json",
+      "sha256": "cb2132aa419d8c6a1840c3e6bbbb1d58c4f371938739eed827e5cef85873edc8",
+      "bytes": 622
+    }
+  ]
+}

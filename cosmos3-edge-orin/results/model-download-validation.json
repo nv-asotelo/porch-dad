@@ -1,0 +1,14 @@
+{
+  "checked_at_utc": "2026-09-20T01:34:40.772476+00:00",
+  "target_directory": "/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/models/cosmos3-edge-reasoner",
+  "all_indexed_tensors_present": true,
+  "indexed_tensor_count": 698,
+  "indexed_tensor_dtype_counts": {
+    "BF16": 698
+  },
+  "indexed_tensor_payload_bytes": 4871240160,
+  "weight_shard_count": 3,
+  "generator_configs_absent": true,
+  "gpu_ready": false,
+  "inference_validated": false
+}

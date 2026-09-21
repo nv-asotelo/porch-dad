@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-09-20T02:17:01.420886+00:00",
+  "source": "Jetson native sha1sum/sha256sum reading read-only NFS through USB SSH bridge",
+  "payload_bytes": 2774391691,
+  "sha1": "1c4d9c03d0fc840ed2fd5348af6554f6618e65bc",
+  "sha256": "4acaca669c32b45e1601a442d525de94095c8d8b4d215c05bfb045538dca55f3",
+  "sha1_matches_host_and_sidecar": true,
+  "sha256_matches_host": true,
+  "exit_code": 0,
+  "errors": "",
+  "persistent_storage_written": false
+}

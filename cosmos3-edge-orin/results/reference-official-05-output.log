@@ -1,0 +1,4 @@
+{"phase": "loading_model", "device": "mps"}
+Loading weights:   0%|          | 0/670 [00:00<?, ?it/s]Loading weights:  10%|█         | 68/670 [00:00<00:01, 406.44it/s]Loading weights:  34%|███▎      | 226/670 [00:00<00:00, 877.99it/s]Loading weights: 100%|██████████| 670/670 [00:00<00:00, 2200.48it/s]
+{"phase": "generating", "prompt_tokens": 294, "grid": [[1, 32, 32]]}
+{"status": "completed", "phase": "complete", "output_text": "Both objects are purple. The left object, which is a sphere, is larger than the right object, which is a smaller sphere.", "error": null}

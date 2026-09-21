@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-19",
+  "host": "macOS arm64",
+  "python_unit_tests_passed": 31,
+  "javascript_sse_parser_tests": "passed",
+  "shell_syntax_checks": "passed",
+  "browser_desktop_width_px": 1440,
+  "browser_mobile_width_px": 390,
+  "browser_javascript_errors": [],
+  "horizontal_overflow": false,
+  "backend_unavailable_state_verified": true,
+  "browser_contract_evidence": "results/browser-contract-check.json",
+  "upstream_source_modified": false,
+  "jetson_or_gpu_validation": false,
+  "limitations": "Tests use explicit synthetic transport fixtures. They do not measure model quality, Jetson memory, CUDA execution or GPU latency.",
+  "visual_quality_fixtures": {
+    "path": "benchmarks/fixtures/manifest.json",
+    "count": 6,
+    "expected_facts": 19,
+    "original_artwork": true,
+    "visual_inspection": "contact sheet inspected by creating agent and primary agent",
+    "generator_verification": "deterministic regeneration and PNG/hash integrity checked",
+    "model_evaluated": false,
+    "limitation": "Does not establish natural-video understanding"
+  }
+}

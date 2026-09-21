@@ -1,0 +1,58 @@
+{
+  "validated_at_utc": "2026-09-21T00:29:14.714539+00:00",
+  "source_hash_verified_during_reextraction": true,
+  "exact_reextraction_passed": true,
+  "selected_frames_visually_reviewed": 6,
+  "visible_metrics_independently_reviewed": true,
+  "contact_sheet_visually_reviewed": true,
+  "frames": [
+    {
+      "file": "01-before-00.950s-scene-overview.png",
+      "reextracted_sha256_matches": true,
+      "dimensions": [
+        3348,
+        2096
+      ]
+    },
+    {
+      "file": "02-before-05.808s-action-camera.png",
+      "reextracted_sha256_matches": true,
+      "dimensions": [
+        3348,
+        2096
+      ]
+    },
+    {
+      "file": "03-before-09.842s-pen.png",
+      "reextracted_sha256_matches": true,
+      "dimensions": [
+        3348,
+        2096
+      ]
+    },
+    {
+      "file": "04-before-21.950s-toy.png",
+      "reextracted_sha256_matches": true,
+      "dimensions": [
+        3348,
+        2096
+      ]
+    },
+    {
+      "file": "05-before-29.850s-battery.png",
+      "reextracted_sha256_matches": true,
+      "dimensions": [
+        3348,
+        2096
+      ]
+    },
+    {
+      "file": "06-before-33.947s-scissors.png",
+      "reextracted_sha256_matches": true,
+      "dimensions": [
+        3348,
+        2096
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "restored_at_utc": "2026-09-21T01:12:44.401493+00:00",
+  "reason": "Candidate failed the frozen 10 percent acceptance gate; stop and restore original FP16 runtime.",
+  "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+  "sampler_source_sha256": "90e73755fffe25a9c381283c83481813681b1b11284463730eae0681b6a0aa0f"
+}

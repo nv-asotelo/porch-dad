@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "suite_id": "natural-image-smoke-v1",
+  "created_utc": "2026-09-20T07:00:59.767220+00:00",
+  "purpose": "Three final-selected-model functional illustrations. Not an optimization acceptance gate, calibration corpus, representative accuracy benchmark or paired 512px performance workload.",
+  "selection": "Three ordinary-object photographs outside all 32 calibration image IDs; COCO license 4 plus freshly verified Flickr oEmbed CC BY 2.0, complete author/title/page. Captions were used to select subject matter; rubrics were written from direct inspection of the exact images before any model run.",
+  "request_settings": {
+    "model_alias": "Cosmos3-Edge",
+    "max_tokens": 64,
+    "temperature": 0,
+    "top_p": 1,
+    "concurrency": 1,
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "enable_thinking": false
+  },
+  "review_policy": {
+    "method": "Human semantic review of the three listed observations per image; accept ordinary synonyms and record omissions or false visual claims. No candidate selection or optimization acceptance decision is based on this smoke set.",
+    "expected_fact_count": 9,
+    "model_run_status_at_freeze": "not_run",
+    "limitations": "Only three single images, no temporal/action-sequence evaluation. Native source dimensions vary; any backend resizing and sample timing must be reported separately from the frozen 512px paired benchmark."
+  },
+  "disjointness": {
+    "calibration_manifest": "../../data/calibration/images.jsonl",
+    "calibration_manifest_sha256": "d808b2897ba8148017ae62a208d47d466c408258b7ea8cc48b9b30dd31d26229",
+    "calibration_image_count": 32,
+    "overlapping_coco_ids": [],
+    "overlapping_image_sha256": [],
+    "synthetic_quality_manifest": "../fixtures/jpeg-manifest.json",
+    "synthetic_quality_manifest_sha256": "39b1257e9f56b08965aa294ab99239c4881ce683c58ed550b702540e8c816085",
+    "synthetic_jpeg_count": 6,
+    "synthetic_source_png_count": 6,
+    "checked_additional_contact_sheet": true,
+    "synthetic_byte_overlap": false
+  },
+  "cases": [
+    {
+      "id": "01-market-produce",
+      "filename": "images/000000023781.jpg",
+      "mime_type": "image/jpeg",
+      "width_px": 640,
+      "height_px": 427,
+      "decoded_mode": "RGB",
+      "size_bytes": 153693,
+      "sha256": "085b1c7f25bf1d149b6dff82dfdb0a83fbf6e875c01d5d374070eb582aada80e",
+      "prompt": "Name the vegetables near the center-left and at the lower right, and the red fruit along the left edge.",
+      "expected_facts": [
+        "Broccoli is near the center-left.",
+        "Carrots are at the lower right.",
+        "Strawberries are along the left edge."
+      ],
+      "review_notes": "No person is visible. Additional visible produce is acceptable, but is not required.",
+      "rubric_author": "Codex, after direct visual inspection of the exact saved JPEG",
+      "rubric_frozen_utc": "2026-09-20T07:00:59.767220+00:00",
+      "provenance": {
+        "title": "6.24.09 Market",
+        "creator": "whitneyinchicago",
+        "creator_url": "https://www.flickr.com/photos/whitneyinchicago/",
+        "source": "https://www.flickr.com/photos/whitneyinchicago/3669674438",
+        "license": "CC BY 2.0",
+        "license_url": "https://creativecommons.org/licenses/by/2.0/",
+        "coco_image_id": 23781,
+        "dataset": "COCO val2017",
+        "download_url": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000023781.jpg",
+        "official_coco_image_url": "http://images.cocodataset.org/val2017/000000023781.jpg",
+        "original_flickr_image_url": "http://farm4.staticflickr.com/3631/3669674438_5e744504c0_z.jpg",
+        "flickr_attribution_evidence": "metadata/flickr-3669674438.json",
+        "flickr_metadata_checked_at_utc": "2026-09-20T06:59:29.858991+00:00",
+        "image_modifications": "None: exact downloaded COCO JPEG bytes retained."
+      },
+      "flickr_attribution_evidence_sha256": "86cbedbda7cddc8550d94bcea71e6f2b7fea63a0979544c65726c6dfb9f3fa15"
+    },
+    {
+      "id": "02-cap-and-mitt",
+      "filename": "images/000000027932.jpg",
+      "mime_type": "image/jpeg",
+      "width_px": 288,
+      "height_px": 307,
+      "decoded_mode": "RGB",
+      "size_bytes": 75978,
+      "sha256": "9ab6d8c5a124427d77add9827dc6ad58ce94efb003c34e5e20699acd82f43731",
+      "prompt": "What two pieces of sports equipment are visible, and how are they arranged?",
+      "expected_facts": [
+        "A baseball cap is visible.",
+        "A baseball glove or mitt is visible.",
+        "The cap rests on top of the glove or mitt."
+      ],
+      "review_notes": "Accept hat/cap and glove/mitt. Do not require brand, team, writing, location or a person identity. Preserve the photographer watermark.",
+      "rubric_author": "Codex, after direct visual inspection of the exact saved JPEG",
+      "rubric_frozen_utc": "2026-09-20T07:00:59.767220+00:00",
+      "provenance": {
+        "title": "Beit Shemesh Hat and Mitt",
+        "creator": "macman715",
+        "creator_url": "https://www.flickr.com/photos/roncantrell/",
+        "source": "https://www.flickr.com/photos/roncantrell/837387952",
+        "license": "CC BY 2.0",
+        "license_url": "https://creativecommons.org/licenses/by/2.0/",
+        "coco_image_id": 27932,
+        "dataset": "COCO val2017",
+        "download_url": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000027932.jpg",
+        "official_coco_image_url": "http://images.cocodataset.org/val2017/000000027932.jpg",
+        "original_flickr_image_url": "http://farm2.staticflickr.com/1149/837387952_4f322eeacb_z.jpg",
+        "flickr_attribution_evidence": "metadata/flickr-837387952.json",
+        "flickr_metadata_checked_at_utc": "2026-09-20T06:59:29.859401+00:00",
+        "image_modifications": "None: exact downloaded COCO JPEG bytes retained."
+      },
+      "flickr_attribution_evidence_sha256": "9fe913a09cc6b7763b53f8509d18b80096174737f2066a7824aeccf0485d0661"
+    },
+    {
+      "id": "03-dog-on-bench",
+      "filename": "images/000000029393.jpg",
+      "mime_type": "image/jpeg",
+      "width_px": 500,
+      "height_px": 375,
+      "decoded_mode": "RGB",
+      "size_bytes": 167853,
+      "sha256": "378763dec71a25c7cb44ff9e345c84ca0fe2d8bf993b88775c360549edf3b733",
+      "prompt": "What animal is visible, what is it doing, and what is it standing on?",
+      "expected_facts": [
+        "A dog is visible.",
+        "The dog is standing.",
+        "The dog is on a bench."
+      ],
+      "review_notes": "Accept bench seat or wooden bench. Breed, pet name and location are not required. No person is visible.",
+      "rubric_author": "Codex, after direct visual inspection of the exact saved JPEG",
+      "rubric_frozen_utc": "2026-09-20T07:00:59.767220+00:00",
+      "provenance": {
+        "title": "Rusty on the bench",
+        "creator": "Dan Harrelson",
+        "creator_url": "https://www.flickr.com/photos/dharrels/",
+        "source": "https://www.flickr.com/photos/dharrels/4228514131",
+        "license": "CC BY 2.0",
+        "license_url": "https://creativecommons.org/licenses/by/2.0/",
+        "coco_image_id": 29393,
+        "dataset": "COCO val2017",
+        "download_url": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000029393.jpg",
+        "official_coco_image_url": "http://images.cocodataset.org/val2017/000000029393.jpg",
+        "original_flickr_image_url": "http://farm3.staticflickr.com/2556/4228514131_81f3416db3_z.jpg",
+        "flickr_attribution_evidence": "metadata/flickr-4228514131.json",
+        "flickr_metadata_checked_at_utc": "2026-09-20T06:59:29.859592+00:00",
+        "image_modifications": "None: exact downloaded COCO JPEG bytes retained."
+      },
+      "flickr_attribution_evidence_sha256": "c05ed7383bbcc5bdc762017dadc1bee48723aa6e729accc0439a7888ee995593"
+    }
+  ]
+}

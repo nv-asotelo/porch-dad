@@ -1,0 +1,15 @@
+{
+  "reviewed_utc": "2026-09-20T07:25:31.692929+00:00",
+  "source": "results/raw/quality-final-service-01.jsonl",
+  "source_sha256": "a17bd51646e0cc9c6c51fa1b1f10f8e35961ce60fce3cda551222e391b45b111",
+  "method": "Exact output equality with already semantically reviewed corrected FP16; all six complete successfully.",
+  "comparison_source": "results/raw/quality-fp16-corrected-01.jsonl",
+  "comparison_review": "results/quality-fp16-corrected-01-review.json",
+  "case_count": 6,
+  "all_outputs_identical": true,
+  "strict_score": 18,
+  "required_facts": 19,
+  "strict_pass": false,
+  "reference_equivalence_pass": true,
+  "policy": "results/optimization-quality-policy.json"
+}

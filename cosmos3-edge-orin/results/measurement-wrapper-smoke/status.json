@@ -1,0 +1,39 @@
+{
+  "started_utc": "2026-09-20T05:03:56.957053+00:00",
+  "command": [
+    "python3",
+    "-c",
+    "import time; print(\"measurement wrapper smoke, no model inference\"); time.sleep(0.6)"
+  ],
+  "cwd": "/home/jetson/cosmos-edge",
+  "phase": "build",
+  "inference_validated": false,
+  "sample_interval_s": 0.5,
+  "swap_page_bytes": 4096,
+  "memory_note": "System RAM includes CPU and GPU shared memory on Jetson. JSON RAM/swap sizes are bytes; pswpin/pswpout are page counts. System peaks are sampled. GNU time maximum RSS is a separate kernel high-water mark in KiB, not a sum of simultaneous process-tree RSS. These observations overlap; do not add them.",
+  "command_cleanup": {
+    "initial_signal": 15,
+    "signal_sent": false,
+    "sigkill_sent": false,
+    "leader_returncode": 0
+  },
+  "tegrastats_cleanup": {
+    "initial_signal": 15,
+    "signal_sent": true,
+    "sigkill_sent": false,
+    "leader_returncode": -15
+  },
+  "completed_utc": "2026-09-20T05:03:58.062811+00:00",
+  "elapsed_s": 1.105342414000006,
+  "exit_code": 0,
+  "child_returncode": 0,
+  "requested_signal": null,
+  "samples": 3,
+  "sampling_errors": [],
+  "system_ram_unavailable_peak_bytes": 1211600896,
+  "mem_available_minimum_bytes": 6701174784,
+  "swap_occupied_peak_bytes": 0,
+  "swap_in_pages_delta": 0,
+  "swap_out_pages_delta": 0,
+  "oom_kills_delta": 0
+}

@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-20T06:23:32.912Z",
+  "url": "http://localhost:8090",
+  "input": "Chromium synthetic moving camera; real Orin inference",
+  "checks": {
+    "camera_stop_releases_tracks": true,
+    "no_new_completion_after_stop": true,
+    "camera_restart_completes": true,
+    "fresh_frames": true,
+    "one_request_at_a_time": true,
+    "no_browser_errors": true
+  },
+  "maximum_browser_requests_in_flight": 1,
+  "status": "passed",
+  "frame_hashes": [
+    "04de589b551ecaeebdd8848e6801f0fcfc0e1669d87972eece28895c063cda69",
+    "aae7ce5465ea8d012c8f3cfa31c1fceea7587d37fc1d9ae5eb213d43743d7e9a",
+    "5d956bf13a2a7bea26ace26c1ddb85081995ff1c1c864c376b93ad48f551b1d7",
+    "d903da619954ca5f956fbdc71e31ae0e987552d84125a402774c79bfc2c35496",
+    "140db61275493a0adb4603ca9bb15a2038b0a954a361d243e83321aa012294f8",
+    "04de589b551ecaeebdd8848e6801f0fcfc0e1669d87972eece28895c063cda69"
+  ],
+  "browser_errors": []
+}

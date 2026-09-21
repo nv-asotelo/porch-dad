@@ -1,0 +1,15 @@
+{
+  "observed_at": "2026-09-20T03:35:08.620333+00:00",
+  "state": "prepared_not_device_executed",
+  "script": "scripts/build_backend.sh",
+  "sha256": "5febb12a38f54ac8b4d514bc14c7d1165b106cf6d304a7a19c5d29f749f6b5df",
+  "validation": {
+    "shell_syntax": true,
+    "help_command": true,
+    "macos_execution_refused_with_exit_2": true,
+    "source_target_names_and_python_option_verified": true
+  },
+  "native_build_executed": false,
+  "gpu_execution_validated": false,
+  "build_memory_trace": "tegrastats at 500 ms when available, separate from inference measurements"
+}

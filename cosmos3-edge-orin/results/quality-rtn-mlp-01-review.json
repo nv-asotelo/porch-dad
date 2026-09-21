@@ -1,0 +1,71 @@
+{
+  "candidate": "rtn-mlp-i1024-kv2048",
+  "raw_results": "results/raw/quality-rtn-mlp-01.jsonl",
+  "raw_sha256": "5374e889f01e095b1381fe392dd472b7cb9c085485ed1441543a9abf9cb5d617",
+  "reviewer": "Codex semantic review against unchanged frozen answer key and reference-equivalence policy",
+  "required_facts": 19,
+  "correct_facts": 18,
+  "strict_pass": false,
+  "optimization_equivalent": false,
+  "policy": "results/optimization-quality-policy.json",
+  "transport_successes": 6,
+  "completed_without_token_truncation": 6,
+  "rejection": "Same18/19numeric score asFP16, but differenterror. Frozen policy forbids losing any of the18previouslycorrectfacts.",
+  "cases": [
+    {
+      "case_id": "01-left-right",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts correct."
+    },
+    {
+      "case_id": "02-counts",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All counts correct."
+    },
+    {
+      "case_id": "03-above-below",
+      "fact_scores": [
+        0,
+        1,
+        1
+      ],
+      "review": "Calls the yellow triangle orange. Correct shape and vertical relation do not repair the color fact. This is a new error relative to corrected FP16."
+    },
+    {
+      "case_id": "04-inside-outside",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All facts correct, including the right-side relation missing in the firstRTN."
+    },
+    {
+      "case_id": "05-relative-size",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "Correctly calls both circles; improves the one permitted reference error."
+    },
+    {
+      "case_id": "06-quadrants",
+      "fact_scores": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "review": "All quadrant facts correct; no truncation."
+    }
+  ]
+}

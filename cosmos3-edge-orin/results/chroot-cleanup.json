@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-09-20T03:29:28.339930+00:00",
+  "state": "cleanly_unmounted",
+  "temporary_service_policy_removed": true,
+  "active_project_processes_at_cleanup": 0,
+  "all_chroot_binds_and_nvme_rootfs_unmounted": true,
+  "installed_ssh_host_public_keys_saved": true,
+  "normal_boot_executed": false,
+  "required_before_reboot": "User confirmation that FC REC-GND jumper is removed."
+}

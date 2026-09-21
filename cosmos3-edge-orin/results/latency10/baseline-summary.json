@@ -1,0 +1,49 @@
+{
+  "created_utc": "2026-09-21T00:55:02.283811+00:00",
+  "status": "baseline is repeatable; candidate not yet tested",
+  "runs": [
+    {
+      "file": "results/latency10/raw/baseline-01-action-camera.jsonl",
+      "output_text": "A man holds a GoPro camera in front of a mirror.",
+      "completion_tokens": 14,
+      "prompt_tokens": 511,
+      "normal_stop": true,
+      "unique_outputs": 1,
+      "p50_ms": 1004.5724970041192,
+      "p95_ms": 1016.2582941033179,
+      "p50_ttft_ms": 432.8591765006422,
+      "peak_shared_ram_bytes": 6918205440
+    },
+    {
+      "file": "results/latency10/raw/baseline-02-pen.jsonl",
+      "output_text": "A man with gray hair holds a pen in his right hand, positioned across his eye, while raising his left hand with three fingers extended upward in a gesture that suggests he is saying \"three.\"",
+      "completion_tokens": 40,
+      "prompt_tokens": 511,
+      "normal_stop": true,
+      "unique_outputs": 1,
+      "p50_ms": 2151.125589502044,
+      "p95_ms": 2167.4205332499696,
+      "p50_ttft_ms": 442.61848850146635,
+      "peak_shared_ram_bytes": 6917095424
+    },
+    {
+      "file": "results/latency10/raw/baseline-03-scissors.jsonl",
+      "output_text": "A man with gray hair holds a pair of scissors in front of him.",
+      "completion_tokens": 17,
+      "prompt_tokens": 511,
+      "normal_stop": true,
+      "unique_outputs": 1,
+      "p50_ms": 1152.299673500238,
+      "p95_ms": 1162.3386727493198,
+      "p50_ttft_ms": 450.6686329987133,
+      "peak_shared_ram_bytes": 6904954880
+    }
+  ],
+  "geomean_p50_ms": 1355.4104504346024,
+  "quality_notes": {
+    "action-camera": "Correct object category; mirror is an unsupported scene claim. Brand wording is model output, not a scored fact.",
+    "pen": "Correct pen category; intended gesture/meaning and body-side claims are not established and are not accepted as truth.",
+    "scissors": "Correct object category."
+  },
+  "quality_gate": "Exact baseline output preservation measures equivalence, not absolute correctness. No representative accuracy claim."
+}

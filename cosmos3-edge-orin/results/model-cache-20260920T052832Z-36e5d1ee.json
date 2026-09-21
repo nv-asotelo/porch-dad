@@ -1,0 +1,75 @@
+{
+  "started_utc": "2026-09-20T05:28:32.647113+00:00",
+  "completed_utc": "2026-09-20T05:32:44.814865+00:00",
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+  "cache_dir": "/home/jetson/cosmos-edge/data/engine-cache",
+  "build_mode": "unquantized FP16 reasoner baseline",
+  "build_options": {
+    "spec_type": "none",
+    "draft_model_dir": "",
+    "max_input_len": 1024,
+    "max_kv_cache_capacity": 2048,
+    "max_batch_size": 1,
+    "max_image_tokens": null,
+    "max_image_tokens_per_image": null,
+    "tp_size": null,
+    "plugin_path": "",
+    "tree_base": false
+  },
+  "max_cache_size_bytes": 12884901888,
+  "published_cache_bytes": 41975699,
+  "prepared_model": {
+    "bundle_dir": "/home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc",
+    "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+    "draft_model_dir": "",
+    "built": true
+  },
+  "server_started": false,
+  "inference_validated": false,
+  "build_provenance": {
+    "before": {
+      "tensorrt_version": "10.16.2.10",
+      "cupy_version": "13.6.0",
+      "cuda_driver_version": 13020,
+      "cuda_runtime_version": 13000,
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "backend_tracked_diff": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0,
+        "dirty": false,
+        "base": "HEAD",
+        "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+      },
+      "built_plugin": {
+        "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+        "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+        "size_bytes": 18255824
+      },
+      "plugin_environment_override": null
+    },
+    "after": {
+      "tensorrt_version": "10.16.2.10",
+      "cupy_version": "13.6.0",
+      "cuda_driver_version": 13020,
+      "cuda_runtime_version": 13000,
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "backend_tracked_diff": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0,
+        "dirty": false,
+        "base": "HEAD",
+        "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+      },
+      "built_plugin": {
+        "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+        "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+        "size_bytes": 18255824
+      },
+      "plugin_environment_override": null
+    },
+    "changed_during_prepare": false,
+    "note": "Versions use CUDA integer encoding. built_plugin identifies the source-build artifact; any EDGELLM_PLUGIN_PATH override is recorded separately. On a cache hit (built=false), these observations do not establish the original engine build environment."
+  },
+  "note": "The 12 GiB limit concerns published engine files, not GPU memory or temporary compiler disk usage."
+}

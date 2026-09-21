@@ -1,0 +1,29 @@
+{
+  "observed_utc": "2026-09-20T18:27:18.572864+00:00",
+  "status": "passed",
+  "direct_urls": [
+    "http://192.168.6.252:8090",
+    "https://192.168.6.252:8443"
+  ],
+  "validation": {
+    "proxy_telemetry_tests": 14,
+    "sse_capture_cancel_tests": "passed",
+    "occupied_port_startup_cleanup": "passed",
+    "browser": "results/browser-ui-lan.json",
+    "deployment": "results/ui-lan-deployment.json",
+    "final_both_listener_health": "ready",
+    "backend_restarted": false
+  },
+  "limits": [
+    "Local self-signed HTTPS certificate requires browser acceptance; no trust store changed",
+    "Camera test used synthetic browser media, not a physical camera",
+    "Unauthenticated LAN service; model backend bound to loopback"
+  ],
+  "sha256": {
+    "scripts/serve_ui.py": "342517d19b9c5a03106eac5f430328c7af35fe5e5dfa84bfaf2ae8019460b4d7",
+    "scripts/enable_lan_ui.sh": "98fc0a32c39da7536e298be903e284efe772a1b703d63466030671dcdec3a48e",
+    "web/app.js": "5331207a1aaf6e327e42a5f46ce6b1e80fdbfe66345f88945aab2b98a702b9af",
+    "README.md": "d0157e36318f4a00387b1ce3d96e6019e467f80645d90854cabfd6617ebd3441",
+    "research/ui-feasibility.md": "53b423f1af111776df2e16750afb7c4942151947c8734fa32f8310919a32e8f7"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "observed_at": "2026-09-20T03:27:19.146451+00:00",
+  "state": "python_environment_validated_in_native_arm64_chroot",
+  "pip_check_passed": true,
+  "tokenizer_preflight_passed": true,
+  "gpu_execution_validated": false,
+  "native_backend_compiled": false
+}

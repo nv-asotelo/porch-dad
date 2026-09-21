@@ -1,0 +1,57 @@
+{
+  "selected_candidate": {
+    "run_id": "ace5cc05-187f-4431-9f2a-fdbe7e1665f5",
+    "kind": "summary",
+    "candidate_id": "fp16-corrected-i1024-kv2048",
+    "workload_fingerprint": "995a2d77d99ac8ce98bbc3729d97b0ff97363891acf0699c5a80c27265c8cb95",
+    "measured_requests": 30,
+    "successful_requests": 30,
+    "warmup_requests": 5,
+    "error_count": 0,
+    "warmup_error_count": 0,
+    "p50_latency_ms": 1830.4363854999792,
+    "p95_latency_ms": 1834.860942600244,
+    "p50_ttft_ms": 266.30634800039843,
+    "p95_ttft_ms": 271.70885049999924,
+    "memory_metric": "local_system_ram_unavailable_peak_bytes",
+    "memory_bytes": 6852915200,
+    "oom_detected": false,
+    "swap_activity_detected": false,
+    "quality_pass": true,
+    "quality_note": "Reference-equivalent under results/optimization-quality-policy.json; strictscreen18/19 remains failed. Official reference repeats exact case05 sphere answer.",
+    "recommendation": "Use at least 30 measured requests per candidate, after warmup.",
+    "strict_quality_screen_pass": false,
+    "strict_quality_score": 18,
+    "quality_policy_id": "reference-equivalent-quality-v1",
+    "original_measurement": "results/raw/benchmark-fp16-reference-01.jsonl",
+    "original_measurement_sha256": "3ecce48f18c461161a99368c221dc87abc43a8cb1e1a7c1b199f46f8d7d65417",
+    "qualification_created_utc": "2026-09-20T06:29:10.175699+00:00"
+  },
+  "decisions": [
+    {
+      "candidate_id": "fp16-corrected-i1024-kv2048",
+      "accepted": true,
+      "reason": "initial_eligible_baseline",
+      "consecutive_non_improvements": 0
+    },
+    {
+      "candidate_id": "rtn-v1-i1024-kv2048",
+      "accepted": false,
+      "reason": "quality_not_verified_pass",
+      "consecutive_non_improvements": 1
+    },
+    {
+      "candidate_id": "rtn-mlp-i1024-kv2048",
+      "accepted": false,
+      "reason": "quality_not_verified_pass",
+      "consecutive_non_improvements": 2
+    }
+  ],
+  "stop_reason": "input_exhausted",
+  "candidates_evaluated": 3,
+  "candidates_ignored_after_stop": 0,
+  "maximum_candidates": 5,
+  "maximum_non_improvements": 3,
+  "minimum_measured_requests": 30,
+  "scope": "Best accepted candidate in this bounded experiment; not a global optimum."
+}

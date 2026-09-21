@@ -1,0 +1,17 @@
+{
+  "utc": "2026-09-19T19:59:06Z",
+  "source_url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00001-of-00002.safetensors?download=true",
+  "cdn_host": "us.aws.cdn.hf.co",
+  "requested_range": "4000000000-4008388607",
+  "status": 206,
+  "content_range": "bytes 4000000000-4008388607/5000040072",
+  "content_length": null,
+  "received_bytes": 8388608,
+  "elapsed_seconds": 40.376,
+  "mib_per_second": 0.198,
+  "range_valid": true,
+  "sha256_local": "fcc18f3347433fa42e7674e5089ecd2d2d358aa50e93324d1037000a1dbcd91f",
+  "existing_transfers_untouched": true,
+  "retained_range_path": ".model-download/range-probe-4000000000.bin",
+  "header_record_note": "Content-Range equality was validated using case-insensitive HTTP headers; initial dict rendering omitted its lowercase key."
+}

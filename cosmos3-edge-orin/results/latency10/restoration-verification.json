@@ -1,0 +1,103 @@
+{
+  "verified_at_utc": "2026-09-21T01:14:13.925199+00:00",
+  "health_before": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "fixtures": [
+    {
+      "image": "benchmarks/live-vlm-1280/01-action-camera.jpg",
+      "identical_to_baseline": true,
+      "result": {
+        "ttft_ms": 460.2552259893855,
+        "total_latency_ms": 1100.3744799963897,
+        "completion_tokens": 14,
+        "completion_tokens_per_second": 12.722941375417879,
+        "throughput_definition": "completion_tokens / total_request_seconds",
+        "usage": {
+          "prompt_tokens": 511,
+          "completion_tokens": 14,
+          "total_tokens": 525
+        },
+        "output_text": "A man holds a GoPro camera in front of a mirror.",
+        "http_status": 200,
+        "finish_reason": "stop",
+        "stream_done": true,
+        "error": null
+      }
+    },
+    {
+      "image": "benchmarks/live-vlm-1280/02-pen.jpg",
+      "identical_to_baseline": true,
+      "result": {
+        "ttft_ms": 421.98924500553403,
+        "total_latency_ms": 2108.359894991736,
+        "completion_tokens": 40,
+        "completion_tokens_per_second": 18.972092997508277,
+        "throughput_definition": "completion_tokens / total_request_seconds",
+        "usage": {
+          "prompt_tokens": 511,
+          "completion_tokens": 40,
+          "total_tokens": 551
+        },
+        "output_text": "A man with gray hair holds a pen in his right hand, positioned across his eye, while raising his left hand with three fingers extended upward in a gesture that suggests he is saying \"three.\"",
+        "http_status": 200,
+        "finish_reason": "stop",
+        "stream_done": true,
+        "error": null
+      }
+    },
+    {
+      "image": "benchmarks/live-vlm-1280/03-scissors.jpg",
+      "identical_to_baseline": true,
+      "result": {
+        "ttft_ms": 423.8728940108558,
+        "total_latency_ms": 1115.600416000234,
+        "completion_tokens": 17,
+        "completion_tokens_per_second": 15.238431033353464,
+        "throughput_definition": "completion_tokens / total_request_seconds",
+        "usage": {
+          "prompt_tokens": 511,
+          "completion_tokens": 17,
+          "total_tokens": 528
+        },
+        "output_text": "A man with gray hair holds a pair of scissors in front of him.",
+        "http_status": 200,
+        "finish_reason": "stop",
+        "stream_done": true,
+        "error": null
+      }
+    }
+  ],
+  "metrics": {
+    "sampled_at": "2026-09-21T01:14:17.623646+00:00",
+    "status": "ok",
+    "cpu": {
+      "utilization_percent": 3.0
+    },
+    "gpu": {
+      "utilization_percent": 81.4
+    },
+    "memory": {
+      "used_bytes": 6872219648,
+      "total_bytes": 7912775680,
+      "utilization_percent": 86.8,
+      "shared": true,
+      "measurement": "MemTotal - MemAvailable"
+    },
+    "age_ms": 677,
+    "sample_interval_ms": 1000
+  },
+  "health_after": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "services": {
+    "cosmos-edge-backend": "MainPID=91754\nNRestarts=0\nActiveState=active\nSubState=running\n",
+    "cosmos-edge-ui": "MainPID=84351\nNRestarts=0\nActiveState=active\nSubState=running\n"
+  },
+  "status": "passed",
+  "scope": "Three post-restoration functional requests, not a new performance benchmark."
+}

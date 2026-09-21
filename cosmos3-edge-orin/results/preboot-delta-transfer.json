@@ -1,0 +1,92 @@
+{
+  "observed_at": "2026-09-20T03:28:25.540229+00:00",
+  "state": "delta_copied_and_verified",
+  "files": [
+    {
+      "path": "GOAL.md",
+      "bytes": 5680,
+      "sha256": "4c2da877df8c7e867b19344f6d6570725c86006c5d204fc281380027bbef3356"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5611,
+      "sha256": "81a4daceeeca0e187e59b532404e9a25c270c445640ce4e8d980347d6f69002c"
+    },
+    {
+      "path": "docs/backend-build.md",
+      "bytes": 17016,
+      "sha256": "3d40665e6d190b97f7a0a43bd41c640b2d4fcfa7369457e1ff3992dcd7c30a9b"
+    },
+    {
+      "path": "docs/usb-package-proxy.md",
+      "bytes": 8072,
+      "sha256": "e2066a65d8ec3c6faaed3685004122b34b425c2c7060c36fd6d0f29089ed8619"
+    },
+    {
+      "path": "research/python-system-site-compatibility.md",
+      "bytes": 2538,
+      "sha256": "de96fd4a54801c48a388e8738f1bf72267c39c459a351c16bd38fdc460e87699"
+    },
+    {
+      "path": "research/cosmos3-kernel-selection.md",
+      "bytes": 3290,
+      "sha256": "bc728daae10e453fef4f5082bd38061f8f4f1be5705ae21c1d14ce7660ee9ae0"
+    },
+    {
+      "path": "scripts/deploy_transfer.py",
+      "bytes": 19655,
+      "sha256": "75825210fa2cf720941ad4743ff554a0d9f0068cfb8f77f49518344439c7eb49"
+    },
+    {
+      "path": "tests/test_deploy_transfer.py",
+      "bytes": 3867,
+      "sha256": "089f0c663073ea989749fecbe8e421f3f84e81d53098b15320f8a3f41f00d0aa"
+    },
+    {
+      "path": "results/python-environment.json",
+      "bytes": 260,
+      "sha256": "91ce3bdf1c568e2d62a231028e31c4b89a677b9fbf1573044c908d2eb08a7350"
+    },
+    {
+      "path": "results/installed-compute-packages.json",
+      "bytes": 534,
+      "sha256": "f41c45dcb4a5dd924592a9b44e0fc5adf840843c9eb7290a6ce7000665134eb3"
+    },
+    {
+      "path": "results/chroot-compute-provisioning.json",
+      "bytes": 491,
+      "sha256": "97375ec732fa52dc544c832ea59405c157eb1bdc63f7b0a6ff3eebca0e24b8c8"
+    },
+    {
+      "path": "results/deployment-transfer.json",
+      "bytes": 814,
+      "sha256": "4f324301efedab1303a03cd30ad55ad7ea46e916ca195766a3a08aa148228c40"
+    },
+    {
+      "path": "results/compute-install/dpkg-audit.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "results/compute-install/installed-packages.tsv",
+      "bytes": 73476,
+      "sha256": "4573cdccdeb97e2437e52afd34d13028e1bb0e625c76793bcb4fc8128f431342"
+    },
+    {
+      "path": "results/compute-install/nvcc.txt",
+      "bytes": 211,
+      "sha256": "69965ab33cd417861856aa2a7fe83be213b9a30a70c26b7b11fcc770466416b5"
+    },
+    {
+      "path": "results/compute-install/plan.txt",
+      "bytes": 11295,
+      "sha256": "1312ebeda17cf952c42b7c761026ff2fdd9817ebbde7dcb1d871aa15ef632784"
+    },
+    {
+      "path": "results/compute-install/tensorrt.txt",
+      "bytes": 66,
+      "sha256": "60180a6f2064d66c3caf9627879389b825fa6225fb96f26081e064d8fdf3cd96"
+    }
+  ],
+  "model_or_upstream_source_changed": false
+}

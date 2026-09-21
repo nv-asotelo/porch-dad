@@ -1,0 +1,35 @@
+{
+  "observed_utc": "2026-09-20T18:26:39.109680+00:00",
+  "backend_pid_before": "27246",
+  "backend_pid_after": "27246",
+  "ui_restart_at_idle": true,
+  "http_url": "http://192.168.6.252:8090",
+  "https_url": "https://192.168.6.252:8443",
+  "https_certificate": "Self-signed certificate generated only in the Orin task directory; no client trust store changed",
+  "secure_health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "metrics": {
+    "sampled_at": "2026-09-20T18:26:38.985524+00:00",
+    "status": "ok",
+    "cpu": {
+      "utilization_percent": 0.5
+    },
+    "gpu": {
+      "utilization_percent": 0.0
+    },
+    "memory": {
+      "used_bytes": 6860746752,
+      "total_bytes": 7912775680,
+      "utilization_percent": 86.7,
+      "shared": true,
+      "measurement": "MemTotal - MemAvailable"
+    },
+    "age_ms": 86,
+    "sample_interval_ms": 1000
+  },
+  "ui_service": "MainPID=49034\nExecStart={ path=/usr/bin/python3 ; argv[]=/usr/bin/python3 /home/jetson/cosmos-edge/scripts/serve_ui.py --host 0.0.0.0 --port 8090 --allow-insecure-lan --https-port 8443 --cert /home/jetson/cosmos-edge/deployment/tls/orin.crt --key /home/jetson/cosmos-edge/deployment/tls/orin.key ; ignore_errors=no ; start_time=[Sun 2026-09-20 18:26:37 UTC] ; stop_time=[n/a] ; pid=49034 ; code=(null) ; status=0/0 }\nActiveState=active\nUnitFileState=enabled\n",
+  "certificate": "sha256 Fingerprint=DB:1F:50:EA:A8:E5:02:24:D0:97:2B:56:07:05:0D:1F:06:23:81:33:FB:94:9A:C4:74:A6:79:3A:82:60:8F:45\nnotBefore=Sep 20 18:22:40 2026 GMT\nnotAfter=Sep 20 18:22:40 2027 GMT\nX509v3 Subject Alternative Name: \n    IP Address:192.168.6.252, DNS:jetson.local, DNS:localhost, IP Address:127.0.0.1\n"
+}

@@ -1,0 +1,23 @@
+{
+  "observed_at": "2026-09-20T01:40:07.916086+00:00",
+  "board": "P3767-0005",
+  "bsp": "R39.2.1",
+  "image_upload_succeeded": true,
+  "uploaded_blob_bytes": 104758069,
+  "rcm_boot_started": true,
+  "persistent_storage_written": false,
+  "target_usb_identity": {
+    "vid": "0955",
+    "pid": "7035",
+    "product": "Linux for Tegra"
+  },
+  "guest_usb_network_available": false,
+  "storage_inventory_complete": false,
+  "initrd_script_exit_code": 1,
+  "initrd_script_failure": "Timed out waiting for USB network; macOS sees unregistered/unmatched USB device that libusb does not publish. Accessory approval suspected, not yet confirmed.",
+  "private_logs": [
+    ".qa/initrd-boot.log",
+    ".qa/initrd-boot-retry.log"
+  ],
+  "requested_user_action": "Unlock Mac and approve Linux for Tegra/NVIDIA accessory prompt if present. Keep Jetson powered; no new recovery power cycle needed."
+}

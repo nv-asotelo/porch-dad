@@ -1,0 +1,36 @@
+{
+  "observed_at": "2026-09-20T06:17:30.723Z",
+  "url": "http://localhost:8090",
+  "service_host": "actual Orin through SSH tunnel",
+  "backend": "TensorRT-Edge-LLM",
+  "model": "Cosmos3-Edge",
+  "checks": {
+    "incremental_text_before_completion": true,
+    "stop_preserves_partial_without_false_completion": true
+  },
+  "responses": [
+    "On the left side of the image, there's a red circle. On the right side, there's a blue square. The red circle is positioned to the left of the blue square."
+  ],
+  "status": "failed",
+  "error": "page.waitForFunction: Timeout 30000ms exceeded.",
+  "failure_state": {
+    "runStatus": {
+      "text": "Request failed"
+    },
+    "requestCount": {
+      "text": "1 completed"
+    },
+    "error": {
+      "text": "One inference is already active. Retry after it finishes."
+    },
+    "analyzeButton": {
+      "text": "Analyze image",
+      "disabled": false
+    },
+    "stopButton": {
+      "text": "Stop",
+      "disabled": true
+    }
+  },
+  "browser_errors": []
+}

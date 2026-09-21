@@ -1,0 +1,15 @@
+{
+  "observed_at": "2026-09-20T01:54:03.020661+00:00",
+  "source": "Native Mac SSH over USB NCM into official RAM recovery",
+  "device": "/dev/nvme0n1",
+  "model": "WD_BLACK SN7100 1TB",
+  "size_bytes": 1000204886016,
+  "partitions": [],
+  "blkid_probe_exit_code": 2,
+  "recognized_filesystem_signature": false,
+  "microsd_present": false,
+  "ram_memtotal_kib": 7665276,
+  "mounted_target_storage": false,
+  "planned_flash": "Super QSPI firmware and rootfs on explicitly selected nvme0n1p1; fixed 55 GiB APP, deliberate expansion after boot",
+  "persistent_storage_written": false
+}

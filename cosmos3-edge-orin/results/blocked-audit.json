@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-09-20T03:38:02.838864+00:00",
+  "consecutive_goal_turns": 3,
+  "blocker": "FC REC-GND jumper removal has not been confirmed; normal boot is required for native GPU compilation/inference.",
+  "live_evidence": ".qa/check-ready-boot.log",
+  "live_rootfs": "RAM recovery rootfs",
+  "persistent_install_exit_code": 0,
+  "python_setup_exit_code": 0,
+  "chroot_mounts_present": false,
+  "remaining_deliverables": [
+    "normal NVMe boot and CUDA device execution",
+    "native TensorRT-Edge-LLM build and actual Cosmos3-Edge image inference",
+    "Orin-served working streaming web UI and reachable URL",
+    "bounded latency/shared-memory optimization and sustained validation",
+    "final presentation with measurements and attribution"
+  ],
+  "auxiliary_gpu": "Supplied credential rejected by Paramiko and native SSH; no remote task directory created. Awaiting confirmed credential if needed for calibration.",
+  "resolved_by_user_message": "the jumper isn't in",
+  "resolved_at": "2026-09-20T04:33:44.033815+00:00"
+}

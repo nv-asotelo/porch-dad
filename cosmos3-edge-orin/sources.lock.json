@@ -1,0 +1,50 @@
+{
+  "retrieved_at": "2026-09-19",
+  "sources": [
+    {
+      "name": "TensorRT-Edge-LLM",
+      "url": "https://github.com/NVIDIA/TensorRT-Edge-LLM",
+      "ref": "v0.10.1",
+      "commit": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "license": "Apache-2.0",
+      "role": "Requested inference backend and experimental OpenAI-compatible streaming server"
+    },
+    {
+      "name": "live-vlm-webui",
+      "url": "https://github.com/NVIDIA-AI-IOT/live-vlm-webui",
+      "commit": "2fd5ba0b334c334d24bf0f9439d8742b243d22be",
+      "license": "Apache-2.0",
+      "role": "Public workflow reference and credited inspiration; custom minimal UI developed separately"
+    },
+    {
+      "name": "Cosmos3-Edge",
+      "url": "https://huggingface.co/nvidia/Cosmos3-Edge",
+      "commit": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "license": "OpenMDW-1.1",
+      "license_url": "https://openmdw.ai/license/1-1/",
+      "role": "Requested pretrained model; reasoner mode for image-to-text streaming"
+    },
+    {
+      "name": "JetPack",
+      "version": "7.2.1",
+      "jetson_linux": "39.2.1",
+      "cuda": "13.2.86",
+      "cuda_version_scope": "installed nvcc compiler",
+      "advertised_cuda_release": "13.2.1",
+      "tensorrt": "10.16.2.10",
+      "url": "https://developer.nvidia.com/embedded/jetpack/downloads",
+      "installer_url": "https://developer.download.nvidia.com/embedded/L4T/r39_Release_v2.1/ISO/jetsoninstaller-r39.2.1-2026-08-07-18-30-47-arm64.iso",
+      "installer_size_bytes": 5035601920,
+      "license": "NVIDIA Jetson software terms; bundled component licenses apply",
+      "role": "Installed target OS and compute stack; USB-C flash, normal NVMe boot and CUDA GPU preflight verified; model engines and inference remain unverified",
+      "installation_verified_at": "2026-09-20T04:41:50.230199+00:00",
+      "installation_evidence": [
+        "results/jetpack-flash-status.json",
+        "results/installed-compute-packages.json",
+        "results/normal-boot.json",
+        "results/cuda-preflight.json",
+        "results/storage-expansion.json"
+      ]
+    }
+  ]
+}

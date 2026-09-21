@@ -1,0 +1,123 @@
+{
+  "kind": "soak_summary",
+  "status": "passed",
+  "scope": "API streaming soak; not browser/camera validation or semantic quality grading",
+  "elapsed_seconds": 600.7010017830016,
+  "requested_seconds": 600,
+  "policy": {
+    "minimum_duration_seconds": 600,
+    "minimum_available_bytes": 536870912,
+    "maximum_active_requests": 1,
+    "maximum_queued_requests": 1,
+    "rss_growth_baseline_window_seconds": [
+      60,
+      120
+    ],
+    "rss_growth_final_window_seconds": 60,
+    "rss_growth_absolute_tolerance_bytes": 67108864,
+    "rss_growth_relative_tolerance": 0.05,
+    "growth_rule": "Fail if final-window median RSS minus baseline median exceeds max(64 MiB, 5% baseline RSS).",
+    "system_ram_growth_rule": "Report the same windows separately; system unavailable RAM is not added to RSS.",
+    "length_finish_reason_is_failure": true,
+    "quality_rule": "No semantic grading or exact answer matching; the frozen quality screen is separate."
+  },
+  "request_count": 366,
+  "request_failure_count": 0,
+  "case_counts": {
+    "01-left-right": 61,
+    "02-counts": 61,
+    "03-above-below": 61,
+    "04-inside-outside": 61,
+    "05-relative-size": 61,
+    "06-quadrants": 61
+  },
+  "length_finish_count": 0,
+  "minimum_available_bytes": 1011798016,
+  "counter_deltas": {
+    "swap_in_pages": 0,
+    "swap_out_pages": 0,
+    "system_oom_kills": 0
+  },
+  "growth": {
+    "process_rss_bytes": {
+      "baseline_median": 6342529024.0,
+      "final_median": 6342688768.0,
+      "growth_bytes": 159744.0,
+      "baseline_samples": 120,
+      "final_samples": 120,
+      "tolerance_bytes": 317126451.2
+    },
+    "system_ram_unavailable_bytes": {
+      "baseline_median": 6894000128.0,
+      "final_median": 6896562176.0,
+      "growth_bytes": 2562048.0,
+      "baseline_samples": 120,
+      "final_samples": 120,
+      "tolerance_bytes": null
+    }
+  },
+  "memory": {
+    "sampler_errors": [],
+    "local_system_ram_unavailable_peak_bytes": 6900977664,
+    "local_process_rss_peak_bytes": 6342721536,
+    "tegrastats_ram_used_peak_bytes": 6696206336,
+    "local_swap_occupied_peak_bytes": 0,
+    "swap_activity_detected": false,
+    "oom_detected": false,
+    "cuda_allocator_allocated_bytes": null,
+    "cuda_allocator_reserved_bytes": null,
+    "cuda_allocator_note": "Requires backend instrumentation; cannot be inferred from RAM or RSS.",
+    "memory_note": "Local host observations. Jetson GPU/CPU share RAM. RAM, RSS and allocator counters overlap; do not add them or label system RAM as dedicated VRAM. Peaks are sampled, not exact."
+  },
+  "resource_sample_count": 1199,
+  "oom_note": "The sampled oom_kill counter is system-wide. CUDA/backend failures also reject the run as request errors; this is not CUDA allocator instrumentation.",
+  "health_sample_count": 581,
+  "peak_active_requests": 1,
+  "peak_queued_requests": 0,
+  "failure_reasons": [],
+  "candidate_id": "fp16-corrected-i1024-kv2048",
+  "completed_utc": "2026-09-20T07:29:17.762834+00:00",
+  "raw_jsonl": "results/raw/soak-final-service-01.jsonl",
+  "manifest_sha256": "39b1257e9f56b08965aa294ab99239c4881ce683c58ed550b702540e8c816085",
+  "pid_after": {
+    "pid": 27246,
+    "start_ticks": 997130,
+    "command": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/.venv/bin/python /home/jetson/cosmos-edge/scripts/serve_backend.py /home/jetson/cosmos-edge/models/cosmos3-edge-reasoner --encoder-embedding-cache-budget-bytes 0 --host 127.0.0.1 --port 8000 --served-model-name Cosmos3-Edge --cache-dir /home/jetson/cosmos-edge/data/engine-cache-chw --engine-cache-max-size-gb 12 --max-input-len 1024 --max-kv-cache-capacity 2048 --max-batch-size 1 --max-queued-requests 1 --queue-timeout 10 --reasoning-parser none",
+    "executable": "/usr/bin/python3.12"
+  },
+  "provenance_after": {
+    "backend_config_path": "/home/jetson/cosmos-edge/deployment/selected-config.json",
+    "backend_config_sha256": "f8f0f6636bfb4c63e2a2e2558b45f27679af058dee91ec5f005a5a02acd2ccb2",
+    "backend_config": {
+      "candidate": "fp16-corrected-i1024-kv2048",
+      "model": "nvidia/Cosmos3-Edge",
+      "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+      "precision": "FP16 weights, activation and KV",
+      "max_input_len": 1024,
+      "max_kv_cache_capacity": 2048,
+      "max_batch_size": 1,
+      "encoder_embedding_cache_budget_bytes": 0,
+      "text_context_reuse": false,
+      "power_mode": "stock25W ID1, original dynamic clocksettings restored andindependentlyverified",
+      "patch_sha256": {
+        "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+        "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+        "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+      },
+      "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+      "engine_build_receipt": "results/model-cache-20260920T060126Z-5973645f.json",
+      "cache": "/home/jetson/cosmos-edge/data/engine-cache-chw",
+      "image_quality": "Equivalent to correctedFP16 under results/optimization-quality-policy.json; strict18/19stillfails",
+      "deployment_memory_mode": "Swap disabled; existing2GiBswapfile preserved",
+      "selected": true,
+      "selection_evidence": "results/optimization-selection.json",
+      "memory_mode_evidence": "results/deployment-memory-mode/receipt.json",
+      "served_via": "cosmos-edge-backend.service"
+    },
+    "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+    "backend_tracked_diff_sha256": "8caa5d0255a825ee53c2d34117ecbff3fc07a2296431314da48162f769285152",
+    "soak_script_sha256": "28c61c6ec66936dfe4e24303e50fd275e71906346cdd585f908bd0bb52a0d5b2",
+    "benchmark_script_sha256": "8623bea9802ccd8c94f115d679e4c9331b28dfcd2f236d108f4fdfabbe280a41"
+  }
+}

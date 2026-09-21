@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "analyzed_at_utc": "2026-09-20T05:32:19.802289+00:00",
+  "state": "native_backend_build_and_import_passed",
+  "phase": "native runtime compilation; separate from model-engine construction and inference",
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "mode": "fp16",
+  "platform": {
+    "build_mode": "native",
+    "host_arch": "aarch64",
+    "target_arch": "aarch64",
+    "gpu_arch": "sm_87",
+    "compiler_workers": 1
+  },
+  "duration": {
+    "started_utc": "2026-09-20T04:41:41Z",
+    "completed_utc": "2026-09-20T05:27:25Z",
+    "elapsed_seconds_from_recorded_timestamps": 2744.0,
+    "display": "45m 44s",
+    "timestamp_resolution_seconds": 1,
+    "scope": "Includes wrapper dependency/CUDA preflight, CuTe kernel generation, CMake configuration, required native target compilation/linking and runtime import; not pure compiler time or model latency."
+  },
+  "exit_code": 0,
+  "launcher_exit_code": 0,
+  "required_targets": {
+    "_edgellm_runtime": true,
+    "NvInfer_edgellm_plugin": true
+  },
+  "all_logged_completed_targets": [
+    "edgellmBuilder",
+    "edgellmCore",
+    "_edgellm_runtime",
+    "edgellmKernels",
+    "generatePluginJitEmbeddedSources",
+    "edgellmPluginJit",
+    "NvInfer_edgellm_plugin"
+  ],
+  "runtime_import": {
+    "passed": true,
+    "module_path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so",
+    "llm_runtime_attribute_checked_by_wrapper": true
+  },
+  "dependency_check_passed": true,
+  "cuda_array_preflight": {
+    "observed_at": "2026-09-20T04:41:50.230199+00:00",
+    "gpu": "Orin",
+    "compute_capability": [
+      8,
+      7
+    ],
+    "cuda_runtime": 13000,
+    "tensorrt": "10.16.2.10",
+    "cuda_array_sum_passed": true,
+    "model_inference_verified": false
+  },
+  "fmha": {
+    "selected_count": 25,
+    "compiled_success_count": 25,
+    "all_selected_variants_have_success_markers": true,
+    "artifact_written_marker_present": true,
+    "variant_names": [
+      "fmha_v2_d64",
+      "fmha_v2_d64_small",
+      "fmha_v2_d128",
+      "fmha_v2_d256",
+      "fmha_v2_d64_sw",
+      "fmha_v2_d128_sw",
+      "fmha_v2_d256_sw",
+      "fmha_v2_d64_paged",
+      "fmha_v2_d64_small_paged",
+      "fmha_v2_d128_paged",
+      "fmha_v2_d256_paged",
+      "fmha_v2_d512_paged",
+      "fmha_v2_d64_sw_paged",
+      "fmha_v2_d128_sw_paged",
+      "fmha_v2_d256_sw_paged",
+      "fmha_v2_d512_sw_paged",
+      "fmha_v2_d256_padding",
+      "fmha_v2_vit_d64",
+      "fmha_v2_vit_d72",
+      "fmha_v2_vit_d80",
+      "fmha_v2_vit_d128",
+      "fmha_v2_d256_bidirectional",
+      "fmha_v2_d512",
+      "fmha_v2_d512_sw",
+      "fmha_v2_d512_bidirectional"
+    ],
+    "scope": "25 selected SM87 FMHA variants only; no assertion that other precision/platform groups were built."
+  },
+  "tegrastats": {
+    "source": "results/build-fp16.1IkqC1/tegrastats.log",
+    "requested_interval_ms": 500,
+    "parsed_samples": 5423,
+    "unparsed_lines": 0,
+    "first_timestamp_as_emitted": "09-20-2026 04:41:42",
+    "last_timestamp_as_emitted": "09-20-2026 05:27:25",
+    "timestamp_note": "Tegrastats strings contain no explicit time zone or subsecond field; retained without inventing additional precision. Wrapper UTC start/end are recorded separately.",
+    "ram_used_peak_reported_mb": 1918,
+    "ram_total_reported_mb_values": [
+      7546
+    ],
+    "ram_peak_log_line": 3879,
+    "ram_peak_timestamp_as_emitted": "09-20-2026 05:14:24",
+    "swap_used_peak_reported_mb": 0,
+    "swap_total_reported_mb_values": [
+      2048
+    ],
+    "nonzero_swap_samples": 0,
+    "memory_note": "MB labels and RAM/SWAP fields are preserved as emitted by tegrastats. RAM is a whole-system CPU/GPU shared-memory observation, not dedicated VRAM, process RSS or a CUDA allocator total. The maxima are sampled, not an exact high-water mark; no conversion or addition to overlapping memory counters is made. Zero sampled occupied swap does not independently prove zero swap I/O.",
+    "temperature_parsing": "Use the numeric field immediately after sensor@ and before the first C; do not conflate it with the second slash-separated field.",
+    "temperatures": {
+      "cpu": {
+        "samples": 5423,
+        "sampled_maximum_c": 47.781,
+        "maximum_log_line": 3914,
+        "maximum_timestamp_as_emitted": "09-20-2026 05:14:42"
+      },
+      "soc2": {
+        "samples": 5423,
+        "sampled_maximum_c": 47.187,
+        "maximum_log_line": 3934,
+        "maximum_timestamp_as_emitted": "09-20-2026 05:14:52"
+      },
+      "soc0": {
+        "samples": 5423,
+        "sampled_maximum_c": 47.093,
+        "maximum_log_line": 3911,
+        "maximum_timestamp_as_emitted": "09-20-2026 05:14:40"
+      },
+      "gpu": {
+        "samples": 5423,
+        "sampled_maximum_c": 48.0,
+        "maximum_log_line": 3925,
+        "maximum_timestamp_as_emitted": "09-20-2026 05:14:47"
+      },
+      "tj": {
+        "samples": 5423,
+        "sampled_maximum_c": 48.0,
+        "maximum_log_line": 3925,
+        "maximum_timestamp_as_emitted": "09-20-2026 05:14:47"
+      },
+      "soc1": {
+        "samples": 5423,
+        "sampled_maximum_c": 47.656,
+        "maximum_log_line": 3933,
+        "maximum_timestamp_as_emitted": "09-20-2026 05:14:51"
+      }
+    }
+  },
+  "evidence": [
+    {
+      "path": "results/build-fp16.1IkqC1/build.log",
+      "sha256": "46b05b1575777a5b7e4f5258254a0e09524bd5b6deeba627f5538009cbfbd0a4"
+    },
+    {
+      "path": "results/build-fp16.1IkqC1/tegrastats.log",
+      "sha256": "d23d7f81083cc02a633ab229db6b8dc0bb25a6bbbfa4899d96951a27881db9e3"
+    },
+    {
+      "path": "results/build-fp16.1IkqC1/ended-at.txt",
+      "sha256": "d118b09741791b630805dbce56931dd6e243bd1bebf609a9aacd16a341a0c267"
+    },
+    {
+      "path": "results/build-fp16.1IkqC1/exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "results/native-build-launch/run.sh",
+      "sha256": "d574d077659320d60e2097f491592122522570f8804526bfa5acbcef9c2ca201"
+    },
+    {
+      "path": "results/native-build-launch/exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    }
+  ],
+  "model_engine_build_completed": false,
+  "inference_validated": false,
+  "inference_latency_measured": false,
+  "inference_memory_measured": false
+}

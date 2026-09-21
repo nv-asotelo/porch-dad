@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-09-20T02:51:14.411216+00:00",
+  "plan_exit_code": 0,
+  "review_passed": true,
+  "new_packages": 50,
+  "dependency_upgrades": 6,
+  "upgrades_scope": "Python 3.12 packages to match requested development headers",
+  "removals": [],
+  "bsp_kernel_firmware_changes": [],
+  "nvidia_top_level_versions_match_recipe": true,
+  "package_installation_not_gpu_validation": true
+}

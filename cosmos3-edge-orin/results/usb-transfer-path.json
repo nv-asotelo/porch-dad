@@ -1,0 +1,15 @@
+{
+  "observed_at": "2026-09-20T02:00:49.900181+00:00",
+  "native_mac_usb_ssh_succeeded": true,
+  "usb_interface": "en8",
+  "ram_target": "fe80::1%en8",
+  "qemu_ncm_passthrough_issue": "macOS native NCM driver; libusb_detach_kernel_driver returns ACCESS",
+  "mac_security_policy_changed": false,
+  "nfs_version": "4.1",
+  "nfs_readonly_mount_verified": true,
+  "nfs_transport": "pinned SSH connections via Mac between target loopback and Linux VM loopback",
+  "package_proxy": "Ubuntu tinyproxy-bin1.11.0-1 in dedicatedVM; loopback only; no globalservice",
+  "https_pypi_request_through_proxy": 200,
+  "target_proxy_tested": false,
+  "persistent_storage_written": false
+}

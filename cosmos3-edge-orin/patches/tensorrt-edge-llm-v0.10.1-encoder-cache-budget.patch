@@ -1,0 +1,90 @@
+diff --git a/experimental/pybind/edgellm_pybind.cpp b/experimental/pybind/edgellm_pybind.cpp
+index f480485cc8a170933fe10ab7c62981f73a0b6b8c..a4a8ac80bb367b7f9ad8fd06729c2bb8f049e6a1 100644
+--- a/experimental/pybind/edgellm_pybind.cpp
++++ b/experimental/pybind/edgellm_pybind.cpp
+@@ -671,7 +671,8 @@ PYBIND11_MODULE(_edgellm_runtime, m)
+         .def_readwrite("enabled", &ContextCacheConfig::enabled)
+         .def_readwrite("max_records", &ContextCacheConfig::maxRecords)
+         .def_readwrite("recurrent_snapshot_pool_bytes", &ContextCacheConfig::recurrentSnapshotPoolBytes)
+-        .def_readwrite("partial_kv_snapshot_pool_bytes", &ContextCacheConfig::partialKvSnapshotPoolBytes);
++        .def_readwrite("partial_kv_snapshot_pool_bytes", &ContextCacheConfig::partialKvSnapshotPoolBytes)
++        .def_readwrite("encoder_embedding_cache_budget_bytes", &ContextCacheConfig::encoderEmbeddingCacheBudgetBytes);
+ 
+     // ========================================================================
+     // Image utilities
+diff --git a/experimental/server/config.py b/experimental/server/config.py
+index 7be49bc831166e4b49666c0ed6d1624d822a7f5c..2612552ef6615945feeca9cc66981e7d9905b996 100644
+--- a/experimental/server/config.py
++++ b/experimental/server/config.py
+@@ -99,12 +99,13 @@ class SpeculativeConfig:
+ 
+ @dataclass(frozen=True)
+ class ContextCacheConfig:
+-    """Deployment-scoped KV-cache reuse configuration."""
++    """Deployment-scoped KV reuse and independent encoder-cache budgets."""
+ 
+     enabled: bool = False
+     max_records: int = 1024
+     recurrent_snapshot_pool_bytes: int = 0
+     partial_kv_snapshot_pool_bytes: int = 0
++    encoder_embedding_cache_budget_bytes: int = 256 * 1024 * 1024
+ 
+     def __post_init__(self) -> None:
+         if not isinstance(self.enabled, bool):
+@@ -113,6 +114,7 @@ class ContextCacheConfig:
+                 "max_records",
+                 "recurrent_snapshot_pool_bytes",
+                 "partial_kv_snapshot_pool_bytes",
++                "encoder_embedding_cache_budget_bytes",
+         ):
+             value = getattr(self, name)
+             if isinstance(value,
+@@ -123,7 +125,8 @@ class ContextCacheConfig:
+             raise ServerConfigError(
+                 "context_cache.max_records must fit a signed 32-bit integer")
+         for name in ("recurrent_snapshot_pool_bytes",
+-                     "partial_kv_snapshot_pool_bytes"):
++                     "partial_kv_snapshot_pool_bytes",
++                     "encoder_embedding_cache_budget_bytes"):
+             if getattr(self, name) > _INT64_MAX:
+                 raise ServerConfigError(
+                     f"context_cache.{name} must fit a signed 64-bit integer")
+@@ -152,6 +155,7 @@ class ContextCacheConfig:
+             "max_records",
+             "recurrent_snapshot_pool_bytes",
+             "partial_kv_snapshot_pool_bytes",
++            "encoder_embedding_cache_budget_bytes",
+         }
+         unsupported = sorted(set(raw) - supported)
+         if unsupported:
+@@ -341,6 +345,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
+     model.add_argument("--context-cache-partial-kv-snapshot-pool-bytes",
+                        type=_non_negative_int,
+                        default=0)
++    model.add_argument("--encoder-embedding-cache-budget-bytes",
++                       type=_non_negative_int,
++                       default=256 * 1024 * 1024,
++                       help="ViT/audio output cache budget, independent of context reuse; zero disables.")
+     return parser
+ 
+ 
+@@ -365,6 +373,7 @@ def parse_server_config(argv: Optional[Sequence[str]] = None) -> ServerConfig:
+             args.context_cache_recurrent_snapshot_pool_bytes),
+         partial_kv_snapshot_pool_bytes=(
+             args.context_cache_partial_kv_snapshot_pool_bytes),
++        encoder_embedding_cache_budget_bytes=args.encoder_embedding_cache_budget_bytes,
+     )
+     model = ModelConfig(
+         model=args.model,
+diff --git a/experimental/server/runtime/engine.py b/experimental/server/runtime/engine.py
+index 1b92752df7db4d21024cf82085319c58f7b8351e..d07a0edcfbc07231694e4f3a6d59dd0ad82a07cd 100644
+--- a/experimental/server/runtime/engine.py
++++ b/experimental/server/runtime/engine.py
+@@ -594,6 +594,7 @@ def _native_context_cache_config(rt, config: ContextCacheConfig):
+     native.max_records = config.max_records
+     native.recurrent_snapshot_pool_bytes = config.recurrent_snapshot_pool_bytes
+     native.partial_kv_snapshot_pool_bytes = config.partial_kv_snapshot_pool_bytes
++    native.encoder_embedding_cache_budget_bytes = config.encoder_embedding_cache_budget_bytes
+     return native
+ 
+ 

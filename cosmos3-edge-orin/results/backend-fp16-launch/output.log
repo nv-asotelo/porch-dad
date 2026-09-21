@@ -1,0 +1,56 @@
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[transformers] You are using a model of type `cosmos3_edge` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+Checkpoint validated structurally; TensorRT 10.16.2.10.
+Starting actual TensorRT Edge-LLM; health remains unavailable until engine build/load succeeds.
+05:33:11 INFO     edgellm.server: Using cached engine bundle: /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc
+05:33:11 INFO     edgellm.server: Loading runtime bundle from /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc
+[05:33:11.561] [INFO] [trtUtils.h:75:loadEdgellmPluginLib] EDGELLM_PLUGIN_PATH variable is not set. Default to build/libNvInfer_edgellm_plugin.so
+[05:33:18.569] [INFO] [externalWeightManager.cpp:888:load] Prepared 226 model weight tensor(s) and the embedding table from checkpoint in 7003 ms (index 3 ms, validate 3 ms, map/register 4950 ms, peak mapped source 33558528 bytes, arena 3892547584 bytes, aliases saved 0 bytes in 562 ms, transform 6429 ms)
+[05:33:18.571] [INFO] [llmEngineConfig.cpp:672:parseEngineConfig] reading /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/config.json
+[05:33:18.575] [INFO] [llmRuntimeUtils.cpp:422:collectRopeConfig] Collected rope config: RopeConfig:  type: MRope  rotaryScale: 1  rotaryTheta: 1e+08  partialRotaryFactor: 1  maxPositionEmbeddings: 131072
+[05:33:18.575] [INFO] [llmEngineConfig.cpp:887:parseEngineConfig] LLMEngineConfig{ hiddenSize=2048 vocabSize=131072 outputVocabSize=131072 numDecoderLayers=28 numAttentionLayers=28 numKVHeads=8 headDim=128 rotaryDim=128 maxBatch=1 maxInputLen=1024 maxKVCapacity=2048 kvPoolPages=16 pleEnabled=false numPleInputs=0 pleHiddenSize=0 isSpecDecodeBase=false specDecodeType=0 loraRank=0 eosTokenIds=[11] }
+[05:33:18.576] [INFO] [engineExecutor.cpp:135:TrtEngineExecutor] loading engine file: /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/llm.engine
+[05:33:18.705] [INFO] [TensorRT] [MS] Running engine with multi stream info
+[05:33:18.705] [INFO] [TensorRT] [MS] Number of aux streams is 2
+[05:33:18.705] [INFO] [TensorRT] [MS] Number of total worker streams is 3
+[05:33:18.705] [INFO] [TensorRT] [MS] The main stream provided by execute/enqueue calls is the first worker stream
+[05:33:19.273] [INFO] [TensorRT] [MemUsageChange] TensorRT-managed allocation in IExecutionContext creation: CPU +0, GPU +0, now: CPU 0, GPU 0 (MiB)
+[05:33:19.273] [INFO] [trtUtils.cpp:374:setNonBlockingAuxStreams] configured 2 non-blocking auxiliary stream(s) for execution context
+[05:33:19.274] [INFO] [engineExecutor.cpp:166:TrtEngineExecutor] engine loaded successfully (289 I/O tensors)
+[05:33:19.274] [INFO] [modelArtifacts.cpp:213:loadFromEngineDir] Base EngineExecutor successfully loaded from /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/llm.engine.
+[05:33:19.278] [INFO] [externalWeightManager.cpp:930:validateAgainstEngine] Validated 226 external weight tensor(s) for base
+[05:33:19.279] [INFO] [modelArtifacts.cpp:144:loadTokenizer] Start loading tokenizer from model directory: /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc
+[05:33:20.099] [INFO] [tokenizer.cpp:603:loadVocabulary] Loaded 131072 vocabulary tokens
+[05:33:20.309] [INFO] [tokenizer.cpp:135:loadFromHF] Loaded 1000 special tokens
+[05:33:20.384] [INFO] [tokenizer.cpp:1090:loadChatTemplate] Successfully loaded chat template from /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/processed_chat_template.json (for model: /home/jetson/cosmos-edge/models/cosmos3-edge-reasoner)
+[05:33:20.384] [INFO] [tokenizer.cpp:167:loadFromHF] Successfully loaded tokenizer from /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc (vocab_size=132072)
+[05:33:20.423] [INFO] [modelArtifacts.cpp:147:loadTokenizer] Tokenizer successfully loaded from model directory: /home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc
+[05:33:20.423] [INFO] [modelArtifacts.cpp:154:loadTokenizer] Loaded 1 EOS token IDs from config
+[05:33:20.423] [INFO] [runtimeCoordinator.cpp:70:RuntimeCoordinator] RuntimeCoordinator running single-device inline (no worker thread).
+[05:33:20.424] [INFO] [llmRankRuntime.cpp:364:initializeCommon] Runtime batch size set to: 1 (from engine bundle)
+[05:33:20.550] [INFO] [llmRankRuntime.cpp:533:initializeCommon] Runtime tensors successfully allocated.
+[05:33:20.594] [INFO] [TensorRT] [MS] Running engine with multi stream info
+[05:33:20.594] [INFO] [TensorRT] [MS] Number of aux streams is 2
+[05:33:20.594] [INFO] [TensorRT] [MS] Number of total worker streams is 3
+[05:33:20.594] [INFO] [TensorRT] [MS] The main stream provided by execute/enqueue calls is the first worker stream
+[05:33:21.378] [INFO] [TensorRT] [MemUsageChange] TensorRT-managed allocation in IExecutionContext creation: CPU +0, GPU +0, now: CPU 0, GPU 0 (MiB)
+[05:33:21.378] [INFO] [trtUtils.cpp:374:setNonBlockingAuxStreams] configured 2 non-blocking auxiliary stream(s) for execution context
+[05:33:23.642] [INFO] [externalWeightManager.cpp:888:load] Prepared 442 model weight tensor(s) from checkpoint in 2258 ms (index 3 ms, validate 4 ms, map/register 1275 ms, peak mapped source 33558528 bytes, arena 978098176 bytes, aliases saved 0 bytes in 476 ms, transform 1772 ms)
+[05:33:23.655] [INFO] [externalWeightManager.cpp:950:bindToContext] Bound 442 external weight tensor(s) to visual
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/experimental/server/__main__.py", line 19, in <module>
+    main()
+  File "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/experimental/server/cli.py", line 36, in main
+    llm = load_model(**config.model.llm_kwargs())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/experimental/server/runtime/engine.py", line 1802, in load_model
+    runtime = runtime_class(**{**kwargs, "model": resolved})
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/experimental/server/runtime/engine.py", line 760, in __init__
+    self._load_runtime()
+  File "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/experimental/server/runtime/engine.py", line 817, in _load_runtime
+    self._runtime = self._rt.LLMRuntime(
+                    ^^^^^^^^^^^^^^^^^^^^
+RuntimeError: [parallel rank 0] Failed to initialize runtime: [json.exception.type_error.302] type must be number, but is null

@@ -1,0 +1,75 @@
+{
+  "candidate": "fp16-clocks-i1024-kv2048",
+  "suite_id": "original-geometric-quality-v1-jpeg-v1",
+  "raw_results": "results/raw/quality-fp16-clocks-01.jsonl",
+  "raw_sha256": "ecd53cae1de07b5ad6d6c946cd34f9c1c14672c7741b275dd83ca07e06c28c63",
+  "reviewer": "Codex semantic review against frozen answer key",
+  "required_facts": 19,
+  "correct_facts": 18,
+  "passed": false,
+  "false_added_claims": true,
+  "transport_successes": 6,
+  "completed_without_token_truncation": 6,
+  "cases": [
+    {
+      "case_id": "01-left-right",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "02-counts",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "03-above-below",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "04-inside-outside",
+      "fact_scores": [
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    },
+    {
+      "case_id": "05-relative-size",
+      "fact_scores": [
+        0,
+        1,
+        1
+      ],
+      "review": "Purple and left-larger relations correct. Flat circles are called spheres: shape fact fails and added 3D claim prevents overall pass."
+    },
+    {
+      "case_id": "06-quadrants",
+      "fact_scores": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "review": "All required facts present; no materially false added visual claim observed."
+    }
+  ],
+  "note": "Same original JPEGs, prompts, sampling settings and 64-token ceiling. No acceptance threshold changed.",
+  "strict_pass": false,
+  "optimization_equivalent": true,
+  "policy": "results/optimization-quality-policy.json",
+  "outputs_exactly_match_fp16_baseline": true
+}

@@ -1,0 +1,19 @@
+external/
+downloads/
+models/
+engines/
+.venv/
+__pycache__/
+*.pyc
+*.pem
+*.key
+results/raw/
+.qa/
+.presentation-build/
+.codex-finalizer/
+data/
+.model-download/
+
+# Private provisioning research and local OS metadata.
+.compute-research/
+.DS_Store

@@ -1,0 +1,64 @@
+{
+  "model": {
+    "id": "nvidia/Cosmos3-Edge",
+    "sha": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+    "private": false,
+    "gated": false,
+    "lastModified": "2026-09-16T18:48:41.000Z",
+    "cardData": {
+      "license": "other",
+      "license_name": "openmdw1.1-license",
+      "license_link": "https://openmdw.ai/license/1-1/",
+      "library_name": "cosmos",
+      "tags": [
+        "nvidia",
+        "cosmos",
+        "cosmos3"
+      ]
+    }
+  },
+  "trt_contributors": [
+    {
+      "login": "nvluxiaoz",
+      "html_url": "https://github.com/nvluxiaoz",
+      "contributions": 18
+    },
+    {
+      "login": "ever-wong",
+      "html_url": "https://github.com/ever-wong",
+      "contributions": 2
+    },
+    {
+      "login": "jhalabi-nv",
+      "html_url": "https://github.com/jhalabi-nv",
+      "contributions": 2
+    },
+    {
+      "login": "nvxingkaiz",
+      "html_url": "https://github.com/nvxingkaiz",
+      "contributions": 2
+    },
+    {
+      "login": "JCalafato",
+      "html_url": "https://github.com/JCalafato",
+      "contributions": 1
+    },
+    {
+      "login": "poweiw",
+      "html_url": "https://github.com/poweiw",
+      "contributions": 1
+    }
+  ],
+  "ui_contributors": [
+    {
+      "login": "tokk-nv",
+      "html_url": "https://github.com/tokk-nv",
+      "contributions": 162
+    },
+    {
+      "login": "chitoku",
+      "html_url": "https://github.com/chitoku",
+      "contributions": 1
+    }
+  ]
+}

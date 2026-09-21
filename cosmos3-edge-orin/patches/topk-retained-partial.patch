@@ -1,0 +1,64 @@
+--- a/cpp/sampler/sampling.cu
++++ b/cpp/sampler/sampling.cu
+@@ -498,6 +498,7 @@
+ {
+     typedef cub::BlockReduce<TopK_2, BLOCK_SIZE_> BlockReduce;
+     __shared__ typename BlockReduce::TempStorage tempStorage;
++    __shared__ int32_t selectedIndex;
+ 
+     auto const tid = static_cast<int32_t>(threadIdx.x);
+     auto const bid = static_cast<int32_t>(blockIdx.x);
+@@ -527,17 +528,16 @@
+         tmpLogits[localIndex] = logit * invTemp;
+     }
+ 
+-    // Find top-K elements iteratively
++    partial.init();
++#pragma unroll
++    for (auto elemId = tid + blockLane * BLOCK_SIZE_; elemId < vocabSize; elemId += BLOCK_SIZE_ * BLOCKS_PER_BEAM_)
++    {
++        auto index = elemId + tmpLogBufIndex;
++        partial.insert(tmpLogits[index], index);
++    }
++
+     for (int32_t ite = 0; ite < k; ite++)
+     {
+-        partial.init();
+-#pragma unroll
+-        for (auto elemId = tid + blockLane * BLOCK_SIZE_; elemId < vocabSize; elemId += BLOCK_SIZE_ * BLOCKS_PER_BEAM_)
+-        {
+-            auto index = elemId + tmpLogBufIndex;
+-            partial.insert(tmpLogits[index], index);
+-        }
+-
+         TopK_2 total = BlockReduce(tempStorage).Reduce(partial, topk2MaxOpFunctor());
+ 
+         if (tid == 0)
+@@ -545,6 +545,7 @@
+             auto const index = tmpTopKBufIndex + ite;
+             topKTmpIdBuf[index] = total.index;
+             topKTmpValBuf[index] = total.value;
++            selectedIndex = total.index;
+ 
+             if (total.index >= 0)
+             {
+@@ -552,6 +553,19 @@
+             }
+         }
+         __syncthreads();
++
++        // Only the winning thread's partition changed; retain every other local maximum.
++        if (ite + 1 < k && selectedIndex >= 0 && partial.index == selectedIndex)
++        {
++            partial.init();
++#pragma unroll
++            for (auto elemId = tid + blockLane * BLOCK_SIZE_; elemId < vocabSize;
++                 elemId += BLOCK_SIZE_ * BLOCKS_PER_BEAM_)
++            {
++                auto index = elemId + tmpLogBufIndex;
++                partial.insert(tmpLogits[index], index);
++            }
++        }
+     }
+ }
+ 

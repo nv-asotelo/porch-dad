@@ -1,0 +1,90 @@
+diff --git a/experimental/builder/models/cosmos3/modeling_cosmos3_reasoner_visual.py b/experimental/builder/models/cosmos3/modeling_cosmos3_reasoner_visual.py
+index 777e3fadeff5bc83403c749639fae743c8ea1fcb..4cfe6c3324d9c18f5117144c1bd0116a96d9c823 100644
+--- a/experimental/builder/models/cosmos3/modeling_cosmos3_reasoner_visual.py
++++ b/experimental/builder/models/cosmos3/modeling_cosmos3_reasoner_visual.py
+@@ -17,22 +17,42 @@
+ from __future__ import annotations
+ 
+ import math
++from dataclasses import replace
+ 
+ import tensorrt as trt
+ 
+ from ...ops import LayerNorm, Linear, Module, NetworkModule
+ from ...ops import functional as F
++from .weights import adapt_patch_embedding_weight_for_chw_input
++
++
++class Cosmos3ReasonerPatchEmbedding(Linear):
++    """Checkpoint patch projection with columns adapted to runtime layout."""
++
++    def __init__(self, ctx, prefix: str, patch_size: int,
++                 num_channels: int) -> None:
++        super().__init__(ctx, prefix, rank=2, tensor_parallel=False)
++        self.patch_size = patch_size
++        self.num_channels = num_channels
++
++    def weight_descriptor(self):
++        if self.quant_type() != "fp16":
++            raise ValueError("Cosmos3 patch embedding requires FP16 weights")
++        descriptor = self.weights.linear(self.prefix, "fp16")
++        weight = adapt_patch_embedding_weight_for_chw_input(
++            descriptor.weight, self.patch_size, self.num_channels)
++        # The identity checkpoint recipe cannot reproduce permuted columns.
++        return replace(descriptor, weight=weight, weight_recipe=None)
+ 
+ 
+ class Cosmos3ReasonerVisionEmbeddings(Module):
+     """Flattened patch projection and host-indexed position interpolation."""
+ 
+-    def __init__(self, ctx, hidden_size: int) -> None:
++    def __init__(self, ctx, hidden_size: int, patch_size: int,
++                 num_channels: int) -> None:
+         super().__init__(ctx, "model.visual.embeddings")
+-        self.patch_embedding = Linear(ctx,
+-                                      self.key("patch_embedding"),
+-                                      rank=2,
+-                                      tensor_parallel=False)
++        self.patch_embedding = Cosmos3ReasonerPatchEmbedding(
++            ctx, self.key("patch_embedding"), patch_size, num_channels)
+         self.position_key = self.key("position_embedding.weight")
+         position_shape = self.weights.store.shape(
+             self.weights.checkpoint_key(self.position_key))
+@@ -126,7 +146,8 @@ class Cosmos3ReasonerVisionTransformer(Module):
+         self.hidden_size = int(config["hidden_size"])
+         self.num_heads = int(config["num_attention_heads"])
+         self.embeddings = Cosmos3ReasonerVisionEmbeddings(
+-            ctx, self.hidden_size)
++            ctx, self.hidden_size, int(config["patch_size"]),
++            int(config.get("num_channels", 3)))
+         eps = float(config.get("layer_norm_eps", 1e-6))
+         self.layers = [
+             Cosmos3ReasonerVisionLayer(ctx, index, self.hidden_size,
+diff --git a/experimental/builder/models/cosmos3/weights.py b/experimental/builder/models/cosmos3/weights.py
+index 9d6c1f180f5d21159b92566ecc48dcd3257a8cbf..1cba4cfe58aebbaa3b2d0965f7022bf524267872 100644
+--- a/experimental/builder/models/cosmos3/weights.py
++++ b/experimental/builder/models/cosmos3/weights.py
+@@ -18,6 +18,23 @@ from __future__ import annotations
+ 
+ import os
+ 
++import numpy as np
++
++
++def adapt_patch_embedding_weight_for_chw_input(weight: np.ndarray,
++                                               patch_size: int,
++                                               num_channels: int) -> np.ndarray:
++    """Match the shared runtime's CHW patches to Cosmos3's HWC checkpoint."""
++    expected_width = num_channels * patch_size**2
++    if (patch_size <= 0 or num_channels <= 0 or weight.ndim != 2
++            or weight.shape[1] != expected_width):
++        raise ValueError(
++            "Cosmos3 patch-embedding weight must have shape "
++            f"[out_features, {expected_width}], got {weight.shape}")
++    return np.ascontiguousarray(
++        weight.reshape(weight.shape[0], patch_size, patch_size,
++                       num_channels).transpose(0, 3, 1, 2).reshape(weight.shape))
++
+ 
+ def _component_name(component: str) -> str:
+     return str(component).replace("-", "_")

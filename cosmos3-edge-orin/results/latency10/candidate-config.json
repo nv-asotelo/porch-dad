@@ -1,0 +1,37 @@
+{
+  "candidate": "live-vlm-fp16-retained-topk",
+  "model": "nvidia/Cosmos3-Edge",
+  "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+  "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "precision": "FP16 weights, activation and KV",
+  "max_input_len": 1024,
+  "max_kv_cache_capacity": 2048,
+  "max_batch_size": 1,
+  "encoder_embedding_cache_budget_bytes": 0,
+  "text_context_reuse": false,
+  "power_mode": "stock25W ID1",
+  "patch_sha256": {
+    "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+    "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+    "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64",
+    "topk-retained-partial.patch": "28a5244889800bb7ee808e728217e6b77e0a3f06b6e5c2b1e3f5efbd8fae2f2e"
+  },
+  "native_extension_sha256": "d16eae63a5b06d91172c1ce38d21e32af5a39227e321024cadc2678227f38298",
+  "engine_build_receipt": "results/model-cache-20260920T060126Z-5973645f.json",
+  "cache": "/home/jetson/cosmos-edge/data/engine-cache-chw",
+  "image_quality": "Pending baseline observed output assessment; exact-preservation gate",
+  "created_utc": "2026-09-21T01:07:51.705612+00:00",
+  "clock_policy": "restored stock dynamic 25W",
+  "sampling": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 50,
+    "request_top_p": "omitted",
+    "request_top_k": "omitted",
+    "native_philox_seed": 42,
+    "native_philox_offset": 0
+  },
+  "native_extension_current_sha256": "d16eae63a5b06d91172c1ce38d21e32af5a39227e321024cadc2678227f38298",
+  "sampler_source_sha256": "101b95c40d1326db10ccae4f8dfa8616198ca29b79a6e1463d5ee2053993a0a8",
+  "candidate_change": "Retain per-thread topK partial maxima; rescan only the winning partition. Same partition, comparator, FP32 temperature arithmetic, topP and RNG."
+}

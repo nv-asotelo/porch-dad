@@ -1,0 +1,187 @@
+{
+  "observed_utc_unix": 1789888554.9111605,
+  "all_saved_values_match": true,
+  "settings": [
+    {
+      "path": "/sys/devices/system/cpu/cpu0/online",
+      "expected": "1",
+      "actual": "1",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu1/online",
+      "expected": "1",
+      "actual": "1",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu2/online",
+      "expected": "1",
+      "actual": "1",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu3/online",
+      "expected": "1",
+      "actual": "1",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu4/online",
+      "expected": "1",
+      "actual": "1",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu5/online",
+      "expected": "1",
+      "actual": "1",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq",
+      "expected": "729600",
+      "actual": "729600",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq",
+      "expected": "729600",
+      "actual": "729600",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu2/cpufreq/scaling_min_freq",
+      "expected": "729600",
+      "actual": "729600",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu3/cpufreq/scaling_min_freq",
+      "expected": "729600",
+      "actual": "729600",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu4/cpufreq/scaling_min_freq",
+      "expected": "729600",
+      "actual": "729600",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu5/cpufreq/scaling_min_freq",
+      "expected": "729600",
+      "actual": "729600",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu0/cpuidle/state0/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu0/cpuidle/state1/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu1/cpuidle/state0/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu1/cpuidle/state1/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu2/cpuidle/state0/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu2/cpuidle/state1/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu3/cpuidle/state0/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu3/cpuidle/state1/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu4/cpuidle/state0/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu4/cpuidle/state1/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu5/cpuidle/state0/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/system/cpu/cpu5/cpuidle/state1/disable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/class/devfreq/17000000.gpu/min_freq",
+      "expected": "306000000",
+      "actual": "306000000",
+      "matches": true
+    },
+    {
+      "path": "/sys/devices/platform/gpu.0/railgate_enable",
+      "expected": "0",
+      "actual": "0",
+      "matches": true
+    },
+    {
+      "path": "/sys/class/devfreq/bwmgr/min_freq",
+      "expected": "204000000",
+      "actual": "204000000",
+      "matches": true
+    },
+    {
+      "path": "/sys/class/devfreq/bwmgr/max_freq",
+      "expected": "3199000000",
+      "actual": "3199000000",
+      "matches": true
+    },
+    {
+      "path": "/sys/class/thermal/thermal_zone8/policy",
+      "expected": "user_space",
+      "actual": "user_space",
+      "matches": true
+    },
+    {
+      "path": "/root/.jetsonclocks_fan.txt",
+      "expected": "active",
+      "actual": "active",
+      "matches": true
+    }
+  ],
+  "utility_warning": "Installed jetson_clocks restore also tried unused GPU RM/persistence state without its absentGPU_RM_STATUS_FILE. Independently verified every actual savedsetting exactly; no followupclockwrite needed."
+}

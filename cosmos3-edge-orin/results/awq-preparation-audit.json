@@ -1,0 +1,33 @@
+{
+  "prepared_at": "2026-09-20T01:56:36.197227+00:00",
+  "source_pin": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+  "model_pin": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+  "remote_access_performed": false,
+  "packages_installed": false,
+  "gpu_operation_performed": false,
+  "quantization_performed": false,
+  "candidate_status": "prepared_with_runtime_gates",
+  "material_findings": [
+    "Stock generic quantizer has no explicit Cosmos3 HF calibration adapter; Transformers 5.14.1 AutoConfig, AutoModelForImageTextToText and processor recognition remain unverified.",
+    "Vision FP16 exclusion omits plain projector; original runner appends *projector.* disabled.",
+    "AWQ must calibrate image activations even with FP16 vision; text-only fallback rejected.",
+    "Environment redirection is not an OS filesystem sandbox; host isolation remains the primary agent responsibility."
+  ],
+  "offline_checks_passed": [
+    "Bash environment script syntax",
+    "Python runner syntax/import without optional dependencies",
+    "Contained path accepted",
+    "Root/outside/traversal paths rejected",
+    "Symlink escape rejected",
+    "Valid digest/provenance corpus accepted",
+    "Bad digest rejected",
+    "Duplicate calibration image rejected",
+    "Sourced environment preserves HOME and task-local paths/offline modes",
+    "Documented Bash commands parse"
+  ],
+  "files": [
+    "scripts/awq_isolated_env.sh",
+    "scripts/quantize_cosmos3_awq.py",
+    "research/cosmos3-awq-candidate.md"
+  ]
+}

@@ -1,0 +1,6 @@
+[  6%] Built target edgellmBuilder
+[ 98%] Built target edgellmCore
+[ 98%] Building CXX object experimental/pybind/CMakeFiles/_edgellm_runtime.dir/edgellm_pybind.cpp.o
+[ 98%] Linking CUDA device code CMakeFiles/_edgellm_runtime.dir/cmake_device_link.o
+[ 98%] Linking CXX shared module ../../pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so
+[100%] Built target _edgellm_runtime

@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-09-20T06:22:33.872Z",
+  "url": "http://localhost:8090",
+  "service_host": "actual Orin through SSH tunnel",
+  "backend": "TensorRT-Edge-LLM",
+  "model": "Cosmos3-Edge",
+  "checks": {
+    "incremental_text_before_completion": true,
+    "stop_preserves_partial_without_false_completion": true,
+    "restart_completes": true,
+    "no_javascript_errors": true
+  },
+  "responses": [
+    "On the left side of the image, there's a red circle. On the right side, there's a blue square. The red circle is positioned to the left of the blue square.",
+    "The image shows two shapes: a red circle on the left and a blue square on the right. The red circle is solid in color, while the blue square has a slightly lighter shade of blue compared to the circle."
+  ],
+  "status": "passed_transport_and_ui",
+  "quality_grade": "Not graded by this browser transport check; raw responses saved.",
+  "browser_errors": []
+}

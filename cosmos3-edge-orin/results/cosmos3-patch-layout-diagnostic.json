@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-09-20T05:58:38.181108+00:00",
+  "scope": "CPU patch-projection diagnosis using actual checkpoint values cast to FP16, actual fixture pixels normalized/cast to FP16, FP64 dot accumulation; excludes resize, later vision layers and end-to-end inference",
+  "fixture": "benchmarks/fixtures/jpeg/03-above-below.jpg",
+  "fixture_sha256": "3932dc6c6268340cce9dbfa1d19a166580d32255e2ba76cfea9e47a552e8fc35",
+  "checkpoint_key": "model.visual.embeddings.patch_embedding.weight",
+  "checkpoint_source_dtype": "BF16",
+  "checkpoint_tensor_shape": [
+    1152,
+    768
+  ],
+  "checkpoint_raw_tensor_sha256": "b0aadbad6265dd5d3a2688c6880cda9b5773796b8c3494709534ce9f99976f65",
+  "runtime_layout": "block-major patch sequence; CHW within each patch",
+  "reference_layout": "same block-major patch sequence; HWC within each patch",
+  "before": {
+    "max_abs_error": 6.320722701901104,
+    "rms_error": 0.158750832299451,
+    "cosine_similarity": 0.7207240270853742
+  },
+  "after": {
+    "max_abs_error": 0.0,
+    "rms_error": 0.0,
+    "cosine_similarity": 1.0000000000000113
+  },
+  "patch_projection_fp16_weight_bytes": 1769472,
+  "patch_projection_fp16_bias_bytes": 2304,
+  "note": "Bias omitted identically on both sides; source checkpoint was not changed."
+}

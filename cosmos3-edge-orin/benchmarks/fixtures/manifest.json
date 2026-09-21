@@ -1,0 +1,410 @@
+{
+  "schema_version": 1,
+  "suite_id": "original-geometric-quality-v1",
+  "title": "Original geometric visual quality fixtures",
+  "authorship": "Original scenes, ground-truth facts and renderer authored by Codex for this Jetson deployment project on 2026-09-19.",
+  "license": "Apache-2.0; see the repository LICENSE",
+  "provenance": {
+    "source": "Original deterministic procedural geometry; no downloaded artwork, dataset images or model outputs.",
+    "generator": "generate.py",
+    "generator_sha256": "b40811d963601cd220fa8cb2b8a00169a9924bc5f05d1cdbec9d43f4f5b063c6",
+    "dependencies": "Python standard library only; no image-generation model or runtime imaging package.",
+    "randomness": "None. Fixed coordinates, colors and prompts; no timestamps or random seeds in generated images."
+  },
+  "request_settings": {
+    "model_alias": "Cosmos3-Edge",
+    "max_tokens": 64,
+    "temperature": 0,
+    "top_p": 1,
+    "concurrency": 1,
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    }
+  },
+  "quality_policy": {
+    "required_facts": 19,
+    "scoring": "Human semantic review: award one point per fully correct expected fact, regardless of wording; missing, hedged or contradicted required facts receive zero.",
+    "pass_rule": "All 19 required facts correct, all six responses nonempty and completed without errors, and no materially false added visual claim.",
+    "accepted_equivalents": [
+      "circle / circular disk",
+      "square / equal-sided box",
+      "violet / purple",
+      "upper / top",
+      "lower / bottom"
+    ],
+    "review_evidence": "Record candidate/revision, fixture hashes, exact submitted prompts, raw outputs, per-fact scores, reviewer and false claims. Do not substitute expected facts for model output.",
+    "limitations": "A basic geometric regression screen. Passing does not prove natural-image/video understanding, temporal reasoning, safety, general accuracy or GPU performance."
+  },
+  "contact_sheet": {
+    "filename": "contact-sheet.png",
+    "sha256": "cff576c3fb05a39e6609f36442eae594a4d60d23fee80a4797a959cd1065c2dd",
+    "layout": "Cases 01, 02, 03 across the top; 04, 05, 06 across the bottom. Do not submit this sheet as a case."
+  },
+  "cases": [
+    {
+      "id": "01-left-right",
+      "filename": "01-left-right.png",
+      "prompt": "Describe the shape and color on the left and on the right. Which shape is left of the other?",
+      "expected_facts": [
+        "The left shape is a red circle.",
+        "The right shape is a blue square.",
+        "The red circle is to the left of the blue square."
+      ],
+      "objects": [
+        {
+          "shape": "circle",
+          "color": "red",
+          "center_px": [
+            142,
+            256
+          ],
+          "radius_px": 70
+        },
+        {
+          "shape": "square",
+          "color": "blue",
+          "box_px": [
+            306,
+            186,
+            446,
+            326
+          ]
+        }
+      ],
+      "skills": [
+        "shape",
+        "color",
+        "left-right"
+      ],
+      "width_px": 512,
+      "height_px": 512,
+      "mime_type": "image/png",
+      "sha256": "0347b2bd6296dc860349778b4b06f009eb99b2d6a8c5a1d2bbfcfc7bda18d1d9",
+      "rgb_pixel_sha256": "f70e6ac0729eec8f1bd7579f14dab9c68d373f6b8b0e4a60d5c95ad344dbcfda"
+    },
+    {
+      "id": "02-counts",
+      "filename": "02-counts.png",
+      "prompt": "How many green circles and how many orange squares are visible? How many shapes are there in total?",
+      "expected_facts": [
+        "There are three green circles.",
+        "There are two orange squares.",
+        "There are five shapes in total."
+      ],
+      "objects": [
+        {
+          "shape": "circle",
+          "color": "green",
+          "center_px": [
+            112,
+            168
+          ],
+          "radius_px": 44
+        },
+        {
+          "shape": "circle",
+          "color": "green",
+          "center_px": [
+            256,
+            168
+          ],
+          "radius_px": 44
+        },
+        {
+          "shape": "circle",
+          "color": "green",
+          "center_px": [
+            400,
+            168
+          ],
+          "radius_px": 44
+        },
+        {
+          "shape": "square",
+          "color": "orange",
+          "box_px": [
+            140,
+            308,
+            228,
+            396
+          ]
+        },
+        {
+          "shape": "square",
+          "color": "orange",
+          "box_px": [
+            284,
+            308,
+            372,
+            396
+          ]
+        }
+      ],
+      "skills": [
+        "counting",
+        "shape",
+        "color"
+      ],
+      "width_px": 512,
+      "height_px": 512,
+      "mime_type": "image/png",
+      "sha256": "6fdd3f963f0319d3f81e9d4dc2635b6b3a7c3c3062b9b23b0a503833d6bc9df9",
+      "rgb_pixel_sha256": "c1f88ebb932a597d56c84d9cef9aa317550396e794912a1beb867d5ac3050aa4"
+    },
+    {
+      "id": "03-above-below",
+      "filename": "03-above-below.png",
+      "prompt": "Identify the shape and color at the top and at the bottom. Is the yellow shape above or below the purple shape?",
+      "expected_facts": [
+        "The upper shape is a yellow triangle.",
+        "The lower shape is a purple circle.",
+        "The yellow triangle is above the purple circle."
+      ],
+      "objects": [
+        {
+          "shape": "triangle",
+          "color": "yellow",
+          "points_px": [
+            [
+              256,
+              66
+            ],
+            [
+              170,
+              216
+            ],
+            [
+              342,
+              216
+            ]
+          ]
+        },
+        {
+          "shape": "circle",
+          "color": "purple",
+          "center_px": [
+            256,
+            364
+          ],
+          "radius_px": 70
+        }
+      ],
+      "skills": [
+        "shape",
+        "color",
+        "above-below"
+      ],
+      "width_px": 512,
+      "height_px": 512,
+      "mime_type": "image/png",
+      "sha256": "20775119a793dcd108a3836aed77a0812c30efb7c40ac2903dcec78b84017d43",
+      "rgb_pixel_sha256": "36ffdd7cee99d2bd682d4a0215e83d697995f87698bd8be6b32447f474b15344"
+    },
+    {
+      "id": "04-inside-outside",
+      "filename": "04-inside-outside.png",
+      "prompt": "Is the red circle inside or outside the blue outlined square? Is the green triangle inside or outside it, and on which side?",
+      "expected_facts": [
+        "The red circle is inside the blue outlined square.",
+        "The green triangle is outside the blue outlined square.",
+        "The green triangle is to the right of the blue outlined square."
+      ],
+      "objects": [
+        {
+          "shape": "outlined_square",
+          "color": "blue",
+          "box_px": [
+            48,
+            132,
+            296,
+            380
+          ],
+          "stroke_px": 12
+        },
+        {
+          "shape": "circle",
+          "color": "red",
+          "center_px": [
+            172,
+            256
+          ],
+          "radius_px": 46
+        },
+        {
+          "shape": "triangle",
+          "color": "green",
+          "points_px": [
+            [
+              396,
+              196
+            ],
+            [
+              340,
+              300
+            ],
+            [
+              452,
+              300
+            ]
+          ]
+        }
+      ],
+      "skills": [
+        "containment",
+        "left-right"
+      ],
+      "width_px": 512,
+      "height_px": 512,
+      "mime_type": "image/png",
+      "sha256": "2ac7e1e4f616f0bbf45d27c083967507ab4165d7d1ac24345927d660774e59ef",
+      "rgb_pixel_sha256": "33d2a911f6be3d21dc8f345f805842098717125269a4f0ca8ac282917859e028"
+    },
+    {
+      "id": "05-relative-size",
+      "filename": "05-relative-size.png",
+      "prompt": "What shape and color do both objects share? Is the left object or the right object larger?",
+      "expected_facts": [
+        "Both objects are circles.",
+        "Both objects are purple.",
+        "The circle on the left is larger than the circle on the right."
+      ],
+      "objects": [
+        {
+          "shape": "circle",
+          "color": "purple",
+          "center_px": [
+            152,
+            256
+          ],
+          "radius_px": 88
+        },
+        {
+          "shape": "circle",
+          "color": "purple",
+          "center_px": [
+            382,
+            256
+          ],
+          "radius_px": 38
+        }
+      ],
+      "skills": [
+        "shape",
+        "color",
+        "relative-size"
+      ],
+      "width_px": 512,
+      "height_px": 512,
+      "mime_type": "image/png",
+      "sha256": "53d8c145bfd86e69de46307aa9cc5d61f506fd062a7a5c3c553122cf16b12899",
+      "rgb_pixel_sha256": "46a34ff26dfbac14c2a4e64177e07d93774535d4c94408d08c140ba14e58d119"
+    },
+    {
+      "id": "06-quadrants",
+      "filename": "06-quadrants.png",
+      "prompt": "Give the color and shape in each position: top left, top right, bottom left, and bottom right.",
+      "expected_facts": [
+        "The top-left shape is a red square.",
+        "The top-right shape is a green circle.",
+        "The bottom-left shape is a blue triangle.",
+        "The bottom-right shape is an orange star."
+      ],
+      "objects": [
+        {
+          "shape": "square",
+          "color": "red",
+          "box_px": [
+            78,
+            78,
+            178,
+            178
+          ]
+        },
+        {
+          "shape": "circle",
+          "color": "green",
+          "center_px": [
+            384,
+            128
+          ],
+          "radius_px": 53
+        },
+        {
+          "shape": "triangle",
+          "color": "blue",
+          "points_px": [
+            [
+              128,
+              322
+            ],
+            [
+              70,
+              426
+            ],
+            [
+              186,
+              426
+            ]
+          ]
+        },
+        {
+          "shape": "star",
+          "color": "orange",
+          "points_px": [
+            [
+              384,
+              320
+            ],
+            [
+              399,
+              363
+            ],
+            [
+              445,
+              364
+            ],
+            [
+              409,
+              392
+            ],
+            [
+              422,
+              436
+            ],
+            [
+              384,
+              410
+            ],
+            [
+              346,
+              436
+            ],
+            [
+              359,
+              392
+            ],
+            [
+              323,
+              364
+            ],
+            [
+              369,
+              363
+            ]
+          ]
+        }
+      ],
+      "skills": [
+        "shape",
+        "color",
+        "quadrant-position"
+      ],
+      "width_px": 512,
+      "height_px": 512,
+      "mime_type": "image/png",
+      "sha256": "9f19d42e16d5b6dd5db708071b17b0e1a53f0b64621ffe4ae1995ccfd78f7941",
+      "rgb_pixel_sha256": "501595f6da0a8eb09c1cebb1f2643f582862a1e75c6b6d3afa66e1ba5938f0e5"
+    }
+  ]
+}

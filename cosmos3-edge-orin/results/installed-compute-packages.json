@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-09-20T03:19:05.428924+00:00",
+  "location": "Native NVMe rootfs chroot on Jetson, before first normal boot",
+  "install_exit_code": 0,
+  "dpkg_query_exit_code": 0,
+  "selected_packages": [
+    "cuda-nvcc-13-2\t13.2.86-1",
+    "libnvinfer10\t10.16.2.10-1+cuda13.2",
+    "nvidia-l4t-core\t39.2.1-20260806224157",
+    "python3-libnvinfer\t10.16.2.10-1+cuda13.2"
+  ],
+  "compiler_version": "13.2.86",
+  "tensorrt_python_version": "10.16.2.10",
+  "normal_boot_verified": false,
+  "gpu_operation_verified": false
+}

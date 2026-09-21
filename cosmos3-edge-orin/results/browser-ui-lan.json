@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-09-20T18:23:23.260Z",
+  "certificate_validation": "QA browser explicitly accepts the self-signed Orin certificate; client trust store unchanged",
+  "checks": {
+    "direct_http_and_https_real_image_inference": true,
+    "https_synthetic_browser_camera_and_stop": true,
+    "mobile_no_overflow": true,
+    "no_browser_errors": true
+  },
+  "inference": [
+    {
+      "url": "http://192.168.6.252:8090",
+      "secure_context": false,
+      "output": "There's a red circle and a blue square side by side on a white background.",
+      "first_token": "322 ms",
+      "complete_answer": "1.17 s"
+    },
+    {
+      "url": "https://192.168.6.252:8443",
+      "secure_context": true,
+      "output": "There's a red circle and a blue square side by side on a white background.",
+      "first_token": "348 ms",
+      "complete_answer": "1.09 s"
+    }
+  ],
+  "camera_limit": "Synthetic browser camera checks transport and lifecycle, not a physical camera or natural-video accuracy",
+  "status": "passed",
+  "browser_errors": []
+}

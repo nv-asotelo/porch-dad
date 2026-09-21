@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-09-19T19:43:13Z",
+  "host": "Apple Silicon macOS",
+  "hypervisor": "QEMU 11.1.1 TCG x86_64",
+  "guest": "Ubuntu 22.04.5 LTS amd64",
+  "ram_mib": 8192,
+  "virtual_disk_gib": 80,
+  "guest_ssh_verified": true,
+  "guest_apx_verified": true,
+  "usb_vendor_id": "0955",
+  "usb_product_id": "7523",
+  "usb_speed_mbps": 480,
+  "device_payload_sent": true,
+  "firmware_or_storage_written": false,
+  "ubuntu_image_checksum": "results/jammy-server-cloudimg-amd64.img.download.json",
+  "note": "QEMU daemonize crashed due Objective-C fork safety; foreground execution works. Initial libusb driver NOT_FOUND messages did not prevent guest enumeration.",
+  "bootrom_uid_read_succeeded": true,
+  "device_payload_description": "Official recovery applet loaded into RAM; EEPROM/fuses read; software returned to recovery. No persistent storage write.",
+  "board_eeprom_read_succeeded": true,
+  "bulk_transfer_verified": true,
+  "first_bulk_failure": "First8192byte bct_br RAM upload stalls; trace shows cancellation without completion. Descriptor-based UID reads succeed.",
+  "diagnostic_changes_tried": [
+    "Software USB recapture with guest-reset=false"
+  ],
+  "next_test": "RAM-only initrd boot and storage/network discovery",
+  "bsp_prerequisites_installed": true,
+  "rootfs_extracted": true,
+  "apply_binaries_completed": true,
+  "apply_binaries_exit_code": 0,
+  "rootfs_release": "Ubuntu24.04.4 LTS / L4T39.2.1",
+  "device_flashed": false,
+  "cold_recovery_reset_resolved_first_bulk_stall": true
+}

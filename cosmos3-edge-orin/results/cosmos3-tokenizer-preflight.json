@@ -1,0 +1,43 @@
+{
+  "status": "passed_cpu_only",
+  "transformers": "5.14.1",
+  "jinja2": "3.1.6",
+  "tokenizer_class": "TokenizersBackend",
+  "torch_installed": false,
+  "gpu_used": false,
+  "remote_access": false,
+  "local_files_only": true,
+  "trust_remote_code": false,
+  "rendered_prompts": {
+    "False": "\n<|im_start|>system\nSystem probe.<|im_end|>\n<|im_start|>user\nQuestion probe.<|im_end|>\n<|im_start|>assistant\n<think></think>",
+    "True": "\n<|im_start|>system\nSystem probe.<|im_end|>\n<|im_start|>user\nQuestion probe.<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  },
+  "processed_template": {
+    "model_path": "/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/models/cosmos3-edge-reasoner",
+    "roles": {
+      "system": {
+        "prefix": "\n<|im_start|>system\n",
+        "suffix": "<|im_end|>\n"
+      },
+      "user": {
+        "prefix": "\n<|im_start|>system\n<|im_end|>\n<|im_start|>user\n",
+        "suffix": "<|im_end|>\n"
+      },
+      "assistant": {
+        "prefix": "<|im_start|>assistant\n<think></think>",
+        "suffix": "<|im_end|>\n"
+      }
+    },
+    "content_types": {},
+    "generation_prompt": "<|im_start|>assistant\n<think></think>",
+    "default_system_prompt": "",
+    "generation_prompt_thinking": "<|im_start|>assistant\n<think>\n"
+  },
+  "single_user_processed_template_matches_jinja": {
+    "False": true,
+    "True": true
+  },
+  "image_placeholder_prompt": "\n<|im_start|>system\n<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>Image probe.<|im_end|>\n<|im_start|>assistant\n<think></think>",
+  "upstream_helper_sha256": "c6d06801ab2c593f311167e54137f1cbc198eb26345cb0c42bb87ae3cf3aa326",
+  "note": "Native TensorRT/GPU inference not tested; only real checkpoint tokenizer and pinned template artifact helper. Exact reconstruction checked for the current UI single-user request shape."
+}

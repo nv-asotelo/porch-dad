@@ -1,0 +1,137 @@
+diff --git a/cpp/kernels/preprocessKernels/imageUtilKernels.cu b/cpp/kernels/preprocessKernels/imageUtilKernels.cu
+index 8f6c1d86270c907f643d8355b7e7edc7f0184b33..e12c4d3565489b4a780266d873aaad62378a5694 100644
+--- a/cpp/kernels/preprocessKernels/imageUtilKernels.cu
++++ b/cpp/kernels/preprocessKernels/imageUtilKernels.cu
+@@ -641,7 +641,8 @@ void initPoolingWeightsGemma4ViT(rt::Tensor& poolingWeights, int64_t patchStart,
+ 
+ __global__ void initFastPosEmbedQwenViTKernel(int64_t* fastPosEmbedIdx, half* fastPosEmbedWeight,
+     int64_t const llmGridH, int64_t const llmGridW, int64_t const mergeSize, int64_t const numGridPerSide,
+-    float const lineSpaceH, float const lineSpaceW, int64_t const startIdx, int64_t const totalSeqLength)
++    float const lineSpaceH, float const lineSpaceW, int64_t const startIdx, int64_t const totalSeqLength,
++    bool const alignCorners)
+ {
+     // Each CTA get assigned 256 threads. Each thread processes one position in grid
+     //     [llmGridH, llmGridW, mergeSize, mergeSize]
+@@ -658,8 +659,13 @@ __global__ void initFastPosEmbedQwenViTKernel(int64_t* fastPosEmbedIdx, half* fa
+     auto const mergeHIdx = (tid % (mergeSize * mergeSize)) / mergeSize;
+     auto const mergeWIdx = tid % mergeSize;
+ 
+-    float const hIdx = lineSpaceH * (llmGridHIdx * mergeSize + mergeHIdx);
+-    float const wIdx = lineSpaceW * (llmGridWIdx * mergeSize + mergeWIdx);
++    float const hPosition = static_cast<float>(llmGridHIdx * mergeSize + mergeHIdx);
++    float const wPosition = static_cast<float>(llmGridWIdx * mergeSize + mergeWIdx);
++    float const maxIndex = static_cast<float>(numGridPerSide - 1);
++    float const hIdx = alignCorners ? lineSpaceH * hPosition
++                                   : fminf(maxIndex, fmaxf(0.0F, lineSpaceH * (hPosition + 0.5F) - 0.5F));
++    float const wIdx = alignCorners ? lineSpaceW * wPosition
++                                   : fminf(maxIndex, fmaxf(0.0F, lineSpaceW * (wPosition + 0.5F) - 0.5F));
+ 
+     int64_t const hIdxFloor = static_cast<int64_t>(hIdx);
+     int64_t const wIdxFloor = static_cast<int64_t>(wIdx);
+@@ -686,7 +692,7 @@ __global__ void initFastPosEmbedQwenViTKernel(int64_t* fastPosEmbedIdx, half* fa
+ 
+ void initFastPosEmbedQwenViT(rt::Tensor& fastPosEmbedIdx, rt::Tensor& fastPosEmbedWeight,
+     std::vector<int64_t> const& gridTHW, int64_t const mergeSize, int64_t const numGridPerSide, int64_t const startIdx,
+-    cudaStream_t stream)
++    cudaStream_t stream, bool const alignCorners)
+ {
+     check::check(fastPosEmbedIdx.getDeviceType() == rt::DeviceType::kGPU
+             && fastPosEmbedWeight.getDeviceType() == rt::DeviceType::kGPU,
+@@ -708,8 +714,10 @@ void initFastPosEmbedQwenViT(rt::Tensor& fastPosEmbedIdx, rt::Tensor& fastPosEmb
+     int64_t const W = gridTHW[2];
+     int64_t const llmGridH = H / mergeSize;
+     int64_t const llmGridW = W / mergeSize;
+-    float const lineSpaceH = static_cast<float>(numGridPerSide - 1) / (H - 1);
+-    float const lineSpaceW = static_cast<float>(numGridPerSide - 1) / (W - 1);
++    float const lineSpaceH = alignCorners ? static_cast<float>(numGridPerSide - 1) / (H - 1)
++                                         : static_cast<float>(numGridPerSide) / H;
++    float const lineSpaceW = alignCorners ? static_cast<float>(numGridPerSide - 1) / (W - 1)
++                                         : static_cast<float>(numGridPerSide) / W;
+ 
+     uint32_t const blockSize = 256;
+     uint32_t const gridSize = (H * W + blockSize - 1) / blockSize;
+@@ -721,7 +729,7 @@ void initFastPosEmbedQwenViT(rt::Tensor& fastPosEmbedIdx, rt::Tensor& fastPosEmb
+     {
+         initFastPosEmbedQwenViTKernel<<<gridSize, blockSize, 0, stream>>>(fastPosEmbedIdx.dataPointer<int64_t>(),
+             fastPosEmbedWeight.dataPointer<half>(), llmGridH, llmGridW, mergeSize, numGridPerSide, lineSpaceH,
+-            lineSpaceW, startIdx + t * H * W, totalSeqLength);
++            lineSpaceW, startIdx + t * H * W, totalSeqLength, alignCorners);
+     }
+ }
+ 
+diff --git a/cpp/kernels/preprocessKernels/imageUtilKernels.h b/cpp/kernels/preprocessKernels/imageUtilKernels.h
+index 855020a5b48fee2ea51195046f48a602ce7675ab..2a6587c0fa4a8048dd9f8bf1adb9e8b0cfac3e40 100644
+--- a/cpp/kernels/preprocessKernels/imageUtilKernels.h
++++ b/cpp/kernels/preprocessKernels/imageUtilKernels.h
+@@ -168,13 +168,14 @@ void transposeToPatchInternVLPhi4MM(
+ //!     numGridPerSide: Number of grid per side for the vision transformer
+ //!     startIdx: Start index for the image
+ //!     stream: CUDA stream for execution
++//!     alignCorners: Qwen endpoint alignment by default; false selects half-pixel alignment
+ //! Outputs:
+ //!     fastPosEmbedIdx [GPU, Int64]: Fast position embeddings index tensor [4, totalSeqLength]
+ //!     fastPosEmbedWeight [GPU, Half]: Fast position embeddings weight tensor [4, totalSeqLength]
+ //! \throws std::runtime_error if image has invalid shape, data type or location
+ void initFastPosEmbedQwenViT(rt::Tensor& fastPosEmbedIdx, rt::Tensor& fastPosEmbedWeight,
+     std::vector<int64_t> const& gridTHW, int64_t const mergeSize, int64_t const numGridPerSide, int64_t const startIdx,
+-    cudaStream_t stream);
++    cudaStream_t stream, bool const alignCorners = true);
+ 
+ //! Phi4MMIndex
+ //! Device-side index and size metadata for Phi-4MM HD packing.
+diff --git a/cpp/multimodal/cosmos3/cosmos3EdgeViTRunner.h b/cpp/multimodal/cosmos3/cosmos3EdgeViTRunner.h
+index 13c5f7e2c697f2e3897d1d80f1d65a83d8bbd784..154f006d42d7e070d96e1904fdb6574eff71447a 100644
+--- a/cpp/multimodal/cosmos3/cosmos3EdgeViTRunner.h
++++ b/cpp/multimodal/cosmos3/cosmos3EdgeViTRunner.h
+@@ -27,7 +27,7 @@ namespace rt
+ //! \brief Cosmos3-Edge reasoner vision encoder: SigLIP2 (packed patches) + Qwen3-VL-style PatchMerger.
+ //!        Follows the qwen3_vl visual engine I/O convention at temporalPatchSize == 1 (per-frame Linear
+ //!        patch embed, per-frame vision spans/timestamps, learned pos-emb via the fast-pos-emb inputs,
+-//!        no rotary input, no deepstack), so the Qwen3-VL runner behavior is inherited unchanged.
++//!        no rotary input, no deepstack), with half-pixel interpolation for its learned position grid.
+ class Cosmos3EdgeViTRunner : public Qwen3VLViTRunner
+ {
+ public:
+@@ -42,6 +42,12 @@ protected:
+     //! num_position_embeddings; no deepstack; interleaved mRoPE.
+     bool validateExtraConfig(nlohmann::json const& jsonConfig) override;
+ 
++    //! SigLIP2 interpolates its learned position grid with align_corners=False.
++    bool fastPosEmbedAlignCorners() const override
++    {
++        return false;
++    }
++
+     //! SigLIP2 uses full attention with a learned pos-emb — the visual engine has no rotary_pos_emb input.
+     bool usesRotaryPosEmb() const override
+     {
+diff --git a/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp b/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp
+index 2a3393da944ca64fa1f762a31ae3f2e37e767c59..916f14c4a0002bc29842eb300fc0c0c312892a8e 100644
+--- a/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp
++++ b/cpp/multimodal/qwen3/qwen3vlViTRunner.cpp
+@@ -75,7 +75,7 @@ void Qwen3VLViTRunner::buildExtraInputs(
+     for (auto const& s : spans)
+     {
+         kernel::initFastPosEmbedQwenViT(mFastPosEmbIdx, mFastPosEmbWeight, {s.vit.gridT, s.vit.gridH, s.vit.gridW},
+-            mConfig.mergeSize, mNumGridPerSide, s.vit.patchStart, stream);
++            mConfig.mergeSize, mNumGridPerSide, s.vit.patchStart, stream, fastPosEmbedAlignCorners());
+     }
+ 
+     for (int64_t i = 0; i < mNumDeepstackFeatures; ++i)
+diff --git a/cpp/multimodal/qwen3/qwen3vlViTRunner.h b/cpp/multimodal/qwen3/qwen3vlViTRunner.h
+index a64213e9117753ebe347fb27ea5fa65861f23a43..80f2c95432e0bc6688c75c97f014323679fa71b5 100644
+--- a/cpp/multimodal/qwen3/qwen3vlViTRunner.h
++++ b/cpp/multimodal/qwen3/qwen3vlViTRunner.h
+@@ -40,6 +40,12 @@ protected:
+         cudaStream_t stream) override;
+     bool bindExtraInputShapes() override;
+ 
++    //! Qwen's learned position grid uses endpoint-aligned interpolation.
++    virtual bool fastPosEmbedAlignCorners() const
++    {
++        return true;
++    }
++
+     //! Video splits into per-frame sub-spans (each vit.gridT==1), unlike the base single flat span.
+     std::tuple<int64_t, int64_t> computeVisionSpans(
+         rt::imageUtils::ImageData const& image, int64_t patchBase, std::vector<VisionSpan>& spans) override;

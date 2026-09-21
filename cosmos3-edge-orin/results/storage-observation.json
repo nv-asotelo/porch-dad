@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "analyzed_at_utc": "2026-09-20T05:25:23.844397+00:00",
+  "phase": "native backend build; no model inference measurement",
+  "sources": [
+    {
+      "path": "results/storage-irqs-build-01.jsonl",
+      "sha256": "e3c6488830657584a0623ee4bc7441f44a94229526ab0e3a92f6ded6b6e2b244"
+    },
+    {
+      "path": ".qa/final-storage-observation.log",
+      "sha256": "39020f6930fc387ca44fa05c906d3310b20e1c79e996e2fb0ac71e2d82b78acf"
+    },
+    {
+      "path": ".qa/storage-build-observation.log",
+      "sha256": "57885503e4c37da65f2f2283c46335a4f45410cc2cf82d1fd67c8419fdcbaf62"
+    }
+  ],
+  "window": {
+    "first_sample_utc": "2026-09-20T04:50:35.018829+00:00",
+    "last_sample_utc": "2026-09-20T05:20:34.018770+00:00",
+    "end_record_utc": "2026-09-20T05:20:35.018780+00:00",
+    "first_uptime_s": 1208.77,
+    "last_uptime_s": 3007.77,
+    "counter_delta_span_s": 1798.999934005,
+    "sampler_elapsed_s": 1800.00022902,
+    "samples": 1800,
+    "sample_interval_s": 1.0,
+    "read_error_samples": 0,
+    "max_sample_gap_s": 1.0020522099998743,
+    "max_proc_read_duration_s": 0.002542488000017329,
+    "end_reason": "duration"
+  },
+  "units": {
+    "disk_sector_bytes": 512,
+    "cpu_ticks_per_second": 100,
+    "cpu_percent_denominator": "sum of CPU0 tick deltas excluding overlapping guest and guest_nice counters",
+    "disk_scope": "whole nvme0n1 device, including other OS processes, sampler writes and background activity"
+  },
+  "nvme_diskstats_deltas": {
+    "reads_completed": 5906,
+    "reads_merged": 507,
+    "sectors_read": 638176,
+    "read_ms": 834,
+    "writes_completed": 11067,
+    "writes_merged": 12486,
+    "sectors_written": 1956961,
+    "write_ms": 13777,
+    "io_ms": 5144,
+    "weighted_io_ms": 18407,
+    "discards_completed": 8436,
+    "discards_merged": 0,
+    "sectors_discarded": 1851163035,
+    "discard_ms": 3710,
+    "flushes_completed": 400,
+    "flush_ms": 85
+  },
+  "disk_traffic": {
+    "read_bytes": 326746112,
+    "written_bytes": 1001964032,
+    "read_mib": 311.609375,
+    "written_mib": 955.547363,
+    "mean_read_mib_per_s": 0.173213,
+    "mean_write_mib_per_s": 0.531155,
+    "discard_logical_range_bytes": 947795473920,
+    "discard_note": "Logical ranges covered by completed discard requests; not data read/written, physical NAND erase volume, or throughput. Do not add to read/write traffic."
+  },
+  "io_in_progress": {
+    "first": 0,
+    "last": 0,
+    "sampled_maximum": 1,
+    "nonzero_samples": 2,
+    "note": "Instantaneous one-second snapshots; does not bound activity between samples."
+  },
+  "nvme_queue_irqs": {
+    "total_delta": 23809,
+    "cpu0_delta": 23809,
+    "other_cpu_delta": 0,
+    "per_queue": [
+      {
+        "queue": "nvme0q0",
+        "cpu0_delta": 0,
+        "other_cpu_delta": 0
+      },
+      {
+        "queue": "nvme0q1",
+        "cpu0_delta": 2878,
+        "other_cpu_delta": 0
+      },
+      {
+        "queue": "nvme0q2",
+        "cpu0_delta": 6994,
+        "other_cpu_delta": 0
+      },
+      {
+        "queue": "nvme0q3",
+        "cpu0_delta": 8617,
+        "other_cpu_delta": 0
+      },
+      {
+        "queue": "nvme0q4",
+        "cpu0_delta": 4138,
+        "other_cpu_delta": 0
+      },
+      {
+        "queue": "nvme0q5",
+        "cpu0_delta": 750,
+        "other_cpu_delta": 0
+      },
+      {
+        "queue": "nvme0q6",
+        "cpu0_delta": 432,
+        "other_cpu_delta": 0
+      }
+    ],
+    "parent_controller_irq_record_present": false,
+    "counter_regressions_detected": false
+  },
+  "cpu0": {
+    "tick_deltas": {
+      "user": 54677,
+      "nice": 0,
+      "system": 1536,
+      "idle": 122435,
+      "iowait": 26,
+      "irq": 751,
+      "softirq": 126,
+      "steal": 0,
+      "guest": 0,
+      "guest_nice": 0
+    },
+    "total_nonoverlapping_ticks": 179551,
+    "percent_of_recorded_ticks": {
+      "user": 30.452072,
+      "nice": 0.0,
+      "system": 0.855467,
+      "idle": 68.189539,
+      "iowait": 0.014481,
+      "irq": 0.418266,
+      "softirq": 0.070175,
+      "steal": 0.0
+    },
+    "irq_seconds": 7.51,
+    "softirq_seconds": 1.26,
+    "iowait_seconds": 0.26
+  },
+  "kernel_completion_polled_timeouts": {
+    "captured_total": 5,
+    "within_sample_window": 0,
+    "events": [
+      {
+        "uptime_s": 36.593037,
+        "qid": 4,
+        "stage": "boot",
+        "within_sample_window": false
+      },
+      {
+        "uptime_s": 68.593005,
+        "qid": 4,
+        "stage": "boot",
+        "within_sample_window": false
+      },
+      {
+        "uptime_s": 518.407859,
+        "qid": 1,
+        "stage": "first TensorRT import",
+        "within_sample_window": false
+      },
+      {
+        "uptime_s": 550.375268,
+        "qid": 3,
+        "stage": "first TensorRT import",
+        "within_sample_window": false
+      },
+      {
+        "uptime_s": 580.582783,
+        "qid": 3,
+        "stage": "first TensorRT import",
+        "within_sample_window": false
+      }
+    ],
+    "source": ".qa/final-storage-observation.log",
+    "note": "Kernel messages captured separately after sampler completion; JSONL itself does not capture dmesg. Five earlier cold-stage events remain unresolved."
+  },
+  "earlier_partial_report_consistent": true,
+  "interpretation": "The sampled native-build interval shows continuing disk/IRQ activity without an additional captured completion-polled timeout. It does not reproduce or explain the five earlier events and does not establish reliability, a cause, or a fix. CPU0 IRQ concentration alone is not causality evidence.",
+  "settings_changed": false,
+  "kernel_fix_applied": false,
+  "inference_validated": false
+}

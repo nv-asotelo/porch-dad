@@ -1,0 +1,18 @@
+{
+  "observed_at": "2026-09-20T05:42:45.189278+00:00",
+  "path": "/home/jetson/cosmos-edge/data/engine-cache/engines/model-46cc477be5b2285a/i1024-b1-kv2048-none-bd7215943bdc/processed_chat_template.json",
+  "action": "Restore source-defined multimodal content formats omitted by lightweight template extractor",
+  "additions": {
+    "image": {
+      "format": "<|vision_start|><|image_pad|><|vision_end|>"
+    },
+    "video": {
+      "format": "<|vision_start|><|video_pad|><|vision_end|>"
+    }
+  },
+  "before_sha256": "59a43b58bb7bf65fca33bfd53bbb13e4bf1255f3c3c0c420184aa26612257d8d",
+  "after_sha256": "f76712a886b6f983bd0e911cf604ee8158bdb8afa65aa3c9eabf2c3e5389ae3f",
+  "original_jinja_sha256": "7120ee6666468d4e9b2dc11e133ac5c2fa765fa5907706bf0f906270aa5510c8",
+  "source_unchanged": true,
+  "inference_validated": false
+}

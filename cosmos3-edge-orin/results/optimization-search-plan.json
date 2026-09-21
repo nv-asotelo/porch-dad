@@ -1,0 +1,19 @@
+{
+  "created_utc": "2026-09-20T06:52:15.380777+00:00",
+  "id": "bounded-final-search-v1",
+  "maximum_measured_candidates": 5,
+  "original_maximum": 12,
+  "threshold_unchanged": "At least5% lower median complete-answer latency or peakRAM, no>5%regressioncounterpartorp95; samefixed512pxworkload; qualityequivalencepolicyunchanged.",
+  "early_stop": "Three consecutive non-improvements, including quality-rejected measured candidates.",
+  "candidates_in_order": [
+    "Corrected FP16 stock25W baseline (measured)",
+    "RTN all language linears stock25W (qualityfailed; measure for tradeoffevidence)",
+    "RTN MLPonly stock25W, keepingattentionandLMheadFP16",
+    "Best eligible weight/profile with staticmaxclocks within unchangedstock25W",
+    "One compactcontextandvisualprofile rebuild for best eligible candidate, same512pxinput"
+  ],
+  "stop_after_plan_exhaustion": true,
+  "excluded": "No V2 nativecompilation, no furtherquantization recipes, no resolutionchangeinsideprimarypairedcomparison. 384pxremainsUIuseroption.",
+  "clock_trial_note": "Clockpolicyisexplicitindependentvariable in its onecandidate. Preserve25Wmode; storeoriginalsettings andrecordactualclocks/thermals.",
+  "quality": "results/optimization-quality-policy.json"
+}

@@ -1,0 +1,36 @@
+{
+  "observed_utc": "2026-09-20T23:41:57.439091+00:00",
+  "status": "passed",
+  "default_preset": "live-vlm",
+  "unit_checks": {
+    "python_proxy_telemetry_tests": 15,
+    "javascript_capture_presets": "passed",
+    "javascript_sse_capture_cancellation": "passed"
+  },
+  "browser_receipt": "results/browser-ui-presets.json",
+  "deployment_receipt": "results/ui-presets-deployment.json",
+  "browser_checks": {
+    "default_and_live_sampling_request": true,
+    "real_1280x720_camera_inference_and_stop": true,
+    "lightweight_camera_and_request": true,
+    "busy_samples_skipped_and_switch_aborts_without_stale_output": true,
+    "common_prompt_and_limit_preserved": true,
+    "mobile_no_overflow": true,
+    "reload_defaults_to_live_vlm": true
+  },
+  "root_visual_review": [
+    "desktop preset controls",
+    "390px mobile layout"
+  ],
+  "comparison_contract": "research/capture-preset-comparison.md",
+  "historical_benchmarks_unchanged": true,
+  "source_sha256": {
+    "web/app.js": "76df5b851fad31d7b5e26d374f1248be745f485d3d6d917a109f2eeb6f893790",
+    "web/index.html": "e19c4ce4db728d2505d7f16279e957cf8efbcc746f63af80969e8e22da93caef",
+    "web/style.css": "c906183e796109cb356eed55aec27220ae8d1d0c08811f633e9f2608c431db39",
+    "scripts/serve_ui.py": "857bcf32b6d3eedc4f033de4cbb0211d053878b085470131ad8155fe3970f19c",
+    "tests/test_capture_presets.js": "8745d6447f73c4831b6ae60c66856c3ba79e9c3c534ba0143ac452d464ee116e",
+    "tests/test_sse.js": "a601d5f354854a06ec2b3822f3b1da83c82074bb72f5d9866e3c5b4655251d4e",
+    "tests/test_serve_ui.py": "b98ef492278b8919fa0074a1af026d6cc21235f5199d4242d97c9ea8c12f6d39"
+  }
+}

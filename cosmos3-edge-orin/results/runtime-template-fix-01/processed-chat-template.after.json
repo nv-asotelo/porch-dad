@@ -1,0 +1,28 @@
+{
+  "model_path": "/home/jetson/cosmos-edge/models/cosmos3-edge-reasoner",
+  "roles": {
+    "system": {
+      "prefix": "\n<|im_start|>system\n",
+      "suffix": "<|im_end|>\n"
+    },
+    "user": {
+      "prefix": "\n<|im_start|>system\n<|im_end|>\n<|im_start|>user\n",
+      "suffix": "<|im_end|>\n"
+    },
+    "assistant": {
+      "prefix": "<|im_start|>assistant\n<think></think>",
+      "suffix": "<|im_end|>\n"
+    }
+  },
+  "content_types": {
+    "image": {
+      "format": "<|vision_start|><|image_pad|><|vision_end|>"
+    },
+    "video": {
+      "format": "<|vision_start|><|video_pad|><|vision_end|>"
+    }
+  },
+  "generation_prompt": "<|im_start|>assistant\n<think></think>",
+  "default_system_prompt": "",
+  "generation_prompt_thinking": "<|im_start|>assistant\n<think>\n"
+}

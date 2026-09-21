@@ -1,0 +1,24 @@
+{
+  "checked_at_utc": "2026-09-20T01:33:56.468346+00:00",
+  "download_session_handle_agent_local": 54627,
+  "downloader_pid": 62045,
+  "processes": [],
+  "status": "complete",
+  "verified_total_bytes": 7735525563,
+  "partial_bytes": {},
+  "total_received_bytes": 7735525563,
+  "errors": [],
+  "baseline_samples": [
+    {
+      "utc": "2026-09-19T19:57:45Z",
+      "total_received_bytes": 1382340659
+    },
+    {
+      "utc": "2026-09-19T19:59:39Z",
+      "total_received_bytes": 1666000947
+    }
+  ],
+  "baseline_aggregate_bytes_per_second": 2488248,
+  "range_probe": "results/model-range-probe.json",
+  "decision": "Continue existing downloader; measured range probe does not justify replacing it. No further download optimization."
+}

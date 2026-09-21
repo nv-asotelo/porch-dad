@@ -1,0 +1,74 @@
+{
+  "reviewed_utc": "2026-09-20T07:25:31.692929+00:00",
+  "source": "results/raw/natural-smoke-final-01.jsonl",
+  "source_sha256": "9866576d34e3ae23940863c05143004bb81829ecd868e32022d4b4b882457caf",
+  "manifest": "benchmarks/natural-smoke/manifest.json",
+  "manifest_sha256": "019888bfa3aa2e89250013c72fb694beaf2fc2ca6b45c8542f1c7b6509be1d4c",
+  "reviewer": "Codex after direct viewing of all three exact JPEGs",
+  "method": "Semantic review against rubric frozen before inference; ordinary synonyms accepted. Generous carrot identity credit without stated spatial relation.",
+  "facts_correct": 5,
+  "facts_required": 9,
+  "complete_cases": 0,
+  "total_cases": 3,
+  "strict_pass": false,
+  "transport_success": true,
+  "reference_comparison": {
+    "source": "results/reference-natural-smoke.json",
+    "reference_facts_correct": 5,
+    "reference_complete_cases": 0,
+    "exact_answer_matches": 2,
+    "notes": "Market and dog outputs are identical. Cap/mitt wording differs but also misses the required cap-on-glove relation. Mac MPS diagnostic, not Orin performance."
+  },
+  "scope": "Three illustrative photographs, not representative accuracy or an optimization-selection gate. Variable native sizes are not paired performance data.",
+  "cases": [
+    {
+      "correct_observations": 1,
+      "expected_observations": 3,
+      "complete_case_pass": false,
+      "credit": "Generous partial credit for naming carrots; location is not stated.",
+      "misses": [
+        "Broccoli omitted",
+        "Strawberries omitted"
+      ],
+      "false_claims": [],
+      "case_id": "01-market-produce",
+      "output_text": "Carrots.",
+      "image_sha256": "085b1c7f25bf1d149b6dff82dfdb0a83fbf6e875c01d5d374070eb582aada80e",
+      "finish_reason": "stop"
+    },
+    {
+      "correct_observations": 2,
+      "expected_observations": 3,
+      "complete_case_pass": false,
+      "credit": "Cap and glove identities correct.",
+      "misses": [
+        "Cap on top of glove relation"
+      ],
+      "false_claims": [
+        "Cap described as to the right and leaning against glove instead of resting on it."
+      ],
+      "case_id": "02-cap-and-mitt",
+      "output_text": "The baseball glove is placed on the left side of the image, while the baseball cap is positioned on the right side, leaning against the glove.",
+      "image_sha256": "9ab6d8c5a124427d77add9827dc6ad58ce94efb003c34e5e20699acd82f43731",
+      "finish_reason": "stop"
+    },
+    {
+      "correct_observations": 2,
+      "expected_observations": 3,
+      "complete_case_pass": false,
+      "credit": "Dog identity and standing pose correct.",
+      "misses": [
+        "Bench identity"
+      ],
+      "false_claims": [
+        "Bench called a wooden deck."
+      ],
+      "case_id": "03-dog-on-bench",
+      "output_text": "The dog is standing on a wooden deck.",
+      "image_sha256": "378763dec71a25c7cb44ff9e345c84ca0fe2d8bf993b88775c360549edf3b733",
+      "finish_reason": "stop"
+    }
+  ],
+  "strict_complete_facts_correct": 4,
+  "partial_credit_note": "5/9 generously credits carrot identity although the expected lower-right relation is missing. Requiring every full stated fact yields 4/9 for both Orin and official reference."
+}
