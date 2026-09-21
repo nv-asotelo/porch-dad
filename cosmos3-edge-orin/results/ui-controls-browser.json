@@ -1,0 +1,55 @@
+{
+  "at_utc": "2026-09-21T15:33:50.082Z",
+  "url": "https://192.168.6.252:8443/",
+  "scope": "Deployed Orin UI and real TensorRT inference, Chromium synthetic camera, certificate accepted in this test context. Functional check, not a performance or quality benchmark.",
+  "checks": {
+    "default_below_live_vlm_and_all_prompts": true,
+    "manual_upload": true,
+    "incremental_text": true,
+    "three_caption_positions_preserve_output": true,
+    "manual_camera_exactly_one_with_live_off": true,
+    "selected_prompt_reaches_model": true,
+    "live_resume_and_pause_preserves_preview": true,
+    "manual_after_pause": true,
+    "caption_change_preserves_camera": true,
+    "mobile_no_overflow": true,
+    "stop_releases_camera": true,
+    "live_metrics": true,
+    "no_browser_errors": true
+  },
+  "upload_answer": "A man is holding a pair of scissors in front of his face.",
+  "status": "passed",
+  "posts": [
+    {
+      "prompt": "Describe what you see in this image in one sentence.",
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "frame_sha256": "9a99df86c3fd38c8e81bd42c5e50d1284cfd7ce7daaaa31f313fcba2ec9bbe79"
+    },
+    {
+      "prompt": "Answer with Yes or No only: Is there a person visible?",
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "frame_sha256": "acad69c75fa755bb9137e57e6f2f515accddbdb9aa3c51d401a3589ea9eb294f"
+    },
+    {
+      "prompt": "Answer with Yes or No only: Is there a person visible?",
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "frame_sha256": "5def6ff5b7a03f11329e7d1be97640a76e182715deac41dac214d5b3b2c42bd0"
+    },
+    {
+      "prompt": "Answer with Yes or No only: Is there a person visible?",
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "frame_sha256": "76cc9124618b406f9a6c1904fd501d31275c081b922bf781a8e90ea7e2af6211"
+    },
+    {
+      "prompt": "Answer with Yes or No only: Is there a person visible?",
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "frame_sha256": "64865b4b6ec3d13930f1e5b1e87efc0a067dfcfd504fc74bdb104e1b383af154"
+    }
+  ],
+  "errors": []
+}

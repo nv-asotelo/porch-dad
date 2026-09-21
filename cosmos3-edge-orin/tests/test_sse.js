@@ -47,15 +47,59 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   const fs = require("node:fs");
   const vm = require("node:vm");
   const elements = new Map();
+  function detach(node) {
+    if (node.parentNode) {
+      const siblings = node.parentNode.children;
+      siblings.splice(siblings.indexOf(node), 1);
+      node.parentNode = null;
+    }
+  }
   function element(id) {
     if (!elements.has(id)) elements.set(id, {
-      value: "", textContent: "", disabled: false, hidden: false, handlers: {}, style: {},
+      value: "", textContent: "", disabled: false, hidden: false, handlers: {}, style: {}, dataset: {},
+      children: [], parentNode: null, attributes: {},
       naturalWidth: 512, naturalHeight: 512,
       classList: {add() {}, remove() {}},
       addEventListener(type, callback) { this.handlers[type] = callback; },
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      getAttribute(name) { return this.attributes[name] ?? null; },
+      append(...nodes) {
+        for (const node of nodes) { detach(node); this.children.push(node); node.parentNode = this; }
+      },
+      before(node) {
+        detach(node);
+        this.parentNode.children.splice(this.parentNode.children.indexOf(this), 0, node);
+        node.parentNode = this.parentNode;
+      },
+      after(node) {
+        detach(node);
+        this.parentNode.children.splice(this.parentNode.children.indexOf(this) + 1, 0, node);
+        node.parentNode = this.parentNode;
+      },
       async decode() {}
     });
     return elements.get(id);
+  }
+  element("workspace").append(element("cameraPanel"), element("captionPanel"));
+  const captionRadios = ["side", "above", "below"].map(value => {
+    const radio = element(`caption-${value}`); radio.value = value; return radio;
+  });
+  const storedPreferences = new Map();
+  const frameCallbacks = new Map();
+  let frameCallbackId = 0, tracksStopped = 0;
+  const track = {stop() { tracksStopped += 1; }, getSettings: () => ({frameRate: 30})};
+  const media = {getTracks: () => [track], getVideoTracks: () => [track]};
+  const video = element("video");
+  Object.assign(video, {readyState: 0, videoWidth: 1280, videoHeight: 720,
+    async play() { this.readyState = 2; },
+    requestVideoFrameCallback(callback) { const id = ++frameCallbackId; frameCallbacks.set(id, callback); return id; },
+    cancelVideoFrameCallback(id) { frameCallbacks.delete(id); }
+  });
+  function emitFrame(presentedFrames) {
+    assert.equal(frameCallbacks.size, 1, "A single camera callback owns the frame cadence");
+    const [id, callback] = frameCallbacks.entries().next().value;
+    frameCallbacks.delete(id);
+    callback(performance.now(), {presentedFrames});
   }
   element("prompt").value = "Describe the uploaded image.";
   element("maxTokens").value = "64";
@@ -72,6 +116,7 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
     const delta = `data: ${JSON.stringify({choices: [{delta: {content: text}}]})}\n\n`;
     const ending = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
     return {cancellation, signal: null, cancelCalls: 0,
+      finish() { pendingRead.resolve({value: new TextEncoder().encode(ending), done: false}); },
       response(signal) {
         this.signal = signal;
         let first = true;
@@ -100,7 +145,10 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   const stopped = stream("Stopped fixture");
   const restarted = stream("Current request");
   const final = stream("Restart completed", true, true);
-  const responses = [completed, stopped, restarted, final];
+  const manualCamera = stream("Manual camera request");
+  const automaticCamera = stream("Automatic camera request");
+  const pausedCamera = stream("Manual paused camera", true);
+  const responses = [completed, stopped, restarted, final, manualCamera, automaticCamera, pausedCamera];
   let posts = 0;
   const captures = [];
   const canvasContext = {
@@ -122,10 +170,18 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
     assert.equal(capture.image.source, element("uploadedImage"));
     assert.deepEqual(capture.image.bounds, bounds, "Full source image is centered without crop or upscaling");
   }
+  let createdElements = 0;
   const context = {
-    document: {getElementById: element, createElement: () => canvas,
+    document: {getElementById: element,
+      createElement: tag => tag === "canvas" ? canvas : element(`created-${tag}-${++createdElements}`),
+      querySelectorAll: selector => {
+        assert.equal(selector, 'input[name="captionPosition"]'); return captionRadios;
+      },
       visibilityState: "visible", addEventListener() {}},
-    window: {isSecureContext: true, addEventListener() {}}, navigator: {},
+    window: {isSecureContext: true, addEventListener() {}},
+    navigator: {mediaDevices: {getUserMedia: async () => media}},
+    localStorage: {getItem: key => storedPreferences.get(key) ?? null,
+      setItem: (key, value) => storedPreferences.set(key, value)},
     URL: {createObjectURL: () => "blob:fixture", revokeObjectURL() {}},
     AbortController, AbortSignal, TextDecoder, performance, setTimeout, clearTimeout, clearInterval, setInterval() {},
     async fetch(url, options) {
@@ -206,4 +262,74 @@ console.log("PASS: SSE boundaries, UTF-8, CRLF/CR/LF, multiline data, comments, 
   await turn();
   console.log("PASS: 512px 4:3 capture unchanged; 384px widescreen, small and 768px portrait captures preserve the whole image inside centered black padding.");
   console.log("PASS: pending/rejected/synchronous stream cancellation cannot block completion or Stop/restart, and late cleanup preserves the current request.");
+
+  element("liveVlmPreset").checked = true;
+  element("liveVlmPreset").handlers.change();
+  element("liveToggleButton").handlers.click(); // Live off before opening the preview.
+  assert.equal(element("liveToggleButton").getAttribute("aria-pressed"), "false");
+  await element("startButton").handlers.click();
+  assert.equal(video.srcObject, media);
+  assert.equal(tracksStopped, 0);
+  assert.equal(element("analyzeButton").disabled, false);
+  emitFrame(1); emitFrame(30);
+  await turn();
+  assert.equal(posts, 4, "Live off must not submit automatic frames");
+
+  const manualRequest = element("analyzeButton").handlers.click();
+  await turn();
+  assert.equal(posts, 5);
+  assert.equal(captures[4].image.source, video, "Manual inference captures the running camera");
+  assert.deepEqual([captures[4].width, captures[4].height], [1280, 720]);
+  element("liveToggleButton").handlers.click(); // Live on during manual streaming.
+  emitFrame(60);
+  await element("analyzeButton").handlers.click(); // Exercise the busy guard independently of button disabling.
+  assert.equal(posts, 5, "Automatic cadence and manual clicks cannot steal an active request");
+  const above = captionRadios.find(radio => radio.value === "above");
+  above.checked = true; above.handlers.change();
+  assert.equal(element("workspace").dataset.captionPosition, "above");
+  assert.deepEqual(element("workspace").children, [element("captionPanel"), element("cameraPanel")]);
+  assert.equal(video.srcObject, media);
+  assert.equal(element("answer").textContent, "Manual camera request");
+  assert.equal(manualCamera.signal.aborted, false, "Caption movement preserves the manual stream");
+  element("liveToggleButton").handlers.click(); // Live off must not cancel a manual owner.
+  assert.equal(manualCamera.signal.aborted, false);
+  manualCamera.finish();
+  await settles(manualRequest, "Manual camera completion failed after toggling Live off");
+  emitFrame(90); emitFrame(120);
+  await turn();
+  assert.equal(posts, 5);
+  assert.equal(video.srcObject, media);
+  assert.equal(tracksStopped, 0);
+
+  element("liveToggleButton").handlers.click();
+  emitFrame(150);
+  await turn();
+  assert.equal(posts, 6);
+  assert.equal(element("answer").textContent, "Automatic camera request");
+  const side = captionRadios.find(radio => radio.value === "side");
+  side.checked = true; side.handlers.change();
+  assert.deepEqual(element("workspace").children, [element("cameraPanel"), element("captionPanel")]);
+  assert.equal(storedPreferences.get("cosmos3-edge:caption-position"), "side");
+  assert.equal(automaticCamera.signal.aborted, false, "Caption movement preserves the automatic stream");
+  element("liveToggleButton").handlers.click();
+  await turn();
+  assert.equal(automaticCamera.signal.aborted, true, "Live off cancels the automatic owner");
+  assert.equal(video.srcObject, media, "Live off keeps the same preview stream");
+  assert.equal(tracksStopped, 0);
+  assert.equal(element("analyzeButton").disabled, false);
+  emitFrame(180);
+  await turn();
+  assert.equal(posts, 6);
+  await settles(element("analyzeButton").handlers.click(), "Manual inference after pausing Live did not complete");
+  assert.equal(posts, 7);
+  assert.equal(captures[6].image.source, video);
+  assert.equal(element("answer").textContent, "Manual paused camera");
+  assert.equal(video.srcObject, media);
+  assert.equal(tracksStopped, 0);
+  element("stopButton").handlers.click();
+  assert.equal(tracksStopped, 1, "Stop, unlike Live off, releases the camera");
+  assert.equal(frameCallbacks.size, 0);
+  assert.equal(video.srcObject, null);
+  console.log("PASS: Live off preserves camera and manual requests, cancels automatic requests, and blocks new automatic captures; manual/cadence requests share one owner.");
+  console.log("PASS: Caption reordering and persistence preserve camera and active manual/automatic streams.");
 })().catch(error => { console.error(error); process.exitCode = 1; });

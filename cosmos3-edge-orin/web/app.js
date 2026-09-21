@@ -1,5 +1,51 @@
 "use strict";
 
+// Prompt labels and text from NVIDIA-AI-IOT/live-vlm-webui (Apache-2.0).
+// Copyright (c) 2025 NVIDIA Corporation & Affiliates. All rights reserved.
+// Source: 2fd5ba0b334c334d24bf0f9439d8742b243d22be, static/index.html#promptPreset.
+const PROMPT_PRESETS = [
+  {
+    "prompt": "Describe what you see in this image in one sentence.",
+    "label": "Scene Description"
+  },
+  {
+    "prompt": "List all objects you can see in this image, separated by commas.",
+    "label": "Object Detection"
+  },
+  {
+    "prompt": "Describe the person's activity and what they are doing.",
+    "label": "Activity Recognition"
+  },
+  {
+    "prompt": "Are there any safety hazards visible? Answer with 'ALERT: description' or 'SAFE'.",
+    "label": "Safety Monitoring"
+  },
+  {
+    "prompt": "Describe the facial expressions and emotions of people visible.",
+    "label": "Emotion Detection"
+  },
+  {
+    "prompt": "Provide a detailed description of the scene for a visually impaired person.",
+    "label": "Accessibility"
+  },
+  {
+    "prompt": "Read and transcribe any text visible in the image.",
+    "label": "OCR / Text Reading"
+  },
+  {
+    "prompt": "Answer with Yes or No only: Is there a person visible?",
+    "label": "Yes/No Question"
+  },
+  {
+    "prompt": "You are a robot. Describe what you see, then give 5 navigation commands to get to a possible location of a bathroom. Format: 'linear_x=0.3, angular_z=0.0 # reason'. Keep linear_x between -0.5 and 0.5, angular_z between -1.0 and 1.0.",
+    "label": "🤖 Robot Navigation (Simple)"
+  },
+  {
+    "prompt": "You are controlling a mobile robot with differential drive. Camera: 1.0m height, forward-facing. Generate ROS cmd_vel commands based on what you see to get to a possible location of a bathroom.\n\nCRITICAL CONSTRAINTS:\n- linear.x: MUST be between -0.5 and +0.5 m/s (violations will cause robot damage)\n- angular.z: MUST be between -1.0 and +1.0 rad/s\n- Commands must respond to actual obstacles/scene content\n\nOUTPUT FORMAT (20 commands for 2.0 seconds):\nT=0.0s: linear.x=0.20, angular.z=0.00 # [explain what you see and why this velocity]\nT=0.1s: linear.x=0.18, angular.z=-0.15 # [explain decision based on scene]\n... (continue for all 20 timesteps)\n\nSTRATEGY SECTION:\nAfter commands, explain: obstacles detected, clearance margins, goal inference, safety considerations.",
+    "label": "🤖 Robot Navigation (ROS)"
+  }
+];
+
 const CAPTURE_PRESETS = {
   "live-vlm": {cameraConstraints: {width: {ideal: 1280}, height: {ideal: 720}},
     temperature: 0.7, jpegQuality: 0.75, maxSide: null},
@@ -160,20 +206,62 @@ function startDeviceTelemetry() {
   resume();
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
   const state = {ready: false, model: "", running: false, busy: false, media: null,
     abort: null, captureAt: null, completed: 0, imageURL: null, checking: false, cameraGeneration: 0,
-    preset: "live-vlm", frameCallback: null, sampled: 0, skipped: 0};
+    preset: "live-vlm", frameCallback: null, sampled: 0, skipped: 0,
+    liveStreaming: true, activeTrigger: null};
   const canvas = document.createElement("canvas");
   const duration = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
+  // Moving only the output panel keeps the live video element and in-flight
+  // stream intact. DOM order matches the reading order in stacked layouts.
+  const captionPositions = new Set(["side", "above", "below"]);
+  const captionStorageKey = "cosmos3-edge:caption-position";
+  function applyCaptionPosition(position, save = true) {
+    if (!captionPositions.has(position)) position = "below";
+    $("workspace").dataset.captionPosition = position;
+    if (position === "above") $("cameraPanel").before($("captionPanel"));
+    else $("cameraPanel").after($("captionPanel"));
+    for (const input of document.querySelectorAll('input[name="captionPosition"]')) {
+      input.checked = input.value === position;
+    }
+    if (save) { try { localStorage.setItem(captionStorageKey, position); } catch (_) {} }
+  }
+  let savedCaptionPosition = "below";
+  try { savedCaptionPosition = localStorage.getItem(captionStorageKey) || "below"; } catch (_) {}
+  applyCaptionPosition(savedCaptionPosition, false);
+  for (const input of document.querySelectorAll('input[name="captionPosition"]')) {
+    input.addEventListener("change", () => { if (input.checked) applyCaptionPosition(input.value); });
+  }
+
+  const customPrompt = document.createElement("option");
+  customPrompt.value = ""; customPrompt.textContent = "Custom prompt / select a preset";
+  $("promptPreset").append(customPrompt);
+  for (const preset of PROMPT_PRESETS) {
+    const option = document.createElement("option");
+    option.value = preset.prompt; option.textContent = preset.label;
+    $("promptPreset").append(option);
+  }
+  function matchPromptPreset() {
+    $("promptPreset").value = PROMPT_PRESETS.some(preset => preset.prompt === $("prompt").value)
+      ? $("prompt").value : "";
+  }
+  $("promptPreset").addEventListener("change", () => {
+    if ($("promptPreset").value) $("prompt").value = $("promptPreset").value;
+  });
+  $("prompt").addEventListener("input", matchPromptPreset);
+  matchPromptPreset();
   function error(message = "") { $("error").textContent = message; $("error").hidden = !message; }
   function controls() {
     $("startButton").disabled = state.running || state.busy;
     $("stopButton").disabled = !state.running && !state.busy;
-    $("analyzeButton").disabled = !state.imageURL || !state.ready || state.busy || state.running;
+    const sourceReady = state.running ? Boolean(state.media && $("video").readyState >= 2) : Boolean(state.imageURL);
+    $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy;
+    $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
+    $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
   }
   async function checkBackend() {
     if (state.checking) return;
@@ -228,7 +316,7 @@ if (typeof document !== "undefined") {
     $("captureStatus").textContent = `Sent ${canvas.width}×${canvas.height} · ${state.preset === "live-vlm" ? "Live VLM WebUI" : "Lightweight"}`;
     return {url, capturedAt};
   }
-  async function analyze(source) {
+  async function analyze(source, trigger = "manual") {
     if (state.busy || !state.ready) return;
     const prompt = $("prompt").value.trim();
     const maxTokens = Number($("maxTokens").value);
@@ -237,7 +325,7 @@ if (typeof document !== "undefined") {
       stop(); return;
     }
     const controller = new AbortController();
-    state.busy = true; state.abort = controller; controls(); error();
+    state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
     $("runStatus").textContent = "Reading frame…"; $("answer").textContent = "";
     let reader;
@@ -302,7 +390,7 @@ if (typeof document !== "undefined") {
       // never hold the controls busy or clean up a later request's state.
       try { if (reader) reader.cancel().catch(() => {}); } catch (_) {}
       if (state.abort === controller) {
-        state.abort = null; state.busy = false;
+        state.abort = null; state.busy = false; state.activeTrigger = null;
         $("answer").classList.remove("streaming");
         if (!state.running) releaseCamera();
         controls();
@@ -312,7 +400,7 @@ if (typeof document !== "undefined") {
   async function cameraLoop(generation) {
     while (state.running && generation === state.cameraGeneration) {
       const start = performance.now();
-      if (state.ready && $("video").readyState >= 2) await analyze($("video"));
+      if (state.liveStreaming && state.ready && $("video").readyState >= 2) await analyze($("video"), "live");
       const delay = Math.max(100, Number($("interval").value) - (performance.now() - start));
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -323,10 +411,10 @@ if (typeof document !== "undefined") {
     function frame(now, metadata) {
       if (!state.running || generation !== state.cameraGeneration) return;
       state.frameCallback = null;
-      if (cadence.observe(metadata.presentedFrames)) {
+      if (cadence.observe(metadata.presentedFrames) && state.liveStreaming) {
         if (state.busy) state.skipped += 1;
         else if (state.ready && video.readyState >= 2) {
-          void analyze(video);
+          void analyze(video, "live");
         }
         $("samplingStatus").textContent = `${state.sampled} frames sent · ${state.skipped} skipped while busy`;
       }
@@ -348,7 +436,7 @@ if (typeof document !== "undefined") {
       stop();
       // Retire the aborted owner before clearing its result. Its late stream
       // cleanup must never overwrite the new preset or a restarted request.
-      state.abort = null; state.busy = false;
+      state.abort = null; state.busy = false; state.activeTrigger = null;
       state.completed = 0; state.captureAt = null;
       $("answer").textContent = "Preset changed. Start the camera or analyze your selected image.";
       $("answer").classList.remove("streaming");
@@ -389,11 +477,23 @@ if (typeof document !== "undefined") {
       $("sourceStatus").textContent = `Camera · ${$("video").videoWidth}×${$("video").videoHeight}${actual.frameRate ? ` · ${actual.frameRate.toFixed(1)} FPS` : ""}`;
       state.sampled = 0; state.skipped = 0;
       $("samplingStatus").textContent = state.preset === "live-vlm" ? "Every 30 frames · waiting for first sample" : "Capture after each answer";
+      if (!state.liveStreaming) $("samplingStatus").textContent = "Live streaming off · manual capture ready";
+      controls();
       if (state.preset === "live-vlm") frameCameraLoop(generation); else cameraLoop(generation);
     } catch (err) { if (generation === state.cameraGeneration) { stop(); error(`Camera unavailable: ${err.message}. You can choose an image instead.`); } }
   });
   $("stopButton").addEventListener("click", stop);
-  $("analyzeButton").addEventListener("click", () => analyze($("uploadedImage")));
+  $("analyzeButton").addEventListener("click", () => analyze(state.running ? $("video") : $("uploadedImage")));
+  $("liveToggleButton").addEventListener("click", () => {
+    state.liveStreaming = !state.liveStreaming;
+    // Pause automatic requests without stopping the preview or interrupting
+    // an explicitly requested manual inference.
+    if (!state.liveStreaming && state.activeTrigger === "live") state.abort?.abort();
+    $("samplingStatus").textContent = state.liveStreaming
+      ? (state.preset === "live-vlm" ? "Every 30 frames · live streaming on" : "Capture after each answer")
+      : "Live streaming off · use Run inference";
+    controls();
+  });
   $("imageInput").addEventListener("change", async event => {
     const file = event.target.files[0];
     if (!file) return;

@@ -28,7 +28,19 @@ The preset is explicit and defaults to Live VLM on every new page load. Switchin
 
 Frames with an axis below 256 pixels are padded to preserve the whole source for the existing model integration. Full-size mode rejects axes over 4096, aspect ratios over 8:1 after padding, and encoded data URLs over 1,900,000 characters. The aspect check avoids very thin post-resize grids outside the validated position repair. These checks ask the user to choose a smaller source or Lightweight instead of silently changing comparison dimensions. The server's 2 MiB request limit, 120-second request deadline and 1,024-token input limit remain. Very long prompts may exceed the remaining input budget with larger images.
 
-## Sources and verification
+## Prompt menu, caption placement and manual inference
+
+The 2026-09-21 UI update copies the ten Quick Presets labels and prompt texts exactly from the same public Live VLM WebUI revision, which was also its verified public HEAD on that date. They are Scene Description, Object Detection, Activity Recognition, Safety Monitoring, Emotion Detection, Accessibility, OCR / Text Reading, Yes/No Question, Robot Navigation (Simple) and Robot Navigation (ROS). Selecting one fills the editable prompt. Editing it to a different value selects Custom prompt. The initial Scene Description prompt and 512-token ceiling remain unchanged. The robot examples generate text only; this interface does not execute commands or control a robot.
+
+The explicit caption selector offers Side window, Above camera and Below camera. Below camera is the first-visit default. The browser remembers a valid selection, falling back to Below if storage is blocked or invalid. Side window stacks below the camera on screens at most 800 CSS pixels wide. The implementation moves only the existing output panel, preserving the video element, active request, streamed text, metrics and reading order. Upstream has separate vertical-order and on-camera-overlay controls, plus automatic side-by-side layout on wide screens. This task's three-position selector implements the requested placement without covering the video.
+
+Run inference submits exactly one current camera frame or uploaded image. Live streaming defaults On and controls automatic camera requests. Off preserves camera tracks, prevents further automatic requests and aborts any current automatic request, retaining partial text. An explicitly requested manual inference survives toggling live streaming off. Switching capture presets still stops the camera and active request, but preserves the live on/off choice. The existing one-request admission guard covers both manual and automatic submissions. Turning live back on uses the existing capture cadence; it does not replay skipped frames.
+
+The prompt labels/text remain upstream Apache-2.0 material. Caption positioning, prompt-menu integration and manual/live request controls are task-authored. Source: [Quick Presets and prompt editor](https://github.com/NVIDIA-AI-IOT/live-vlm-webui/blob/2fd5ba0b334c334d24bf0f9439d8742b243d22be/src/live_vlm_webui/static/index.html#L2349), [layout controls](https://github.com/NVIDIA-AI-IOT/live-vlm-webui/blob/2fd5ba0b334c334d24bf0f9439d8742b243d22be/src/live_vlm_webui/static/index.html#L2053) and [Apache-2.0 license](https://github.com/NVIDIA-AI-IOT/live-vlm-webui/blob/2fd5ba0b334c334d24bf0f9439d8742b243d22be/LICENSE).
+
+[Direct Orin browser verification](../results/ui-controls-browser.json) passed actual upload inference, incremental text, all caption positions, manual camera capture, live pause/resume, prompt submission and mobile layout. Camera frames were Chromium's synthetic feed. [Deployment verification](../results/ui-controls-deployment.json) checks the served asset hashes and unchanged selected runtime. The existing SSE tests now also cover manual/automatic request ownership and caption movement during a stream. These are functional checks, not a new latency or accuracy experiment.
+
+## Original comparison sources and verification
 
 Pinned Live VLM WebUI revision: `2fd5ba0b334c334d24bf0f9439d8742b243d22be`.
 
