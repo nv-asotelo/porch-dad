@@ -1,6 +1,10 @@
 # Backend build and launch
 
-Status (2026-09-20): **corrected FP16 is selected and serving actual image answers through enabled, active backend/UI systemd services**. The selected profile is input 1024 / KV 2048, batch one, FP16 weights/activation/KV, zero encoder embedding cache, no text-context reuse, and stock 25 W with restored dynamic clocks. Swap is disabled persistently; the existing `/swapfile` and original fstab are preserved. See [selected environment](../deployment/selected.env), [configuration/provenance](../deployment/selected-config.json), [selection decision](../results/optimization-selection.json), and [memory-mode receipt](../results/deployment-memory-mode/receipt.json).
+Current selection (2026-09-21 UTC): **MLP-only RTN INT4 with N4 GEMV tiling and compact buffers is serving through the enabled backend/UI services**. The profile is input 1024 / KV 1664, aggregate and per-image visual capacity 512, batch one, zero encoder cache, no text-context reuse and stock dynamic 25 W clocks. Attention, vision, embeddings, activations and KV remain FP16. Swap is disabled. See [selected environment](../deployment/selected.env), [configuration/provenance](../deployment/selected-config.json), [MLP selection](../results/mlp-goal/selection.json), [MLP reproduction in section 7](#7-selected-mlp-only-rtn-deployment) and [the full findings](../research/mlp-goal.md).
+
+## Historical FP16 checkpoint
+
+The following FP16 measurements describe the earlier checkpoint. It used input 1024 / KV 2048, FP16 weights/activation/KV, zero encoder cache and stock dynamic 25 W clocks. Its [selection decision](../results/optimization-selection.json) remains available alongside the [memory-mode receipt](../results/deployment-memory-mode/receipt.json). The current MLP result appears in section 7 below.
 
 The corrected six-image screen scores [18/19 required facts](../results/quality-fp16-corrected-01-review.json), up from the initial 7/19. The official unmodified model reproduces the sole remaining shape error, so the absolute screen still fails. The selected model meets the frozen [reference-equivalence policy](../results/optimization-quality-policy.json), and all six final-service outputs match corrected FP16 exactly. Browser incremental display, Stop and restart passed [against the actual Orin service](../results/browser-live-ui.json).
 
@@ -177,7 +181,7 @@ For a fresh deployment without installed units, omit the initial service-stop co
 
 The build helper runs the checkpoint-specific media and RoPE repairs. Direct server startup requires a complete normalized bundle matching the model, input/KV and visual profile; **startup does not build missing engines**. Preserve the original checkpoint and its notices. Build success still requires actual image-quality and streaming validation.
 
-The checked-in `deployment/selected.env` contains only task paths and explicit runtime settings, using systemd `NAME=value` syntax. It selects `COSMOS_PROFILE=fp16`, the original reasoner checkpoint, `data/engine-cache-chw`, input 1024, KV 2048, encoder cache zero and `COSMOS_STATIC_CLOCKS=0`. The companion `deployment/selected-config.json` records source/model pins, patches and observed deployment state; copied provenance does not establish that a newly built engine has been validated.
+The checked-in `deployment/selected.env` contains only task paths and explicit runtime settings, using systemd `NAME=value` syntax. It now selects `COSMOS_PROFILE=rtn-v1`, the MLP-only INT4 checkpoint, `data/engine-cache-mlp-compact`, input 1024, KV 1664, aggregate/per-image visual capacity 512, encoder cache zero and `COSMOS_STATIC_CLOCKS=0`. Section 7 describes building that selected configuration. The companion `deployment/selected-config.json` records source/model pins, patches and observed deployment state; copied provenance does not establish that a newly built engine has been validated.
 
 Install and start the selected services after the cache is ready and any task-owned foreground servers have stopped:
 
@@ -274,7 +278,7 @@ sudo /usr/bin/jetson_clocks --restore /home/jetson/cosmos-edge/data/power/stock2
 The disable command applies only if a clock unit was previously installed; none is needed for the selected dynamic configuration. Merely disabling a clock unit while leaving the backend's `Requires` dependency in place would let a later backend start activate it again.
 
 
-## 6. Selected MLP-only RTN deployment
+## 7. Selected MLP-only RTN deployment
 
 The current [selection](../deployment/selected-config.json) uses the same pinned source model and a task-generated MLP-only INT4 derivative. Attention, LM head, vision, projector, embeddings, activations and KV remain FP16. The known yellow-to-orange error remains. The first new candidate saved 163.45 MiB of sampled peak shared RAM and showed 1.19% lower aggregate p50. The search stopped below the user's 10% continuation threshold and retained the smaller configuration. Read the [measurement and policy record](../research/mlp-goal.md) before interpreting those figures.
 
