@@ -1,0 +1,88 @@
+{
+  "verified_at_utc": "2026-09-21T04:00:27.619664+00:00",
+  "status": "passed",
+  "source_sha256": "7f0eb89718adba7317b37b93018243c9778503fd75c6e0cf15486c74a3eeb363",
+  "source_hash_recomputed": true,
+  "selected_frames": [
+    {
+      "file": "01-after-06.992s-toy.png",
+      "sha256": "b9e49b32aa9ef85e9872c5ac5b5285298d988e2998981c556a7f3dcc61f9a5d7",
+      "width": 3348,
+      "height": 2096,
+      "pixel_rgb_md5": "763b345385a52cb64e32e64b6d0e8f60",
+      "passed": true
+    },
+    {
+      "file": "02-after-14.000s-action-camera.png",
+      "sha256": "6f41955b2477728cbefb08b5a97a080adf14000385cb7bbe3c9800ff2f446e72",
+      "width": 3348,
+      "height": 2096,
+      "pixel_rgb_md5": "b6687e2daae4c5fe57f16ffff9cd939f",
+      "passed": true
+    },
+    {
+      "file": "03-after-30.008s-mouse.png",
+      "sha256": "9483cb1acfa8b0211d229441cd2f5c7f56dea444b541faea72a46a8ed1a43e43",
+      "width": 3348,
+      "height": 2096,
+      "pixel_rgb_md5": "8e821fa02b735260f16b27e40a463c8f",
+      "passed": true
+    },
+    {
+      "file": "04-after-35.142s-watch.png",
+      "sha256": "c02435aef3153067fa8ee3927daf3321ad93c70de411391373ed9902147e5af2",
+      "width": 3348,
+      "height": 2096,
+      "pixel_rgb_md5": "30105eb7405c1dd815bf7f94c146df53",
+      "passed": true
+    },
+    {
+      "file": "05-after-40.008s-scissors.png",
+      "sha256": "895977534d964f76e8d1926e5b0bcdcdec64319bdae40c0bc510a2e2fdb5fc7f",
+      "width": 3348,
+      "height": 2096,
+      "pixel_rgb_md5": "94619a76aa9c0dea2bc11158ee9ab6e3",
+      "passed": true
+    },
+    {
+      "file": "06-after-47.267s-handheld.png",
+      "sha256": "4a73cfdad94af4018ab3d896acd000cccf502e173c1b80f9728a7b7671022241",
+      "width": 3348,
+      "height": 2096,
+      "pixel_rgb_md5": "b518e2a438f89a1b6014057e52dc4711",
+      "passed": true
+    }
+  ],
+  "complete_counter_coverage": [
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64
+  ],
+  "regular_resource_sample_count": 492,
+  "completion_recovery_sample_count": 12,
+  "median_and_mean_independently_checked": true,
+  "all_local_gallery_and_readme_links_exist": true,
+  "recovered_values_visually_checked": [
+    46,
+    52,
+    63
+  ],
+  "scope": "Local evidence package integrity and OCR consistency; not a new inference benchmark."
+}

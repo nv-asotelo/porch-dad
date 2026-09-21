@@ -1,0 +1,22 @@
+{
+  "created_utc": "2026-09-21T04:06:38.438870+00:00",
+  "user_instruction": "Start from RTN INT4 MLP only, improve latency and RAM footprint, stop when p50 cannot improve by10percent and load the optimized model.",
+  "original_agent_interpretation": "The frozen plan treated10percent as both a continuation threshold and a deployment eligibility threshold.",
+  "corrected_interpretation": "10percent controls whether to continue searching. Stop now, and deploy the usable measured candidate with lower RAM and no material latency or output regression.",
+  "reason": "Discarding the lower-memory MLP candidate would undo progress toward the requested footprint objective. User did not require discarding every useful improvement below10percent. This clarification does not turn1.19percent into a10percent win or authorize more marginal trials.",
+  "timing": "Clarified after first candidate measurement; originalplan andcomparison preserved without edits.",
+  "continuation_threshold_met": false,
+  "original_comparison_accepted": false,
+  "deployment_selected": "live-vlm-mlp-n4-compact",
+  "observed_latency_reduction_percent": 1.1857373074991573,
+  "latency_caveat": "The small observed latency difference may include measurement noise. This is a memory-saving deployment selection, not a10percent latency success.",
+  "shared_ram_decrease_bytes": 171393024,
+  "observed_regression_limits": "Every per-imagep50/p95 within frozen5percent gate; allp95values lower.",
+  "evidence": [
+    "results/mlp-goal/plan.json",
+    "results/mlp-goal/comparison-01.json",
+    "results/mlp-goal/quality-candidate-review.json"
+  ],
+  "frozen_plan_sha256": "46378d5a97bf522b62aee8f58b35799ff5e15051ea7e4a1f51ca57f616ad7e81",
+  "comparison_sha256": "98413e511ffca12ce657dcef6c4058c2d723719ad2ddb55327b7fee111281c34"
+}

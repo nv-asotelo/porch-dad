@@ -1,0 +1,15 @@
+nvlink info    : 112 bytes gmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi1ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 512 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi2ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 1024 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi3ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 63 registers, used 1 barriers, 0 stack, 1536 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi4ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 73 registers, used 1 barriers, 0 stack, 2048 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi5ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 69 registers, used 1 barriers, 0 stack, 2560 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi6ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 72 registers, used 1 barriers, 0 stack, 3072 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi4ELi1ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 58 registers, used 1 barriers, 0 stack, 1024 bytes smem, 392 bytes cmem[0], 0 bytes lmem

@@ -1,0 +1,118 @@
+{
+  "verified_at_utc": "2026-09-21T04:07:23.213222+00:00",
+  "health_before": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "fixtures": [
+    {
+      "image": "benchmarks/live-vlm-1280/01-action-camera.jpg",
+      "identical_to_baseline": true,
+      "result": {
+        "ttft_ms": 508.19072999001946,
+        "total_latency_ms": 1109.0886250021867,
+        "completion_tokens": 21,
+        "completion_tokens_per_second": 18.934465223605187,
+        "throughput_definition": "completion_tokens / total_request_seconds",
+        "usage": {
+          "prompt_tokens": 511,
+          "completion_tokens": 21,
+          "total_tokens": 532
+        },
+        "output_text": "A man holds a GoPro camera up to his face as if he is taking a selfie.",
+        "http_status": 200,
+        "finish_reason": "stop",
+        "stream_done": true,
+        "error": null
+      }
+    },
+    {
+      "image": "benchmarks/live-vlm-1280/02-pen.jpg",
+      "identical_to_baseline": true,
+      "result": {
+        "ttft_ms": 474.7798290045466,
+        "total_latency_ms": 864.0464010095457,
+        "completion_tokens": 16,
+        "completion_tokens_per_second": 18.51752403725739,
+        "throughput_definition": "completion_tokens / total_request_seconds",
+        "usage": {
+          "prompt_tokens": 511,
+          "completion_tokens": 16,
+          "total_tokens": 527
+        },
+        "output_text": "A man holds a pen in front of his face while raising three fingers.",
+        "http_status": 200,
+        "finish_reason": "stop",
+        "stream_done": true,
+        "error": null
+      }
+    },
+    {
+      "image": "benchmarks/live-vlm-1280/03-scissors.jpg",
+      "identical_to_baseline": true,
+      "result": {
+        "ttft_ms": 478.8451820058981,
+        "total_latency_ms": 870.1910250092624,
+        "completion_tokens": 16,
+        "completion_tokens_per_second": 18.386767434000706,
+        "throughput_definition": "completion_tokens / total_request_seconds",
+        "usage": {
+          "prompt_tokens": 511,
+          "completion_tokens": 16,
+          "total_tokens": 527
+        },
+        "output_text": "A man is holding a pair of scissors in front of his face.",
+        "http_status": 200,
+        "finish_reason": "stop",
+        "stream_done": true,
+        "error": null
+      }
+    }
+  ],
+  "selected_candidate_id": "live-vlm-mlp-n4-compact",
+  "web_url": "https://192.168.6.252:8443",
+  "metrics": {
+    "sampled_at": "2026-09-21T04:07:25.290724+00:00",
+    "status": "ok",
+    "cpu": {
+      "utilization_percent": 5.2
+    },
+    "gpu": {
+      "utilization_percent": 84.4
+    },
+    "memory": {
+      "used_bytes": 5309173760,
+      "total_bytes": 7912775680,
+      "utilization_percent": 67.1,
+      "shared": true,
+      "measurement": "MemTotal - MemAvailable"
+    },
+    "age_ms": 798,
+    "sample_interval_ms": 1000
+  },
+  "health_after": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "services": {
+    "cosmos-edge-backend": "MainPID=101996\nNRestarts=0\nActiveState=active\nSubState=running\n",
+    "cosmos-edge-ui": "MainPID=84351\nNRestarts=0\nActiveState=active\nSubState=running\n"
+  },
+  "runtime_cmdline": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/.venv/bin/python /home/jetson/cosmos-edge/scripts/rtn_backend.py serve --model /home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4 --cache-dir /home/jetson/cosmos-edge/data/engine-cache-mlp-compact --max-input-len 1024 --max-kv-capacity 1664 --host 127.0.0.1 --port 8000 --max-image-tokens 512 --max-image-tokens-per-image 512 ",
+  "native_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+  "plugin_sha256": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe",
+  "runtime_maps": [
+    "ffff096e0000-ffff0a77f000 r-xp 00000000 103:01 2247552                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+    "ffff0a77f000-ffff0a78b000 ---p 0109f000 103:01 2247552                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+    "ffff0a78b000-ffff0a790000 r--p 010ab000 103:01 2247552                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+    "ffff0a790000-ffff0a79a000 rw-p 010b0000 103:01 2247552                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+    "ffff14380000-ffff15967000 r-xp 00000000 103:01 2247376                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so",
+    "ffff15967000-ffff1597b000 ---p 015e7000 103:01 2247376                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so",
+    "ffff1597b000-ffff15980000 r--p 015eb000 103:01 2247376                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so",
+    "ffff15980000-ffff1598c000 rw-p 015f0000 103:01 2247376                   /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so"
+  ],
+  "status": "passed",
+  "scope": "Three selected-runtime functional requests, not a new performance benchmark."
+}

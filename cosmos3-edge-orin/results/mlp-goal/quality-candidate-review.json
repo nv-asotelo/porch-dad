@@ -1,0 +1,11 @@
+{
+  "candidate": "live-vlm-mlp-n4-compact",
+  "source": "results/mlp-goal/quality-candidate.jsonl",
+  "source_sha256": "e09e6ca9351646ad15e72b9843ebe5644b746990de76a0626411082787a41a54",
+  "exact_mlp_baseline_outputs": true,
+  "transport_successes": 6,
+  "correct_facts": 18,
+  "required_facts": 19,
+  "remaining_error": "Yellow triangle described as orange, unchanged.",
+  "scope": "Six synthetic diagnostic images;64-token greedy settings; no general accuracy claim."
+}

@@ -1,0 +1,208 @@
+{
+  "mode": "build",
+  "started_utc": "2026-09-21T03:56:46.347586+00:00",
+  "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4",
+  "cache_dir": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact",
+  "bundle_dir": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact/engines/model-244ac2008d9dca75/i1024-b1-kv1664-none-e20330567a8f",
+  "build_options": {
+    "spec_type": "none",
+    "draft_model_dir": "",
+    "max_input_len": 1024,
+    "max_kv_cache_capacity": 1664,
+    "max_batch_size": 1,
+    "max_image_tokens": 512,
+    "max_image_tokens_per_image": 512,
+    "tp_size": null,
+    "plugin_path": "",
+    "tree_base": false,
+    "int4_gemm_plugin_version": 1
+  },
+  "checkpoint_provenance": {
+    "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+    "source_shards": {
+      "transformer/diffusion_pytorch_model-00001-of-00002.safetensors": {
+        "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00001-of-00002.safetensors?download=true",
+        "expected_size_bytes": 5000040072,
+        "published_lfs_sha256": "116134e5492c514df79a2f07214e577c397aa961387dbe1c5dda488e7994ff6b",
+        "published_git_blob_sha1": "0428010516216042739b4a81a33373696eaeaf23",
+        "verified": true,
+        "size_bytes": 5000040072,
+        "sha256": "116134e5492c514df79a2f07214e577c397aa961387dbe1c5dda488e7994ff6b",
+        "git_blob_sha1": null,
+        "verified_against": "Hugging Face LFS SHA256"
+      },
+      "transformer/diffusion_pytorch_model-00002-of-00002.safetensors": {
+        "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/transformer/diffusion_pytorch_model-00002-of-00002.safetensors?download=true",
+        "expected_size_bytes": 1739335512,
+        "published_lfs_sha256": "3b4c0aafe2705c900ac7bc743085a8e9e09c906624331bc2baa21e172e5d48e4",
+        "published_git_blob_sha1": "9fdd75623bcbb8ac13b3d4bf77de04d7f646b8c9",
+        "verified": true,
+        "size_bytes": 1739335512,
+        "sha256": "3b4c0aafe2705c900ac7bc743085a8e9e09c906624331bc2baa21e172e5d48e4",
+        "git_blob_sha1": null,
+        "verified_against": "Hugging Face LFS SHA256"
+      },
+      "vision_encoder/model.safetensors": {
+        "url": "https://huggingface.co/nvidia/Cosmos3-Edge/resolve/344d602b128d1bbdacb43b08d0a3626f46343e29/vision_encoder/model.safetensors?download=true",
+        "expected_size_bytes": 978739880,
+        "published_lfs_sha256": "2180ad739ecc96b5c1e9386892d3c5c08bfa42b9cdab9aabc53b028671db89b3",
+        "published_git_blob_sha1": "2fcc1c37e9977c106cdd52733a0751774bb12821",
+        "verified": true,
+        "size_bytes": 978739880,
+        "sha256": "2180ad739ecc96b5c1e9386892d3c5c08bfa42b9cdab9aabc53b028671db89b3",
+        "git_blob_sha1": null,
+        "verified_against": "Hugging Face LFS SHA256"
+      }
+    },
+    "algorithm": "round_to_nearest",
+    "calibration": null,
+    "quantization_scope": "mlp-only",
+    "quantized_linear_count": 56,
+    "output_tensor_count": 810,
+    "candidate_shard": {
+      "path": "/home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4/model.safetensors",
+      "sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+      "size_bytes": 3306531432
+    },
+    "metadata_sha256": {
+      "config.json": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+      "hf_quant_config.json": "6823e2fd3c25acdd4a83e62afcf828134fc2dc7dd0159f43f7df927169a256d4",
+      "model.safetensors.index.json": "98fefa4b28fb4a6c19333c1c5b218b807dd4809149238be50b452a35e694cea6",
+      "rtn-conversion.json": "ba039dcb76588954d1d6012975622d667cc0011f8e04930e9ee3c2c4e5baf445"
+    }
+  },
+  "provenance_before": {
+    "tensorrt_version": "10.16.2.10",
+    "cupy_version": "13.6.0",
+    "cuda_driver_version": 13020,
+    "cuda_runtime_version": 13000,
+    "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+    "backend_tracked_diff": {
+      "sha256": "e7ee34dfa1c6dedd492b95463b7f9d3410a55d0a56fb492cd1cbd1d801569e21",
+      "size_bytes": 17268,
+      "dirty": true,
+      "base": "HEAD",
+      "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+    },
+    "built_plugin": {
+      "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+      "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+      "size_bytes": 18255824
+    },
+    "plugin_environment_override": null
+  },
+  "inference_validated": false,
+  "note": "RTN without calibration; GPTQ describes storage only. Vision/projector/embed and KV are FP16.",
+  "compatibility_repairs": [
+    {
+      "created_utc": "2026-09-21T04:00:24.472634+00:00",
+      "status": "applied",
+      "source_config": "/home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4/config.json",
+      "source_config_sha256": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+      "source_reference": "nvidia/Cosmos3-Edge",
+      "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "artifact": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact/engines/model-244ac2008d9dca75/i1024-b1-kv1664-none-e20330567a8f/visual/config.json",
+      "before_sha256": "f53f1b0683decada5ba26451a6731fa94f47b48553fa175b1c9d3c5c8143cc94",
+      "after_sha256": "2c1fb57778deb334074acd148f2dad2db46d988b5aa619aef53e5f2d8917848d",
+      "additions": {
+        "text_config.rope_theta": 100000000,
+        "text_config.rope_scaling": {
+          "mrope_section": [
+            24,
+            20,
+            20
+          ],
+          "rope_theta": 100000000,
+          "rope_type": "default",
+          "type": "default"
+        }
+      },
+      "engine_files_modified": false,
+      "note": "Only config aliases are normalized. No engine rebuild or inference validation is performed.",
+      "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260921T040024Z-1bd1057324ee496ea108eac87d18b0b9.visual-config.before.json",
+      "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-rope-20260921T040024Z-1bd1057324ee496ea108eac87d18b0b9.receipt.json",
+      "applied_utc": "2026-09-21T04:00:24.478375+00:00"
+    },
+    {
+      "created_utc": "2026-09-21T04:00:24.630736+00:00",
+      "status": "applied",
+      "source_model": "/home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4",
+      "source_reference": "nvidia/Cosmos3-Edge",
+      "source_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+      "source_sha256": {
+        "config.json": "ffb75b654e65d10e337ea07f20ac4eadc3775dd22c9a8194c87c3b68df5c8f5f",
+        "chat_template.jinja": "7120ee6666468d4e9b2dc11e133ac5c2fa765fa5907706bf0f906270aa5510c8",
+        "tokenizer_config.json": "85577f01be64ea03ee9aacc0536088e47b96971e4aff21e0aa604900b1410386"
+      },
+      "special_tokens": {
+        "video_token_id": {
+          "id": 18,
+          "token": "<|video_pad|>"
+        },
+        "image_token_id": {
+          "id": 19,
+          "token": "<|image_pad|>"
+        },
+        "vision_start_token_id": {
+          "id": 20,
+          "token": "<|vision_start|>"
+        },
+        "vision_end_token_id": {
+          "id": 21,
+          "token": "<|vision_end|>"
+        }
+      },
+      "artifact": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact/engines/model-244ac2008d9dca75/i1024-b1-kv1664-none-e20330567a8f/processed_chat_template.json",
+      "before_sha256": "af9808a0dac6fdc178e2cb848976b9df9a10a9c091a1181446b164a440128015",
+      "after_sha256": "e28dea55a72d0969630d9d47ca92fa6194406b5a5feed45ac69609acb3af56a9",
+      "additions": {
+        "content_types.image.format": "<|vision_start|><|image_pad|><|vision_end|>",
+        "content_types.video.format": "<|vision_start|><|video_pad|><|vision_end|>"
+      },
+      "previous_values": {
+        "content_types.image.format": {
+          "present": false,
+          "value": null
+        },
+        "content_types.video.format": {
+          "present": false,
+          "value": null
+        }
+      },
+      "engine_files_modified": false,
+      "note": "Formats match the pinned Jinja with add_vision_id disabled. Roles/generation prompts are preserved. No inference validation is performed.",
+      "backup": "/home/jetson/cosmos-edge/results/compatibility/cosmos-media-20260921T040024Z-c2868cf68a4d422499e5a6ebb59fef77.processed-template.before.json",
+      "receipt": "/home/jetson/cosmos-edge/results/compatibility/cosmos-media-20260921T040024Z-c2868cf68a4d422499e5a6ebb59fef77.receipt.json",
+      "applied_utc": "2026-09-21T04:00:24.635112+00:00"
+    }
+  ],
+  "prepared_model": {
+    "bundle_dir": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact/engines/model-244ac2008d9dca75/i1024-b1-kv1664-none-e20330567a8f",
+    "model_dir": "/home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4",
+    "draft_model_dir": "",
+    "built": true
+  },
+  "server_started": false,
+  "provenance_after": {
+    "tensorrt_version": "10.16.2.10",
+    "cupy_version": "13.6.0",
+    "cuda_driver_version": 13020,
+    "cuda_runtime_version": 13000,
+    "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+    "backend_tracked_diff": {
+      "sha256": "e7ee34dfa1c6dedd492b95463b7f9d3410a55d0a56fb492cd1cbd1d801569e21",
+      "size_bytes": 17268,
+      "dirty": true,
+      "base": "HEAD",
+      "scope": "Tracked working tree versus HEAD, including staged changes and tracked submodule diffs; untracked files excluded"
+    },
+    "built_plugin": {
+      "path": "/home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/build/libNvInfer_edgellm_plugin.so.1.0",
+      "sha256": "f0076f9548eb53dee2e5e53e5ca91ea10f91d83010b63ae709e191fc0464aa75",
+      "size_bytes": 18255824
+    },
+    "plugin_environment_override": null
+  },
+  "completed_utc": "2026-09-21T04:00:30.777989+00:00",
+  "published_cache_bytes": 45344155
+}

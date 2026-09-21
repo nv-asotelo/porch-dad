@@ -19,7 +19,7 @@
   "native_extension_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
   "engine_build_receipt": "results/rtn-build-20260921T040030Z-41c97631.json",
   "cache": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact",
-  "image_quality": "18/19 synthetic facts, exact baseline outputs on six diagnostic images and90measured LiveVLM requests; yellow-to-orange limitation remains.",
+  "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
   "quantization_scope": "mlp-only",
   "quantized_linear_count": 56,
   "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
@@ -40,10 +40,5 @@
   "max_image_tokens_per_image": 512,
   "plugin_sha256": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe",
   "gemv_source_sha256": "3d47772a5d4d46ec207e6d6d3fb43acd27bcd6c872880423c74982e65e7c5708",
-  "candidate_change": "Batch-one MLP GEMV output tiling2to4 for9216x2048/2048x9216 only, aggregate visual capacity1024to512, KV2048to1664. Same per-image512/input1024/output512 limits and weights.",
-  "selected": true,
-  "selection_evidence": "results/mlp-goal/selection.json",
-  "deployment_memory_mode": "Swap disabled; existing2GiBswapfile preserved",
-  "memory_mode_evidence": "results/deployment-memory-mode/receipt.json",
-  "served_via": "cosmos-edge-backend.service"
+  "candidate_change": "Batch-one MLP GEMV output tiling2to4 for9216x2048/2048x9216 only, aggregate visual capacity1024to512, KV2048to1664. Same per-image512/input1024/output512 limits and weights."
 }

@@ -1,0 +1,892 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-09-21T04:04:29.598356+00:00",
+  "plan": {
+    "path": "/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/results/mlp-goal/plan.json",
+    "sha256": "46378d5a97bf522b62aee8f58b35799ff5e15051ea7e4a1f51ca57f616ad7e81"
+  },
+  "manifest": {
+    "path": "/Users/asotelo/Documents/ChatGPT/jetson-orin-streaming-codes/benchmarks/live-vlm-1280/manifest.json",
+    "sha256": "92618b79acc7a6f0ed1b1d0264e9fd9e29b177ed71480cd5edca7b5e2b2f41bf"
+  },
+  "comparator_sha256": "21cdeb3ff7906e7b70890f33e22d66495f460baa0038561b4632b66a7a19fd02",
+  "raw_validator_sha256": "f375945050bd06a9c59c34455006dd5a4a3aa4eba9a5a2ea8baa5d00c0709d26",
+  "primary_metric": "geometric mean of per-fixture median complete-answer latency; equal image weighting, compared with last accepted candidate",
+  "mutable_backend_fields": [
+    "int4_gemm_plugin_version",
+    "max_image_tokens",
+    "max_kv_cache_capacity",
+    "native_extension_current_sha256",
+    "native_extension_sha256"
+  ],
+  "baseline": {
+    "candidate_id": "live-vlm-mlp-baseline",
+    "per_fixture": [
+      {
+        "fixture": "01-action-camera.jpg",
+        "source": "results/mlp-goal/raw/baseline-01-action-camera.jsonl",
+        "source_sha256": "cfdf5a9f0b311e2ce2287ade7153b501fb4a02005acce6510646953c9065fc06",
+        "run_id": "7347094c-0482-4c39-9037-4727ec2fc661",
+        "candidate_id": "live-vlm-mlp-baseline",
+        "workload_fingerprint": "4bfc36dcf0ac757cb02ec025b0d337159065f569ea61b24b9797e2f7b7b434b4",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-baseline",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 2048,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+          },
+          "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "engine_build_receipt": "results/rtn-build-20260920T070502Z-85c4a5fb.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-rtn-mlp-v1",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T03:51:03.079302+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "max_image_tokens": 1024,
+          "max_image_tokens_per_image": 512
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 996.9122269976651,
+        "p95_latency_ms": 1008.729976444738,
+        "p50_ttft_ms": 473.4077429966419,
+        "p95_ttft_ms": 484.4949111517053,
+        "completion_tokens": 21,
+        "answer": "A man holds a GoPro camera up to his face as if he is taking a selfie.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5495009280,
+        "peak_process_rss_bytes": 4989464576,
+        "minimum_available_shared_ram_bytes": 2417766400,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      },
+      {
+        "fixture": "02-pen.jpg",
+        "source": "results/mlp-goal/raw/baseline-02-pen.jsonl",
+        "source_sha256": "078683109a1ede080ff4a7520a604185e69bee448ae77c561dbe6eb38b47da53",
+        "run_id": "dcc5f8d6-ab77-46b2-a972-c722562747f8",
+        "candidate_id": "live-vlm-mlp-baseline",
+        "workload_fingerprint": "5e8ca04dc6ea0c5454de71a9f2f874d7b3b823f597b7a34551f54fbba2ec98a3",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-baseline",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 2048,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+          },
+          "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "engine_build_receipt": "results/rtn-build-20260920T070502Z-85c4a5fb.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-rtn-mlp-v1",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T03:51:03.079302+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "max_image_tokens": 1024,
+          "max_image_tokens_per_image": 512
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 877.0079265013919,
+        "p95_latency_ms": 882.0037088029494,
+        "p50_ttft_ms": 484.43965350452345,
+        "p95_ttft_ms": 487.6425162045052,
+        "completion_tokens": 16,
+        "answer": "A man holds a pen in front of his face while raising three fingers.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5485801472,
+        "peak_process_rss_bytes": 4990476288,
+        "minimum_available_shared_ram_bytes": 2426974208,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      },
+      {
+        "fixture": "03-scissors.jpg",
+        "source": "results/mlp-goal/raw/baseline-03-scissors.jsonl",
+        "source_sha256": "30fc105f560d7ca59c7222a1cf752d5d4aa38657a12907ac35e6aa50fdfbfaec",
+        "run_id": "bff44ff2-ad52-4cfd-b29f-2a8f1a915981",
+        "candidate_id": "live-vlm-mlp-baseline",
+        "workload_fingerprint": "57e567879298528c1ef2cd151e817719ae0317444f3f831b128b4be5d5a9974e",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-baseline",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 2048,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+          },
+          "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "engine_build_receipt": "results/rtn-build-20260920T070502Z-85c4a5fb.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-rtn-mlp-v1",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T03:51:03.079302+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "max_image_tokens": 1024,
+          "max_image_tokens_per_image": 512
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 878.1416690035257,
+        "p95_latency_ms": 883.2488672516774,
+        "p50_ttft_ms": 484.86015149683226,
+        "p95_ttft_ms": 489.6475982503034,
+        "completion_tokens": 16,
+        "answer": "A man is holding a pair of scissors in front of his face.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5473554432,
+        "peak_process_rss_bytes": 4990783488,
+        "minimum_available_shared_ram_bytes": 2439221248,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      }
+    ],
+    "geomean_p50_complete_latency_ms": 915.6756713951249,
+    "peak_shared_ram_unavailable_bytes": 5495009280,
+    "peak_process_rss_bytes": 4990783488,
+    "minimum_available_shared_ram_bytes": 2417766400,
+    "failures": []
+  },
+  "candidate": {
+    "candidate_id": "live-vlm-mlp-n4-compact",
+    "per_fixture": [
+      {
+        "fixture": "01-action-camera.jpg",
+        "source": "results/mlp-goal/raw/candidate-01-action-camera.jsonl",
+        "source_sha256": "2c160d2cd18aa39e66621afaff3f9f2062255c574ab6c2d945a7bd7a2e7f79ef",
+        "run_id": "1bbe1cbf-5460-46b0-bc6c-b553c99d28b3",
+        "candidate_id": "live-vlm-mlp-n4-compact",
+        "workload_fingerprint": "4bfc36dcf0ac757cb02ec025b0d337159065f569ea61b24b9797e2f7b7b434b4",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-n4-compact",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 1664,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64",
+            "int4-gemv-cosmos-mlp-n4.patch": "4bbb7c10010cfaf4e2cede83ea104cb19456678ecdde67acf74653dadada0fc9"
+          },
+          "native_extension_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+          "engine_build_receipt": "results/rtn-build-20260921T040030Z-41c97631.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T04:01:54.283417+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+          "max_image_tokens": 512,
+          "max_image_tokens_per_image": 512,
+          "plugin_sha256": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe",
+          "gemv_source_sha256": "3d47772a5d4d46ec207e6d6d3fb43acd27bcd6c872880423c74982e65e7c5708",
+          "candidate_change": "Batch-one MLP GEMV output tiling2to4 for9216x2048/2048x9216 only, aggregate visual capacity1024to512, KV2048to1664. Same per-image512/input1024/output512 limits and weights."
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 1000.5439175074571,
+        "p95_latency_ms": 1006.5618395019555,
+        "p50_ttft_ms": 481.4108494974789,
+        "p95_ttft_ms": 486.82069834976573,
+        "completion_tokens": 21,
+        "answer": "A man holds a GoPro camera up to his face as if he is taking a selfie.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5315063808,
+        "peak_process_rss_bytes": 4758876160,
+        "minimum_available_shared_ram_bytes": 2597711872,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      },
+      {
+        "fixture": "02-pen.jpg",
+        "source": "results/mlp-goal/raw/candidate-02-pen.jsonl",
+        "source_sha256": "bedcbd479a0eab2f2e5857006ea63904c5683cf06ac60f82e96f3ce561655cc6",
+        "run_id": "34f891d5-aff3-4e26-b07d-9d03d4f1c44c",
+        "candidate_id": "live-vlm-mlp-n4-compact",
+        "workload_fingerprint": "5e8ca04dc6ea0c5454de71a9f2f874d7b3b823f597b7a34551f54fbba2ec98a3",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-n4-compact",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 1664,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64",
+            "int4-gemv-cosmos-mlp-n4.patch": "4bbb7c10010cfaf4e2cede83ea104cb19456678ecdde67acf74653dadada0fc9"
+          },
+          "native_extension_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+          "engine_build_receipt": "results/rtn-build-20260921T040030Z-41c97631.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T04:01:54.283417+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+          "max_image_tokens": 512,
+          "max_image_tokens_per_image": 512,
+          "plugin_sha256": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe",
+          "gemv_source_sha256": "3d47772a5d4d46ec207e6d6d3fb43acd27bcd6c872880423c74982e65e7c5708",
+          "candidate_change": "Batch-one MLP GEMV output tiling2to4 for9216x2048/2048x9216 only, aggregate visual capacity1024to512, KV2048to1664. Same per-image512/input1024/output512 limits and weights."
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 859.0303905002656,
+        "p95_latency_ms": 873.2283443991037,
+        "p50_ttft_ms": 468.259355504415,
+        "p95_ttft_ms": 482.63645064871525,
+        "completion_tokens": 16,
+        "answer": "A man holds a pen in front of his face while raising three fingers.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5323526144,
+        "peak_process_rss_bytes": 4759601152,
+        "minimum_available_shared_ram_bytes": 2589249536,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      },
+      {
+        "fixture": "03-scissors.jpg",
+        "source": "results/mlp-goal/raw/candidate-03-scissors.jsonl",
+        "source_sha256": "986c99ce5573a38b72be649148c08cf1bb0c26499e3340c17e54f8e2436300b7",
+        "run_id": "2c44df5f-0d53-403c-a39f-8cf76e64a296",
+        "candidate_id": "live-vlm-mlp-n4-compact",
+        "workload_fingerprint": "57e567879298528c1ef2cd151e817719ae0317444f3f831b128b4be5d5a9974e",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-n4-compact",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 1664,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64",
+            "int4-gemv-cosmos-mlp-n4.patch": "4bbb7c10010cfaf4e2cede83ea104cb19456678ecdde67acf74653dadada0fc9"
+          },
+          "native_extension_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+          "engine_build_receipt": "results/rtn-build-20260921T040030Z-41c97631.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-mlp-compact",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T04:01:54.283417+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0",
+          "max_image_tokens": 512,
+          "max_image_tokens_per_image": 512,
+          "plugin_sha256": "302d4e8c8f579471cfcdebcb0910f20caf4228dbcc9000b60757db4780176dbe",
+          "gemv_source_sha256": "3d47772a5d4d46ec207e6d6d3fb43acd27bcd6c872880423c74982e65e7c5708",
+          "candidate_change": "Batch-one MLP GEMV output tiling2to4 for9216x2048/2048x9216 only, aggregate visual capacity1024to512, KV2048to1664. Same per-image512/input1024/output512 limits and weights."
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 861.8650019925553,
+        "p95_latency_ms": 875.3296085036709,
+        "p50_ttft_ms": 471.0603349885787,
+        "p95_ttft_ms": 483.1134517546161,
+        "completion_tokens": 16,
+        "answer": "A man is holding a pair of scissors in front of his face.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5323616256,
+        "peak_process_rss_bytes": 4759748608,
+        "minimum_available_shared_ram_bytes": 2589159424,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      }
+    ],
+    "geomean_p50_complete_latency_ms": 904.8181633436996,
+    "peak_shared_ram_unavailable_bytes": 5323616256,
+    "peak_process_rss_bytes": 4759748608,
+    "minimum_available_shared_ram_bytes": 2589159424,
+    "failures": []
+  },
+  "initial_mlp": {
+    "candidate_id": "live-vlm-mlp-baseline",
+    "per_fixture": [
+      {
+        "fixture": "01-action-camera.jpg",
+        "source": "results/mlp-goal/raw/baseline-01-action-camera.jsonl",
+        "source_sha256": "cfdf5a9f0b311e2ce2287ade7153b501fb4a02005acce6510646953c9065fc06",
+        "run_id": "7347094c-0482-4c39-9037-4727ec2fc661",
+        "candidate_id": "live-vlm-mlp-baseline",
+        "workload_fingerprint": "4bfc36dcf0ac757cb02ec025b0d337159065f569ea61b24b9797e2f7b7b434b4",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-baseline",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 2048,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+          },
+          "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "engine_build_receipt": "results/rtn-build-20260920T070502Z-85c4a5fb.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-rtn-mlp-v1",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T03:51:03.079302+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "max_image_tokens": 1024,
+          "max_image_tokens_per_image": 512
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 996.9122269976651,
+        "p95_latency_ms": 1008.729976444738,
+        "p50_ttft_ms": 473.4077429966419,
+        "p95_ttft_ms": 484.4949111517053,
+        "completion_tokens": 21,
+        "answer": "A man holds a GoPro camera up to his face as if he is taking a selfie.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5495009280,
+        "peak_process_rss_bytes": 4989464576,
+        "minimum_available_shared_ram_bytes": 2417766400,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      },
+      {
+        "fixture": "02-pen.jpg",
+        "source": "results/mlp-goal/raw/baseline-02-pen.jsonl",
+        "source_sha256": "078683109a1ede080ff4a7520a604185e69bee448ae77c561dbe6eb38b47da53",
+        "run_id": "dcc5f8d6-ab77-46b2-a972-c722562747f8",
+        "candidate_id": "live-vlm-mlp-baseline",
+        "workload_fingerprint": "5e8ca04dc6ea0c5454de71a9f2f874d7b3b823f597b7a34551f54fbba2ec98a3",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-baseline",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 2048,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+          },
+          "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "engine_build_receipt": "results/rtn-build-20260920T070502Z-85c4a5fb.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-rtn-mlp-v1",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T03:51:03.079302+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "max_image_tokens": 1024,
+          "max_image_tokens_per_image": 512
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 877.0079265013919,
+        "p95_latency_ms": 882.0037088029494,
+        "p50_ttft_ms": 484.43965350452345,
+        "p95_ttft_ms": 487.6425162045052,
+        "completion_tokens": 16,
+        "answer": "A man holds a pen in front of his face while raising three fingers.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5485801472,
+        "peak_process_rss_bytes": 4990476288,
+        "minimum_available_shared_ram_bytes": 2426974208,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      },
+      {
+        "fixture": "03-scissors.jpg",
+        "source": "results/mlp-goal/raw/baseline-03-scissors.jsonl",
+        "source_sha256": "30fc105f560d7ca59c7222a1cf752d5d4aa38657a12907ac35e6aa50fdfbfaec",
+        "run_id": "bff44ff2-ad52-4cfd-b29f-2a8f1a915981",
+        "candidate_id": "live-vlm-mlp-baseline",
+        "workload_fingerprint": "57e567879298528c1ef2cd151e817719ae0317444f3f831b128b4be5d5a9974e",
+        "endpoint": "http://127.0.0.1:8090/v1/chat/completions",
+        "sampling_host": "cosmos-edge",
+        "backend_config": {
+          "candidate": "live-vlm-mlp-baseline",
+          "model": "nvidia/Cosmos3-Edge",
+          "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+          "backend_revision": "e8b29522938901f6df19ebeedd4b69bc8edbcd97",
+          "precision": "RTN INT4 MLP weights; FP16 attention, LM head, vision, projector, embeddings, activations and KV",
+          "max_input_len": 1024,
+          "max_kv_cache_capacity": 2048,
+          "max_batch_size": 1,
+          "encoder_embedding_cache_budget_bytes": 0,
+          "text_context_reuse": false,
+          "power_mode": "stock25W ID1",
+          "patch_sha256": {
+            "tensorrt-edge-llm-v0.10.1-encoder-cache-budget.patch": "af1a3fc45204d23b44cd2f3c424cda461fe257a2f2f426583fa53725435899fb",
+            "cosmos3-half-pixel-position.patch": "b0ee740480efd902131dcf9691bac9f7d1be25c188ca3f79a692eb51c751ea7f",
+            "cosmos3-patch-embedding-chw.patch": "d56614bd8d413d7069a90850e7641ff9a7d4624df6aa8d47fec48de1cdea0d64"
+          },
+          "native_extension_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "engine_build_receipt": "results/rtn-build-20260920T070502Z-85c4a5fb.json",
+          "cache": "/home/jetson/cosmos-edge/data/engine-cache-rtn-mlp-v1",
+          "image_quality": "Fresh MLP baseline pending. Prior controlled screen18/19 with yellow triangle called orange; not general accuracy evidence.",
+          "quantization_scope": "mlp-only",
+          "quantized_linear_count": 56,
+          "weight_sha256": "93ac92d48d893aa45009fb327846bdd1052d03b22150ab8b64698d00a23d1854",
+          "int4_gemm_plugin_version": 1,
+          "created_utc": "2026-09-21T03:51:03.079302+00:00",
+          "clock_policy": "restored stock dynamic 25W",
+          "sampling": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 50,
+            "request_top_p": "omitted",
+            "request_top_k": "omitted",
+            "native_philox_seed": 42,
+            "native_philox_offset": 0
+          },
+          "native_extension_current_sha256": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+          "max_image_tokens": 1024,
+          "max_image_tokens_per_image": 512
+        },
+        "measured_requests": 30,
+        "warmup_requests": 5,
+        "p50_latency_ms": 878.1416690035257,
+        "p95_latency_ms": 883.2488672516774,
+        "p50_ttft_ms": 484.86015149683226,
+        "p95_ttft_ms": 489.6475982503034,
+        "completion_tokens": 16,
+        "answer": "A man is holding a pair of scissors in front of his face.",
+        "finish_reason": "stop",
+        "unique_measured_answers": 1,
+        "peak_shared_ram_unavailable_bytes": 5473554432,
+        "peak_process_rss_bytes": 4990783488,
+        "minimum_available_shared_ram_bytes": 2439221248,
+        "raw_counter_start": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "raw_counter_end": {
+          "swap_in_pages": 21347,
+          "swap_out_pages": 30793,
+          "system_oom_kills": 0
+        },
+        "failures": []
+      }
+    ],
+    "geomean_p50_complete_latency_ms": 915.6756713951249,
+    "peak_shared_ram_unavailable_bytes": 5495009280,
+    "peak_process_rss_bytes": 4990783488,
+    "minimum_available_shared_ram_bytes": 2417766400,
+    "failures": []
+  },
+  "comparison": {
+    "accepted": false,
+    "decision": "stop_and_keep_last_accepted_mlp",
+    "selected_candidate_id": "live-vlm-mlp-baseline",
+    "candidate_to_baseline_ratio": 0.9881426269250084,
+    "latency_reduction_percent": 1.1857373074991573,
+    "peak_shared_ram_candidate_to_baseline_ratio": 0.9688093294721424,
+    "per_fixture": [
+      {
+        "fixture": "01-action-camera.jpg",
+        "output_equivalent": true,
+        "backend_changes": {
+          "max_kv_cache_capacity": {
+            "before": 2048,
+            "after": 1664
+          },
+          "max_image_tokens": {
+            "before": 1024,
+            "after": 512
+          },
+          "native_extension_sha256": {
+            "before": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+            "after": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0"
+          },
+          "native_extension_current_sha256": {
+            "before": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+            "after": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0"
+          }
+        },
+        "ratios": {
+          "p50_latency_ms": 1.0036429390787285,
+          "p95_latency_ms": 0.997850627032594
+        }
+      },
+      {
+        "fixture": "02-pen.jpg",
+        "output_equivalent": true,
+        "backend_changes": {
+          "max_kv_cache_capacity": {
+            "before": 2048,
+            "after": 1664
+          },
+          "max_image_tokens": {
+            "before": 1024,
+            "after": 512
+          },
+          "native_extension_sha256": {
+            "before": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+            "after": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0"
+          },
+          "native_extension_current_sha256": {
+            "before": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+            "after": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0"
+          }
+        },
+        "ratios": {
+          "p50_latency_ms": 0.9795012844720307,
+          "p95_latency_ms": 0.9900506490888166
+        }
+      },
+      {
+        "fixture": "03-scissors.jpg",
+        "output_equivalent": true,
+        "backend_changes": {
+          "max_kv_cache_capacity": {
+            "before": 2048,
+            "after": 1664
+          },
+          "max_image_tokens": {
+            "before": 1024,
+            "after": 512
+          },
+          "native_extension_sha256": {
+            "before": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+            "after": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0"
+          },
+          "native_extension_current_sha256": {
+            "before": "7917679a203010646f4412ccbb2a00bf6a97265114c5f17b5fc98574b376fc12",
+            "after": "f9ead1dc9a9fbeb392ccd0e485817dedb8c657833bb01a1facc362248741a7a0"
+          }
+        },
+        "ratios": {
+          "p50_latency_ms": 0.9814646456426098,
+          "p95_latency_ms": 0.9910339440653367
+        }
+      }
+    ],
+    "rejection_reasons": [
+      "geomean_complete_latency_gain_below_10_percent"
+    ],
+    "memory_changes": {
+      "candidate_vs_incumbent": {
+        "shared_ram_unavailable": {
+          "before_peak_bytes": 5495009280,
+          "after_peak_bytes": 5323616256,
+          "decrease_bytes": 171393024,
+          "decrease_percent": 3.11906705278576
+        },
+        "process_rss": {
+          "before_peak_bytes": 4990783488,
+          "after_peak_bytes": 4759748608,
+          "decrease_bytes": 231034880,
+          "decrease_percent": 4.629230672007866
+        }
+      },
+      "selected_vs_incumbent": {
+        "shared_ram_unavailable": {
+          "before_peak_bytes": 5495009280,
+          "after_peak_bytes": 5495009280,
+          "decrease_bytes": 0,
+          "decrease_percent": 0.0
+        },
+        "process_rss": {
+          "before_peak_bytes": 4990783488,
+          "after_peak_bytes": 4990783488,
+          "decrease_bytes": 0,
+          "decrease_percent": 0.0
+        }
+      },
+      "candidate_vs_initial_mlp": {
+        "shared_ram_unavailable": {
+          "before_peak_bytes": 5495009280,
+          "after_peak_bytes": 5323616256,
+          "decrease_bytes": 171393024,
+          "decrease_percent": 3.11906705278576
+        },
+        "process_rss": {
+          "before_peak_bytes": 4990783488,
+          "after_peak_bytes": 4759748608,
+          "decrease_bytes": 231034880,
+          "decrease_percent": 4.629230672007866
+        }
+      },
+      "selected_vs_initial_mlp": {
+        "shared_ram_unavailable": {
+          "before_peak_bytes": 5495009280,
+          "after_peak_bytes": 5495009280,
+          "decrease_bytes": 0,
+          "decrease_percent": 0.0
+        },
+        "process_rss": {
+          "before_peak_bytes": 4990783488,
+          "after_peak_bytes": 4990783488,
+          "decrease_bytes": 0,
+          "decrease_percent": 0.0
+        }
+      }
+    },
+    "memory_change_definition": "Decrease in sampled peak memory; positive means lower, negative means higher. Shared RAM and RSS overlap and are never added.",
+    "memory_history_scope": "Only the supplied incumbent, candidate and optional initial MLP runs; no claim about an unprovided search history."
+  },
+  "baseline_policy": "MLP-only RTN is the user-selected starting point. Its known yellow-to-orange error remains an accepted limitation; historical FP16 quality gates do not select or reject candidates here.",
+  "quality_scope": "Preserve every measured MLP answer and actual completion-token count. Equal output is not proof of correctness or general accuracy.",
+  "memory_scope": "Sampled extrema across warmup and measured requests; at least 512 MiB available shared RAM, no observed swap/OOM. Shared RAM includes OS/apps; RSS overlaps it.",
+  "queue_scope": "Serial harness concurrency verified; absence of other clients requires separate readiness/isolation evidence.",
+  "limits": [
+    "screen-recording-derived camera crops, not raw original camera inputs",
+    "three examples are a controlled workload, not a representative accuracy benchmark",
+    "baseline mistakes remain mistakes even when byte-identical",
+    "historical 512x512, 64-token, greedy results are not a comparison denominator",
+    "timings exclude browser capture/encoding and Wi-Fi, but include image decode, inference and local proxy streaming"
+  ]
+}

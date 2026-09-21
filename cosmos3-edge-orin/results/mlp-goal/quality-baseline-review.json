@@ -1,0 +1,12 @@
+{
+  "candidate": "live-vlm-mlp-baseline",
+  "historical_review": "results/quality-rtn-mlp-01-review.json",
+  "source": "results/mlp-goal/quality-baseline.jsonl",
+  "source_sha256": "6beaa22f48dadc209948b538254199d06856800c419ac3190c6748bcea5a1de9",
+  "exact_previous_mlp_outputs": true,
+  "transport_successes": 6,
+  "correct_facts": 18,
+  "required_facts": 19,
+  "remaining_error": "Yellow triangle described as orange. Same baseline limitation the user accepted by choosing MLP-only RTN.",
+  "scope": "Six synthetic diagnostic images under64-token greedy settings; not the512-token Live VLM latency workload or a general accuracy estimate."
+}

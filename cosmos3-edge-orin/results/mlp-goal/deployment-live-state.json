@@ -1,0 +1,21 @@
+{
+  "at_utc": "2026-09-21T04:10:05.328065+00:00",
+  "selected_candidate_id": "live-vlm-mlp-n4-compact",
+  "files": {
+    "deployment/selected.env": "934a541cb271135e403bedf8b2f553166018efdc3d32a6d71774faa349b3616f",
+    "deployment/selected-config.json": "aacd98c583d1be9d2335d1042f98e05f30c8c6efd477d825771db21b48875f11",
+    "patches/int4-gemv-cosmos-mlp-n4.patch": "4bbb7c10010cfaf4e2cede83ea104cb19456678ecdde67acf74653dadada0fc9"
+  },
+  "services": {
+    "cosmos-edge-backend": {
+      "enabled": "enabled",
+      "state": "MainPID=101996\nNRestarts=0\nExecMainStartTimestamp=Mon 2026-09-21 04:01:54 UTC\nActiveState=active\nSubState=running\n"
+    },
+    "cosmos-edge-ui": {
+      "enabled": "enabled",
+      "state": "MainPID=84351\nNRestarts=0\nExecMainStartTimestamp=Sun 2026-09-20 23:46:35 UTC\nActiveState=active\nSubState=running\n"
+    }
+  },
+  "physical_reboot_tested": false,
+  "scope": "Persistent systemd configuration and live process state. Does not assert a physical reboot."
+}

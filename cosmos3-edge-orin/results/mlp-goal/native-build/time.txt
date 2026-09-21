@@ -1,0 +1,23 @@
+	Command being timed: "cmake --build external/TensorRT-Edge-LLM/build --parallel 1 --target NvInfer_edgellm_plugin _edgellm_runtime"
+	User time (seconds): 26.95
+	System time (seconds): 3.20
+	Percent of CPU this job got: 102%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:29.44
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 189680
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 74
+	Minor (reclaiming a frame) page faults: 389630
+	Voluntary context switches: 2485
+	Involuntary context switches: 479
+	Swaps: 0
+	File system inputs: 168312
+	File system outputs: 780144
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

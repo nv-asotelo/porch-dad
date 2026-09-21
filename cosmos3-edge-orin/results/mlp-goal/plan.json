@@ -1,0 +1,55 @@
+{
+  "created_utc": "2026-09-21T03:51:03.079302+00:00",
+  "status": "frozen before baseline and candidate measurement",
+  "objective": "Start from MLP-only RTN INT4 and improve complete-answer latency and shared RAM. Stop at first confirmed step failing 10 percent p50 improvement; deploy last accepted MLP configuration.",
+  "baseline_candidate": "live-vlm-mlp-baseline",
+  "fixtures": "benchmarks/live-vlm-1280/manifest.json",
+  "prompt": "Describe what you see in this image in one sentence.",
+  "max_tokens": 512,
+  "temperature": 0.7,
+  "top_p_request": "omitted",
+  "top_k_request": "omitted",
+  "backend_resolved_top_p": 0.9,
+  "backend_resolved_top_k": 50,
+  "warmups_per_fixture": 5,
+  "measured_requests_per_fixture": 30,
+  "fixture_order": [
+    "01-action-camera.jpg",
+    "02-pen.jpg",
+    "03-scissors.jpg"
+  ],
+  "transport": "serial streaming requests through Orin-local UI proxy, no camera capture interval in the isolated inference benchmark",
+  "primary_metric": "geometric mean of per-fixture median complete-answer latency; equal image weighting, compared with last accepted candidate",
+  "acceptance": [
+    "at least 10 percent reduction of the primary metric",
+    "no per-fixture p95 or median latency regression greater than 5 percent",
+    "byte-identical output text, completion token count and normal stop reason for every measured request, relative to repeatable baseline; otherwise investigate and do not accept as equivalent",
+    "no errors, OOM, swap I/O or queue backlog; at least 512 MiB available shared RAM",
+    "Same images, prompt, token ceiling, sampling, power mode, dynamic clocks, input1024 and per-image512 capacity. Explicit mutable backend fields may change; all actual input and output work must remain identical.",
+    "publish TTFT, completion tokens, all per-fixture latency summaries, system shared RAM and process RSS separately",
+    "Candidate peak shared RAM must not increase by more than 1 percent; report changes against both incumbent and original MLP baseline."
+  ],
+  "tie_or_noise_policy": "Repeat matched baseline/candidate once only when the 10 percent threshold or equivalence is ambiguous. A confirmed failure ends this search and restores the last accepted candidate.",
+  "candidate_hypothesis": "Increase batch-one MLP INT4 GEMV output tiling from two to four for the two Cosmos shapes, preserving arithmetic; pair a successful kernel candidate with smaller aggregate vision/KV capacity while preserving the existing single-frame input1024/output512 envelope.",
+  "limits": [
+    "screen-recording-derived camera crops, not raw original camera inputs",
+    "three examples are a controlled workload, not a representative accuracy benchmark",
+    "baseline mistakes remain mistakes even when byte-identical",
+    "historical 512x512, 64-token, greedy results are not a comparison denominator",
+    "timings exclude browser capture/encoding and Wi-Fi, but include image decode, inference and local proxy streaming"
+  ],
+  "mutable_backend_fields": [
+    "max_kv_cache_capacity",
+    "max_image_tokens",
+    "native_extension_sha256",
+    "native_extension_current_sha256",
+    "int4_gemm_plugin_version"
+  ],
+  "quality_policy": "User explicitly selected MLP-only RTN after the earlier strict FP16-equivalence rejection. Its previous yellow-to-orange color error is disclosed baseline context, not a reason to revert to FP16. Exact preservation tests measure regression, not general accuracy.",
+  "frozen_checkpoint": {
+    "repository": "https://github.com/nv-asotelo/porch-dad",
+    "branch": "codex/cosmos3-edge-checkpoint",
+    "commit": "9ed3ffd9263ae887ee6a7aded77368da220525a1",
+    "local_source_commit": "a1048ff6c071f6e7477cae544899de97171781eb"
+  }
+}

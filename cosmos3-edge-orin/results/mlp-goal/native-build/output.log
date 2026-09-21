@@ -1,0 +1,904 @@
+[  0%] Building CUDA object cpp/CMakeFiles/edgellmKernels.dir/kernels/int4GroupwiseGemmKernels/int4WoQGemvCuda.cu.o
+nvcc warning : Resource usage is not shown as the final resource allocation is not done.
+[  0%] Building CUDA object cpp/CMakeFiles/edgellmKernels.dir/kernels/preprocessKernels/imageUtilKernels.cu.o
+nvcc warning : Resource usage is not shown as the final resource allocation is not done.
+[  3%] Linking CXX static library libedgellmKernels.a
+[ 70%] Built target edgellmKernels
+[ 74%] Built target generatePluginJitEmbeddedSources
+[ 77%] Built target edgellmPluginJit
+[ 77%] Linking CUDA device code CMakeFiles/NvInfer_edgellm_plugin.dir/cmake_device_link.o
+nvlink info    : 4371 bytes gmem, 256 bytes cmem[3]
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51040nvfp4MoeWeightNormalizeSourceBatchKernelENS0_21CheckpointSourceBatchIhEES3_S3_S3_NS0_6detail16ExpertFloatBatchES5_Phiiiiiiii':
+nvlink info    : used 30 registers, used 444 barriers, 0 stack, 0 bytes smem, 712 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51031checkpointSourceBatchCopyKernelI5uint2EEvNS0_21CheckpointSourceBatchIhEEPT_il':
+nvlink info    : used 38 registers, used 444 barriers, 0 stack, 0 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51031checkpointSourceBatchCopyKernelIjEEvNS0_21CheckpointSourceBatchIhEEPT_il':
+nvlink info    : used 38 registers, used 444 barriers, 0 stack, 0 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51031checkpointSourceBatchCopyKernelIhEEvNS0_21CheckpointSourceBatchIhEEPT_il':
+nvlink info    : used 36 registers, used 444 barriers, 0 stack, 0 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51037checkpointSourceBatchPaddedCopyKernelI5uint2EEvNS0_21CheckpointSourceBatchIhEEPT_iiiii':
+nvlink info    : used 42 registers, used 444 barriers, 0 stack, 0 bytes smem, 444 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51037checkpointSourceBatchPaddedCopyKernelIjEEvNS0_21CheckpointSourceBatchIhEEPT_iiiii':
+nvlink info    : used 42 registers, used 444 barriers, 0 stack, 0 bytes smem, 444 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51037checkpointSourceBatchPaddedCopyKernelIhEEvNS0_21CheckpointSourceBatchIhEEPT_iiiii':
+nvlink info    : used 39 registers, used 444 barriers, 0 stack, 0 bytes smem, 444 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51035nvfp4Fc1InterleaveSourceBatchKernelI5uint2EEvNS0_21CheckpointSourceBatchIhEES5_PT_iiiii':
+nvlink info    : used 38 registers, used 444 barriers, 0 stack, 0 bytes smem, 508 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f510__ZN11trt_edgellm6kernel59_GLOBAL__N__63979ef2_26_nvfp4MoeWeightTransform_cu_3b95f51035nvfp4Fc1InterleaveSourceBatchKernelIhEEvNS0_21CheckpointSourceBatchIhEES4_PT_iiiii':
+nvlink info    : used 38 registers, used 444 barriers, 0 stack, 0 bytes smem, 508 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__ba268c06_25_nvfp4MoeScaleTransform_cu_8f33908a__ZN11trt_edgellm6kernel58_GLOBAL__N__ba268c06_25_nvfp4MoeScaleTransform_cu_8f33908a39nvfp4MoeScaleTransformSourceBatchKernelENS0_21CheckpointSourceBatchIhEES3_Paiiiiiiiii':
+nvlink info    : used 30 registers, used 444 barriers, 0 stack, 0 bytes smem, 524 bytes cmem[0], 36 bytes cmem[2], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__ba268c06_25_nvfp4MoeScaleTransform_cu_8f33908a__ZN11trt_edgellm6kernel58_GLOBAL__N__ba268c06_25_nvfp4MoeScaleTransform_cu_8f33908a39nvfp4MoeScaleNormalizeSourceBatchKernelENS0_21CheckpointSourceBatchIhEES3_S3_S3_NS0_6detail16ExpertFloatBatchES5_Paiiiiiiiiii':
+nvlink info    : used 30 registers, used 444 barriers, 0 stack, 0 bytes smem, 720 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_43__aeb6fdca_21_int4MoeScaleRepack_cu_86cc00b6__ZN11trt_edgellm6kernel54_GLOBAL__N__aeb6fdca_21_int4MoeScaleRepack_cu_86cc00b635int4MoeScaleRepackSourceBatchKernelENS0_21CheckpointSourceBatchItEES3_Ptiiii':
+nvlink info    : used 30 registers, used 444 barriers, 0 stack, 0 bytes smem, 504 bytes cmem[0], 72 bytes cmem[2], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_41__8e947f30_19_gptqMarlinRepack_cu_eb7f082d__ZN11trt_edgellm6kernel52_GLOBAL__N__8e947f30_19_gptqMarlinRepack_cu_eb7f082d22gptqMarlinRepackKernelEPKiS3_Piiiiiii':
+nvlink info    : used 42 registers, used 444 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_41__8e947f30_19_gptqMarlinRepack_cu_eb7f082d__ZN11trt_edgellm6kernel52_GLOBAL__N__8e947f30_19_gptqMarlinRepack_cu_eb7f082d33gptqMarlinRepackSourceBatchKernelENS0_21CheckpointSourceBatchIiEES3_S3_S3_Piiiiiiii':
+nvlink info    : used 40 registers, used 444 barriers, 0 stack, 0 bytes smem, 644 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__6e582e79_20_int4CuteDslRepack_cu_c4341081__ZN11trt_edgellm6kernel53_GLOBAL__N__6e582e79_20_int4CuteDslRepack_cu_c434108129directInt4CuteDslRepackKernelINS0_20ModelOptInt4AccessorEEEvT_Pjiii':
+nvlink info    : used 26 registers, used 444 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__6e582e79_20_int4CuteDslRepack_cu_c4341081__ZN11trt_edgellm6kernel53_GLOBAL__N__6e582e79_20_int4CuteDslRepack_cu_c434108129directInt4CuteDslRepackKernelINS0_16GptqInt4AccessorEEEvT_Pjiii':
+nvlink info    : used 25 registers, used 444 barriers, 0 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__6e582e79_20_int4CuteDslRepack_cu_c4341081__ZN11trt_edgellm6kernel53_GLOBAL__N__6e582e79_20_int4CuteDslRepack_cu_c434108129directInt4CuteDslRepackKernelINS0_15AwqInt4AccessorEEEvT_Pjiii':
+nvlink info    : used 22 registers, used 444 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__16c7a894_21_int4PluginV1Repack_cu_b0d63a4b_13581__ZN11trt_edgellm6kernel60_GLOBAL__N__16c7a894_21_int4PluginV1Repack_cu_b0d63a4b_1358130directInt4PluginV1RepackKernelINS0_20ModelOptInt4AccessorEEEvT_Ptil':
+nvlink info    : used 30 registers, used 444 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__16c7a894_21_int4PluginV1Repack_cu_b0d63a4b_13581__ZN11trt_edgellm6kernel60_GLOBAL__N__16c7a894_21_int4PluginV1Repack_cu_b0d63a4b_1358130directInt4PluginV1RepackKernelINS0_16GptqInt4AccessorEEEvT_Ptil':
+nvlink info    : used 30 registers, used 444 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__16c7a894_21_int4PluginV1Repack_cu_b0d63a4b_13581__ZN11trt_edgellm6kernel60_GLOBAL__N__16c7a894_21_int4PluginV1Repack_cu_b0d63a4b_1358130directInt4PluginV1RepackKernelINS0_15AwqInt4AccessorEEEvT_Ptil':
+nvlink info    : used 36 registers, used 444 barriers, 32 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_43__1a88f079_21_int4QkvScaleConcat_cu_f0b37d5c__ZN11trt_edgellm6kernel54_GLOBAL__N__1a88f079_21_int4QkvScaleConcat_cu_f0b37d5c20qkvScaleConcatKernelEPK6__halfiS4_iS4_iiPS2_':
+nvlink info    : used 42 registers, used 444 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_50__1459ba45_28_gptqActivationPermutation_cu_5337759c__ZN11trt_edgellm6kernel61_GLOBAL__N__1459ba45_28_gptqActivationPermutation_cu_5337759c31gptqActivationPermutationKernelEPKiPiii':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 36 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_46__f21fc72a_18_fp16MoeAssemble_cu_b0d63a4b_13488__ZN11trt_edgellm6kernel57_GLOBAL__N__f21fc72a_18_fp16MoeAssemble_cu_b0d63a4b_1348824fp16MoeSourceBatchKernelI6__halfEEvNS0_21CheckpointSourceBatchIhEES5_PS3_iiii':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 0 bytes smem, 504 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_46__f21fc72a_18_fp16MoeAssemble_cu_b0d63a4b_13488__ZN11trt_edgellm6kernel57_GLOBAL__N__f21fc72a_18_fp16MoeAssemble_cu_b0d63a4b_1348824fp16MoeSourceBatchKernelI13__nv_bfloat16EEvNS0_21CheckpointSourceBatchIhEES5_P6__halfiiii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 504 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_46__f21fc72a_18_fp16MoeAssemble_cu_b0d63a4b_13488__ZN11trt_edgellm6kernel57_GLOBAL__N__f21fc72a_18_fp16MoeAssemble_cu_b0d63a4b_1348824fp16MoeSourceBatchKernelIfEEvNS0_21CheckpointSourceBatchIhEES4_P6__halfiiii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 504 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da617copy2DBytesKernelEPKhPhlmmm':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da616bf16ToFp16KernelEPK13__nv_bfloat16P6__halfl':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da616fp32ToFp16KernelEPKfP6__halfl':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da616bf16ToFp32KernelEPK13__nv_bfloat16Pfl':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da616fp16ToFp32KernelEPK6__halfPfl':
+nvlink info    : used 12 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da615scaleFp16KernelEP6__halflf':
+nvlink info    : used 8 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da614fillFp32KernelEPflf':
+nvlink info    : used 26 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da615writeFp32KernelENS1_14Fp32ValueBatchEPfi':
+nvlink info    : used 8 registers, used 1 barriers, 0 stack, 0 bytes smem, 2412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da610copyKernelI5uint4EEvPKT_PS4_l':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da610copyKernelIjEEvPKT_PS3_l':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da610copyKernelIhEEvPKT_PS3_l':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da617sliceToFp16KernelI13__nv_bfloat16EEvPKT_P6__halfllll':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da617sliceToFp16KernelIfEEvPKT_P6__halfllll':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da619transposeCastKernelI6__halfLb0ELb0EEEvPKT_PS3_ii':
+nvlink info    : used 12 registers, used 1 barriers, 0 stack, 2112 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da619transposeCastKernelI13__nv_bfloat16Lb1ELb0EEEvPKT_P6__halfii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 2112 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da6__ZN11trt_edgellm6kernel53_GLOBAL__N__3f9f2ecc_20_fp16LayoutConvert_cu_685f3da619transposeCastKernelIfLb0ELb1EEEvPKT_P6__halfii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 2112 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24sumCodecEmbeddingsKernelEPKlPKPK6__halfiiPS3_':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel20castFp32ToFp16KernelEPKfP6__halfl':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23talkerLogitAdjustKernelEPfiiiPKiif':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23assistantPreambleKernelILi8EEEvPK6__halfS4_S4_S4_S4_iiiiiiiiiiPS2_':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 440 bytes cmem[0], 24 bytes cmem[2], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24prefillRowAssembleKernelILi8EEEvPKNS0_14PrefillRowDescEiP6__half':
+nvlink info    : used 26 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24residualConnectionKernelILi8EEEvPK6__halfS4_S4_iiS4_iiPS2_':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_13426__ZN11trt_edgellm6kernel58_GLOBAL__N__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_1342627biasAndSiLUKernelVectorizedEP6__halfPKS2_ll':
+nvlink info    : used 29 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_13426__ZN11trt_edgellm6kernel58_GLOBAL__N__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_1342623addBiasKernelVectorizedILi8EEEvP6__halfPKS3_ii':
+nvlink info    : used 14 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_13426__ZN11trt_edgellm6kernel58_GLOBAL__N__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_1342622gatherKernelVectorizedILi8EEEvPK6__halfPKiPS3_ii':
+nvlink info    : used 19 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_13426__ZN11trt_edgellm6kernel58_GLOBAL__N__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_1342623scatterKernelVectorizedILi8EEEvPK6__halfPKiPS3_ii':
+nvlink info    : used 19 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_13426__ZN11trt_edgellm6kernel58_GLOBAL__N__f0105ba8_19_talkerMLPKernels_cu_b0d63a4b_1342621speakerCodecSumKernelEPKlPKPK6__halfPKiiiPS4_':
+nvlink info    : used 26 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_53__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_13364__ZN11trt_edgellm6kernel64_GLOBAL__N__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_1336421mtpStateScatterKernelI6__halfLNS1_9StateKindE0EEEvPKNS0_12MtpLayerInfoEPKiii':
+nvlink info    : used 15 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_53__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_13364__ZN11trt_edgellm6kernel64_GLOBAL__N__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_1336421mtpStateScatterKernelIfLNS1_9StateKindE0EEEvPKNS0_12MtpLayerInfoEPKiii':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_53__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_13364__ZN11trt_edgellm6kernel64_GLOBAL__N__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_1336421mtpStateScatterKernelI6__halfLNS1_9StateKindE1EEEvPKNS0_12MtpLayerInfoEPKiii':
+nvlink info    : used 15 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_53__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_13364__ZN11trt_edgellm6kernel64_GLOBAL__N__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_1336433mtpAcceptedTreeStateScatterKernelIfLNS1_9StateKindE0EEEvPKNS0_12MtpLayerInfoEPKiS8_iii':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_53__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_13364__ZN11trt_edgellm6kernel64_GLOBAL__N__9ba0b611_25_mtpStateScatterKernels_cu_b0d63a4b_1336433mtpAcceptedTreeStateScatterKernelI6__halfLNS1_9StateKindE1EEEvPKNS0_12MtpLayerInfoEPKiS9_iii':
+nvlink info    : used 16 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__e3b3853b_26_gemma4MTPRuntimeKernels_cu_1b798a4e__ZN11trt_edgellm6kernel59_GLOBAL__N__e3b3853b_26_gemma4MTPRuntimeKernels_cu_1b798a4e23buildVerifyTokensKernelEPKiS3_Piiii':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__e3b3853b_26_gemma4MTPRuntimeKernels_cu_1b798a4e__ZN11trt_edgellm6kernel59_GLOBAL__N__e3b3853b_26_gemma4MTPRuntimeKernels_cu_1b798a4e22gatherSeedHiddenKernelEPKhPhPKilll':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__e3b3853b_26_gemma4MTPRuntimeKernels_cu_1b798a4e__ZN11trt_edgellm6kernel59_GLOBAL__N__e3b3853b_26_gemma4MTPRuntimeKernels_cu_1b798a4e21storeDraftTokenKernelEPKiPiiii':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30prepareEaglePrefillInputKernelEPlPKi':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 368 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel40prepareEagleDraftProposalMiscInputKernelEPKiS2_PiPlii':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27assembleDraftTreeDescKernelEPKaPKiS4_PiS5_i':
+nvlink info    : used 25 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel40assembleCasualTreeAndSelectIndicesKernelEPKiPiS3_PlS3_S2_i':
+nvlink info    : used 26 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35initializeDraftTreeFullTablesKernelEPKiPKfS2_S2_PiPfS5_ii':
+nvlink info    : used 26 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel40initializeDraftTreeInputFirstRoundKernelEPKiPiPaS3_iii':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30initializeDraftTreeInputKernelEPKiS2_PiPaS3_iii':
+nvlink info    : used 21 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel31assembleDraftHiddenStatesKernelEPK6__halfPKiPS1_iiii':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel33assembleIntermediateparentsKernelEPKiPiii':
+nvlink info    : used 12 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel38computeCuScoresAndTranslateTokenKernelEPKiPKfS4_S2_PiPfi':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel31updateDraftTreeFullTablesKernelEPKiPKfS2_PiPfS5_iii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel36constructVerificationDraftTreeKernelEPKiS2_S2_PiPaii':
+nvlink info    : used 33 registers, used 1 barriers, 144 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi64ELi32E6__halfEEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 512 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi64ELi32E13__nv_fp8_e4m3EEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 256 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi128ELi32E6__halfEEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 512 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi128ELi32E13__nv_fp8_e4m3EEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 256 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi256ELi32E6__halfEEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 512 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi256ELi32E13__nv_fp8_e4m3EEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 256 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi512ELi32E6__halfEEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 512 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35eagleBaseCommitKVCacheBatchedKernelILi512ELi32E13__nv_fp8_e4m3EEvPKiS4_S4_PKNS0_11KVLayerInfoEiiS4_ii':
+nvlink info    : used 40 registers, used 1 barriers, 256 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel34eagleBaseAssembleHiddenStateKernelILi32EEEvPKiS3_P6__halfiiii':
+nvlink info    : used 38 registers, used 1 barriers, 512 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_13230__ZN11trt_edgellm6kernel60_GLOBAL__N__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_1323026sequentialAcceptWalkKernelEPKiS3_PiS4_i':
+nvlink info    : used 18 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_13230__ZN11trt_edgellm6kernel60_GLOBAL__N__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_1323017eagleAcceptKernelEPKiS3_PKaPiS6_S6_iii':
+nvlink info    : used 37 registers, used 1 barriers, 0 stack, 16 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_13230__ZN11trt_edgellm6kernel60_GLOBAL__N__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_1323028eagleComputeTop1Stage1KernelILi256ELi8EEEvPKfPiPfiii':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 80 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_49__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_13230__ZN11trt_edgellm6kernel60_GLOBAL__N__8cec2101_21_eagleAcceptKernels_cu_b0d63a4b_1323028eagleComputeTop1Stage2KernelILi256ELi8EEEvPKiPKfPiS4_i':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 80 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319929dsparkBuildVerifyTokensKernelEPKiS3_Piiii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319928dsparkGreedyAcceptWalkKernelEPKiS3_S3_PiS4_ii':
+nvlink info    : used 17 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319933dsparkLogitsToProbabilitiesKernelEPKfPfiifif':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 1920 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319924dsparkFillUniformsKernelEPfimm':
+nvlink info    : used 8 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319931dsparkFillProposalLengthsKernelEPiii':
+nvlink info    : used 8 registers, used 1 barriers, 0 stack, 0 bytes smem, 368 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319922dsparkConfidenceKernelEPK6__halfS4_S4_S4_PKiS6_Pfiiib':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 256 bytes smem, 421 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319936dsparkThresholdProposalLengthsKernelEPKfPiiifii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319930dsparkSPSProposalLengthsKernelEPKfPiiifii':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319929dsparkBuildMarkovLogitsKernelEPKfPK6__halfS6_PKiS8_Pfiiii':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319933dsparkSampleProbabilityRowsKernelEPKfS3_Piiii':
+nvlink info    : used 16 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319939dsparkStoreDraftStepProbabilitiesKernelEPKfPfiiii':
+nvlink info    : used 12 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319931dsparkProbabilisticAcceptKernelEPKfS3_PKiS5_S3_PiS6_iii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 420 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319929dsparkNormalizeTopKRowsKernelEPKfPfiif':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 384 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319930dsparkStoreDraftStepTop1KernelEPKiPiiii':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319934dsparkSampleTopKRowsAndStoreKernelEPKfPKiS3_PiPfS6_iiif':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 384 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319928dsparkSparseTopKAcceptKernelEPKfPKiS3_S5_S5_S5_S3_PiS6_iiii':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_13199__ZN11trt_edgellm6kernel55_GLOBAL__N__9ea2ff5c_16_dsparkKernels_cu_b0d63a4b_1319926dsparkParallelArgmaxKernelILi256EEEvPKfPiii':
+nvlink info    : used 27 registers, used 1 barriers, 0 stack, 80 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel31dflashTargetKVCacheUpdateKernelEPK6__halfS3_PS1_PKfPKiS8_iiiiiiS8_ii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel33dflashPrepareProposalInputsKernelEPKiS2_iPiS3_S3_b':
+nvlink info    : used 19 registers, used 1 barriers, 0 stack, 0 bytes smem, 401 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35dflashPrepareBaseVerifyInputsKernelEPKiiPiS3_PlS3_':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35dflashBuildLinearVerifyInputsKernelEPKiS2_PiPaiiiii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_38__7b560573_16_ddtreeKernels_cu_d5803bab__ZN11trt_edgellm6kernel49_GLOBAL__N__7b560573_16_ddtreeKernels_cu_d5803bab28selectDDTreeCandidatesKernelEPKfPiPfiiii':
+nvlink info    : used 40 registers, used 1 barriers, 64 stack, 16452 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_38__7b560573_16_ddtreeKernels_cu_d5803bab__ZN11trt_edgellm6kernel49_GLOBAL__N__7b560573_16_ddtreeKernels_cu_d5803bab17buildDDTreeKernelEPKiS3_S3_PKfS5_fS3_PiS6_S6_PfS6_S6_S6_S6_PaS6_Pliiii':
+nvlink info    : used 36 registers, used 1 barriers, 0 stack, 2064 bytes smem, 512 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24compactTensorBatchKernelI6__halfEEvPKT_PKiPS3_ii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24compactTensorBatchKernelIfEEvPKT_PKiPS2_ii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24compactTensorBatchKernelIiEEvPKT_PKiPS2_ii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24compactTensorBatchKernelIlEEvPKT_PKiPS2_ii':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24compactTensorBatchKernelIaEEvPKT_PKiPS2_ii':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24compactTensorBatchKernelIhEEvPKT_PKiPS2_ii':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27compactKVCacheBatchedKernelI6__halfEEvPKNS0_11KVLayerInfoEPKiS7_iii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27compactKVCacheBatchedKernelIhEEvPKNS0_11KVLayerInfoEPKiS6_iii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel20normalizeImageKernelEPKhPKfS4_P6__halfllll':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26transposeToPatchQwenKernelEPK6__halfPS1_llllllll':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 432 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel28transposeToPatchGemma4KernelEPK6__halfPS1_lllll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel36transposeToPatchInternVLPhi4MMKernelEPK6__halfPS1_llllll':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35phi4mmPostprocessVisionTokensKernelEPK6__halfPS1_NS0_11Phi4MMIndexENS0_8Phi4MMGNE':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 448 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26initRotaryPosEmbQwenKernelEPfllllllff':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel28initRotaryPosEmbGemma4KernelEPfPKlllf':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30initPoolingWeightsGemma4KernelEP6__halfllllll':
+nvlink info    : used 33 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel29initFastPosEmbedQwenViTKernelEPlP6__halfllllffllb':
+nvlink info    : used 33 registers, used 1 barriers, 0 stack, 0 bytes smem, 425 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27resizeCatmullRomHorizKernelEPKhPfiiii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26resizeCatmullRomVertKernelEPKfPhiiii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30transposeToPatchNemotronKernelEPK6__halfPS1_llllll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel25addPosEmbedNemotronKernelEP6__halfPKS1_ll':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23evsScoresNemotronKernelEPK6__halfPfll':
+nvlink info    : used 36 registers, used 1 barriers, 0 stack, 384 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329017pcmToFramedKernelEPKfS3_liiiiPf':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329023stftR2CFusedMagsqKernelEPKfPK6float2P6__halfi':
+nvlink info    : used 128 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329019melMaxLogInitKernelEPf':
+nvlink info    : used 8 registers, used 1 barriers, 0 stack, 0 bytes smem, 360 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329022pcmPreemphFramedKernelEPKfS3_liifiiPf':
+nvlink info    : used 18 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329026stftR2C512FusedMagsqKernelEPKfPK6float2P6__halfii':
+nvlink info    : used 72 registers, used 1 barriers, 0 stack, 4352 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329033melNormalizeZScoreTimeFirstKernelEPKfiiifS3_S3_P6__half':
+nvlink info    : used 26 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329022melMaxReduceFp16KernelILi256ELi8EEEvPK6__halfiifPf':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 32 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329025logMelNormalizeFp16KernelILi256ELi4EEEvPK6__halfPS3_iiPKfffff':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__96b6563d_20_audioFbankKernels_cu_a5153290__ZN11trt_edgellm6kernel53_GLOBAL__N__96b6563d_20_audioFbankKernels_cu_a515329016melStatsLnKernelILi256EEEvPKfiiffPfS5_':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 64 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel48initializeNormalRopeCosSinWithIdentityTailKernelILi32EEEvPffffi':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel48initializeNormalRopeCosSinWithIdentityTailKernelILi64EEEvPffffi':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32initializeNormalRopeCosSinKernelILi64EEEvPfffi':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel48initializeNormalRopeCosSinWithIdentityTailKernelILi96EEEvPffffi':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel48initializeNormalRopeCosSinWithIdentityTailKernelILi128EEEvPffffi':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32initializeNormalRopeCosSinKernelILi128EEEvPfffi':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel48initializeNormalRopeCosSinWithIdentityTailKernelILi256EEEvPffffi':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32initializeNormalRopeCosSinKernelILi256EEEvPfffi':
+nvlink info    : used 33 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel48initializeNormalRopeCosSinWithIdentityTailKernelILi512EEEvPffffi':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32initializeNormalRopeCosSinKernelILi512EEEvPfffi':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30initializeLongRopeCosSinKernelILi32EEEvPfS2_fif':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30initializeLongRopeCosSinKernelILi64EEEvPfS2_fif':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30initializeLongRopeCosSinKernelILi96EEEvPfS2_fif':
+nvlink info    : used 31 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30initializeLongRopeCosSinKernelILi128EEEvPfS2_fif':
+nvlink info    : used 33 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26initializeYarnCosSinKernelILi64EEEvPfS2_fi':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26initializeYarnCosSinKernelILi128EEEvPfS2_fi':
+nvlink info    : used 33 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27initializeMRopeCosSinKernelILi64ElEEvPfPT0_flbii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27initializeMRopeCosSinKernelILi128ElEEvPfPT0_flbii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27initializeMRopeCosSinKernelILi64EfEEvPfPT0_flbii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27initializeMRopeCosSinKernelILi128EfEEvPfPT0_flbii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel16applyRopeWriteKVI6__halfS2_EEvPT_S4_PKS3_PT0_PKfPKiSC_ffiiijjjjiibSC_i':
+nvlink info    : used 44 registers, used 1 barriers, 0 stack, 0 bytes smem, 468 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel16applyRopeWriteKVI6__half13__nv_fp8_e4m3EEvPT_S5_PKS4_PT0_PKfPKiSD_ffiiijjjjiibSD_i':
+nvlink info    : used 44 registers, used 1 barriers, 0 stack, 0 bytes smem, 468 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30applyRopeWriteKVSplitQKVKernelI6__halfS2_EEvPT_PKS3_S6_PT0_PvPKfPKifffiiijjjjiiSD_i':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 468 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30applyRopeWriteKVSplitQKVKernelI6__half13__nv_fp8_e4m3EEvPT_PKS4_S7_PT0_PvPKfPKifffiiijjjjiiSE_i':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 468 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32applyRopeFromPackedToSplitKernelI6__halfS2_EEvPKT_PS3_S6_S6_PT0_PvPKfPKiSD_SD_S5_S5_ffffiiijjjjiiSD_i':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 516 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32applyRopeFromPackedToSplitKernelI6__half13__nv_fp8_e4m3EEvPKT_PS4_S7_S7_PT0_PvPKfPKiSE_SE_S6_S6_ffffiiijjjjiiSE_i':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 516 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel20applyRopeQOnlyKernelI6__halfEEvPT_PKfPKiiijjjii':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel32applyRopeQOnlyTreeDecodingKernelI6__halfEEvPT_PKfPKiiijjjii':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm7kernels23fusedFp32ToSfAtomKernelEPKfPhiiii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm7kernels22fusedFp8ToSfAtomKernelEPK13__nv_fp8_e4m3PKfPhiiii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna1613MarlinDefaultEPK4int4S2_PS0_S3_S2_PKfS2_PKtS2_PKiS9_S9_S9_S5_ibiiiiPibbb':
+nvlink info    : used 4 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi256ELi1ELi8ELi8ELb1ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 122 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi128ELi1ELi8ELi4ELb1ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 122 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi256ELi1ELi8ELi8ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 177 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi128ELi1ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi256ELi2ELi16ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi128ELi2ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi256ELi3ELi16ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 120 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi128ELi3ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 120 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi256ELi4ELi16ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 272 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl562949953487106ELl1125899906910725ELl2814749767172868ELi128ELi4ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 280 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi256ELi1ELi8ELi8ELb1ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 128 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi128ELi1ELi8ELi4ELb1ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 127 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi256ELi1ELi8ELi8ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 177 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi128ELi1ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi256ELi2ELi16ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi128ELi2ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi256ELi3ELi16ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 112 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi128ELi3ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 120 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi256ELi4ELi16ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 264 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906909960ELl562949953487106ELl1125899906909960ELl2814749767172868ELi128ELi4ELi8ELi4ELb0ELi4ELi1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 272 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb1ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 111 registers, used 1 barriers, 64 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb1ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 114 registers, used 1 barriers, 64 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 186 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 192 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi2ELi16ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 250 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi2ELi8ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi3ELi16ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 144 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi3ELi8ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 144 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi4ELi16ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 296 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi4ELi8ELi4ELb0ELi4ELin1ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 304 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb1ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 128 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb1ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 129 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi2ELi16ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi2ELi8ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi3ELi16ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 120 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi3ELi8ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 128 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi4ELi16ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 280 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi4ELi8ELi4ELb0ELi4ELi2ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 288 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb1ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 128 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb1ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 127 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 177 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi2ELi16ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi2ELi8ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi3ELi16ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 120 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi3ELi8ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 128 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi4ELi16ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 280 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi4ELi8ELi4ELb0ELi4ELi4ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 288 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb1ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 127 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb1ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 128 registers, used 1 barriers, 32 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi1ELi8ELi8ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi1ELi8ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 178 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi2ELi16ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi2ELi8ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 0 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi3ELi16ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 120 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi3ELi8ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 128 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi256ELi4ELi16ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 280 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna166MarlinILl1125899906910725ELl1125899906843648ELl1125899906910725ELl1125899906910725ELi128ELi4ELi8ELi4ELb0ELi4ELi8ELb0EEEvPK4int4S3_PS1_S4_S3_PKfS3_PKtS3_PKiSA_SA_SA_S6_ibiiiiPibbb':
+nvlink info    : used 255 registers, used 1 barriers, 288 stack, 0 bytes smem, 499 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna1619permute_cols_kernelILi8EEEvPK4int4PKiPS1_S5_S5_S5_iii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna1619permute_cols_kernelILi16EEEvPK4int4PKiPS1_S5_S5_S5_iii':
+nvlink info    : used 52 registers, used 1 barriers, 0 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna1619permute_cols_kernelILi32EEEvPK4int4PKiPS1_S5_S5_S5_iii':
+nvlink info    : used 56 registers, used 1 barriers, 128 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna1619permute_cols_kernelILi48EEEvPK4int4PKiPS1_S5_S5_S5_iii':
+nvlink info    : used 64 registers, used 1 barriers, 192 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN16marlin_moe_wna1619permute_cols_kernelILi64EEEvPK4int4PKiPS1_S5_S5_S5_iii':
+nvlink info    : used 96 registers, used 1 barriers, 256 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel13moeTopKKernelILi256EEEvPKfPfPiiib':
+nvlink info    : used 47 registers, used 1 barriers, 0 stack, 80 bytes smem, 385 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi1ELi1ELi4ELi4EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi2ELi2ELi4ELi8EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi4ELi4ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi4ELi8ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 42 registers, used 1 barriers, 16 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi4ELi16ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 48 registers, used 1 barriers, 16 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi4ELi32ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 48 registers, used 1 barriers, 16 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi4ELi64ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 33 registers, used 1 barriers, 16 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi4ELi128ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 31 registers, used 1 barriers, 16 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelIfLi8ELi256ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 31 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel16moeSoftmaxKernelIfLi256EEEvPKT_PfifPKf':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 52 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi1ELi1ELi4ELi2EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi2ELi2ELi4ELi4EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi4ELi4ELi4ELi8EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi8ELi8ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi8ELi16ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 42 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi8ELi32ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 48 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi8ELi64ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 33 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi8ELi128ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 31 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI6__halfLi8ELi256ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 31 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel16moeSoftmaxKernelI6__halfLi256EEEvPKT_PfifPKf':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 52 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li1ELi1ELi4ELi2EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 22 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li2ELi2ELi4ELi4EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li4ELi4ELi4ELi8EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li8ELi8ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li8ELi16ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 42 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li8ELi32ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 48 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li8ELi64ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 33 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li8ELi128ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 31 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel23topkGatingSoftmaxKernelI13__nv_bfloat16Li8ELi256ELi4ELi16EEEvPKT_PfiPiibfPKf':
+nvlink info    : used 31 registers, used 1 barriers, 32 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel16moeSoftmaxKernelI13__nv_bfloat16Li256EEEvPKT_PfifPKf':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 52 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel22sigmoidGroupTopkKernelEPKfPfPiiiiibfS2_':
+nvlink info    : used 31 registers, used 1 barriers, 0 stack, 80 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel25applyPerExpertScaleKernelEPfPKiPKfi':
+nvlink info    : used 12 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24buildMarlinIndicesKernelEPKiS2_S2_S2_PKfPiPfS5_iiii':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 0 bytes smem, 432 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel29buildDenseMarlinIndicesKernelEPiS1_S1_Pfiii':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__ae12d10e_26_moeMarlinIndicesKernels_cu_05dd2431__ZN11trt_edgellm6kernel59_GLOBAL__N__ae12d10e_26_moeMarlinIndicesKernels_cu_05dd243126aggregateSlotOutputsKernelI6__halfEEvPKT_PS4_iii':
+nvlink info    : used 38 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_48__ae12d10e_26_moeMarlinIndicesKernels_cu_05dd2431__ZN11trt_edgellm6kernel59_GLOBAL__N__ae12d10e_26_moeMarlinIndicesKernels_cu_05dd243126aggregateSlotOutputsKernelI13__nv_bfloat16EEvPKT_PS4_iii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 380 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel25countSlotsPerExpertKernelEPKiPiiiiii':
+nvlink info    : used 13 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26computePaddedOffsetsKernelEPKiPiS3_S3_ii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 4256 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel20buildSlotListsKernelEPKiPiS3_iii':
+nvlink info    : used 12 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN3cub16_V_300200_SM_8706detail11EmptyKernelIvEEvv':
+nvlink info    : used 4 registers, used 1 barriers, 0 stack, 0 bytes smem, 352 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel12swiGluKernelI6__halfEEvPKNS0_4Vec8IT_EEPS5_ll':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11relu2KernelI6__halfEEvPKNS0_4Vec8IT_EEPS5_ll':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11geGluKernelI6__halfEEvPKNS0_4Vec8IT_EEPS5_ll':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel12swiGluKernelI13__nv_bfloat16EEvPKNS0_4Vec8IT_EEPS5_ll':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11relu2KernelI13__nv_bfloat16EEvPKNS0_4Vec8IT_EEPS5_ll':
+nvlink info    : used 19 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11geGluKernelI13__nv_bfloat16EEvPKNS0_4Vec8IT_EEPS5_ll':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091019quantizeToFp4KernelI13__nv_bfloat16EEviiPKT_PKfPjPh':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091019quantizeToFp4KernelI6__halfEEviiPKT_PKfPjPh':
+nvlink info    : used 32 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091027quantizeToFp4LinearSfKernelI13__nv_bfloat16EEviiPKT_PKfPjPh':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091027quantizeToFp4LinearSfKernelI6__halfEEviiPKT_PKfPjPh':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091033quantizeRoutedToFp4LinearSfKernelI13__nv_bfloat16EEviiiPKT_PKiPKfPjPh':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091033quantizeRoutedToFp4LinearSfKernelI6__halfEEviiiPKT_PKiPKfPjPh':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091053buildLayoutAndQuantizeRoutedToFp4LinearSfDecodeKernelI13__nv_bfloat16EEviiiiPKT_PKiPKfPiSB_SB_SB_PjPh':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 6144 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__8d41897f_14_fp4Quantize_cu_f4ee0910__ZN11trt_edgellm6kernel47_GLOBAL__N__8d41897f_14_fp4Quantize_cu_f4ee091053buildLayoutAndQuantizeRoutedToFp4LinearSfDecodeKernelI6__halfEEviiiiPKT_PKiPKfPiSB_SB_SB_PjPh':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 6144 bytes smem, 440 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__776150f6_14_buildLayout_cu_05f456bd__ZN11trt_edgellm6kernel47_GLOBAL__N__776150f6_14_buildLayout_cu_05f456bd19build_layout_kernelEPKiPiS4_S4_S4_iiii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__c578824a_20_ssdVarlenMetadata_cu_3773ed3f__ZN11trt_edgellm5mamba53_GLOBAL__N__c578824a_20_ssdVarlenMetadata_cu_3773ed3f17buildSeqIdxKernelEPiPKiii':
+nvlink info    : used 10 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__c578824a_20_ssdVarlenMetadata_cu_3773ed3f__ZN11trt_edgellm5mamba53_GLOBAL__N__c578824a_20_ssdVarlenMetadata_cu_3773ed3f24buildChunkMetadataKernelEPiS2_S2_PKiiiii':
+nvlink info    : used 36 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__c578824a_20_ssdVarlenMetadata_cu_3773ed3f__ZN11trt_edgellm5mamba53_GLOBAL__N__c578824a_20_ssdVarlenMetadata_cu_3773ed3f26fillUniformValidLensKernelEPiii':
+nvlink info    : used 8 registers, used 1 barriers, 0 stack, 0 bytes smem, 368 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi64ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 768 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi64ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 832 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi64ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 1024 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi64ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 1536 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi80ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 896 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi80ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 960 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi80ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 1152 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi80ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 1664 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi128ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 55 registers, used 1 barriers, 0 stack, 1280 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi128ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 1344 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi128ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 1536 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi128ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 2048 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi256ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 56 registers, used 1 barriers, 0 stack, 2304 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi256ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 2368 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi256ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 2560 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfS1_fS1_iLi256ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 3072 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi64ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 768 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi64ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 832 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi64ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 1024 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi64ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 1536 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi80ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 896 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi80ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 960 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi80ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 1152 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi80ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 1664 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi128ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 55 registers, used 1 barriers, 0 stack, 1280 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi128ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 1344 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi128ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 41 registers, used 1 barriers, 0 stack, 1536 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi128ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 2048 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi256ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 56 registers, used 1 barriers, 0 stack, 2304 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi256ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 2368 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi256ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 2560 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm36selective_state_update_kernel_simpleI6__halfffS1_iLi256ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 3072 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi64ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi64ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi64ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi64ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi80ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi80ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi80ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi80ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi128ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi128ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi128ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi128ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi256ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi256ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi256ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfS1_fS1_iLi256ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi64ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi64ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi64ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi64ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi80ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi80ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi80ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi80ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi128ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi128ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi128ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi128ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi256ELi64ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 98 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi256ELi80ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 88 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi256ELi128ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 80 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm44selective_state_update_prefill_kernel_simpleI6__halfffS1_iLi256ELi256ELi4EEEvNS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 74 registers, used 1 barriers, 0 stack, 0 bytes smem, 664 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi64ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 47 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi64ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 53 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi64ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi64ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi80ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 44 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi80ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi80ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi80ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi128ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 47 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi128ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 53 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi128ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi128ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi256ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 47 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi256ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 53 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi256ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelI6__halfLi256ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi64ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi64ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 53 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi64ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi64ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi80ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi80ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi80ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi80ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi128ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi128ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 53 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi128ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi128ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi256ELi64ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi256ELi80ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 53 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi256ELi128ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm39mamba_replay_reconstruct_batched_kernelIfLi256ELi256ELi4EEEvPKNS_20MambaReplayLayerInfoENS_26SelectiveStateUpdateParamsE':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 672 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm19causalConv1dKernelTI6__halfLi2EEEvPKT_S4_S4_S4_PS2_iiiiPKi':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm19causalConv1dKernelTI6__halfLi3EEEvPKT_S4_S4_S4_PS2_iiiiPKi':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm19causalConv1dKernelTI6__halfLi4EEEvPKT_S4_S4_S4_PS2_iiiiPKi':
+nvlink info    : used 42 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm18causalConv1dKernelI6__halfEEvPKT_S4_S4_S4_PS2_iiiiiPKi':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 0 bytes smem, 424 bytes cmem[0], 8 bytes cmem[2], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm22captureConvStateKernelI6__halfEEvPKT_S4_PS2_iiiPKi':
+nvlink info    : used 36 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 8 bytes cmem[2], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm24causalConv1dDecodeKernelI6__halfEEvPT_PKS2_S5_S5_S3_ii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm27causalConv1dDecodeMTPKernelI6__halfEEvPT_PKS2_S5_S5_S3_S3_iiii':
+nvlink info    : used 44 registers, used 1 barriers, 64 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN9mamba_ssm30causalConv1dDecodeDDTreeKernelI6__halfEEvPKT_S4_S4_S4_PS2_S5_S5_PKiS7_iii':
+nvlink info    : used 40 registers, used 1 barriers, 64 stack, 0 bytes smem, 436 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel27incrementLengthTensorKernelEPiPKiii':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel26gatherPagedKVToSplitKernelEPKhPhS3_PKiS5_iimm':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel36gatherDequantFp8PagedKVToSplitKernelEPK13__nv_fp8_e4m3P6__halfS5_PKiS7_iiiff':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 0 bytes smem, 412 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel30gatherPagedKVToHeadMajorKernelEPKhPhS3_PKiS5_iiiim':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 416 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi64ELb0EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi128ELb0EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi256ELb0EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi512ELb0EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi64ELb1EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi128ELb1EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi256ELb1EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel24batchedKVCacheCopyKernelI6__halfLi512ELb1EEEvPKNS0_11KVLayerInfoES5_lll':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel13gemm_w4a16_T2ILi64ELi128ELi64ELi64ELi32ELi64ELi4ELi128EEEvPK6__halfS4_S4_PS2_iii':
+nvlink info    : used 168 registers, used 1 barriers, 0 stack, 0 bytes smem, 396 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi4ELi1ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 58 registers, used 1 barriers, 0 stack, 1024 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi1ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 512 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi2ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 48 registers, used 1 barriers, 0 stack, 1024 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi3ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 63 registers, used 1 barriers, 0 stack, 1536 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi4ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 73 registers, used 1 barriers, 0 stack, 2048 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi5ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 69 registers, used 1 barriers, 0 stack, 2560 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel11gemv_kernelILi2ELi6ELi256ELi128EEEvPK6__halfPKjS4_PS2_ii':
+nvlink info    : used 72 registers, used 1 barriers, 0 stack, 3072 bytes smem, 392 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__906e9a42_22_gdnTreeChunkKernels_cu_7425ea32__ZN11trt_edgellm6kernel55_GLOBAL__N__906e9a42_22_gdnTreeChunkKernels_cu_7425ea3224buildAncestorMasksKernelEPKiPjii':
+nvlink info    : used 16 registers, used 1 barriers, 8 stack, 0 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__906e9a42_22_gdnTreeChunkKernels_cu_7425ea32__ZN11trt_edgellm6kernel55_GLOBAL__N__906e9a42_22_gdnTreeChunkKernels_cu_7425ea3225treeVerifyChunkPrepKernelEPK6__halfS4_S4_S4_S4_PKfS4_PKjPcmS6_iiifi':
+nvlink info    : used 64 registers, used 1 barriers, 0 stack, 0 bytes smem, 460 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__906e9a42_22_gdnTreeChunkKernels_cu_7425ea32__ZN11trt_edgellm6kernel55_GLOBAL__N__906e9a42_22_gdnTreeChunkKernels_cu_7425ea3226treeVerifyChunkApplyKernelEPK6__halfPKjPS2_PKcmiii':
+nvlink info    : used 63 registers, used 1 barriers, 0 stack, 0 bytes smem, 404 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__906e9a42_22_gdnTreeChunkKernels_cu_7425ea32__ZN11trt_edgellm6kernel55_GLOBAL__N__906e9a42_22_gdnTreeChunkKernels_cu_7425ea3229treeReplayCommitBatchedKernelEPKNS0_12MtpLayerInfoEmPKiS6_iiii':
+nvlink info    : used 79 registers, used 1 barriers, 0 stack, 45184 bytes smem, 400 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm21gdnCalCuSeqLensKernelEPKiPii':
+nvlink info    : used 18 registers, used 1 barriers, 0 stack, 0 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm17gdnL2NormQKKernelEP6__halfii':
+nvlink info    : used 33 registers, used 1 barriers, 0 stack, 0 bytes smem, 368 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm23gdnStateTransposeKernelEPKfPfii':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 4224 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel31generateMultimodalIndicesKernelEPKiPiliiiS2_S2_':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel21gemma4PleGatherKernelI6__halfEEvPKiPKT_PS5_llliiiii':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 420 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel21gemma4PleGatherKernelI13__nv_bfloat16EEvPKiPKT_PS5_llliiiii':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 420 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__301beee4_19_embeddingKernels_cu_b0d63a4b_12029__ZN11trt_edgellm6kernel58_GLOBAL__N__301beee4_19_embeddingKernels_cu_b0d63a4b_1202932assembleDeepstackEmbeddingKernelEPKiPK6__halfPS4_llillS3_':
+nvlink info    : used 18 registers, used 1 barriers, 0 stack, 0 bytes smem, 424 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__301beee4_19_embeddingKernels_cu_b0d63a4b_12029__ZN11trt_edgellm6kernel58_GLOBAL__N__301beee4_19_embeddingKernels_cu_b0d63a4b_1202925embeddingLookupKernelImplINS1_18Fp8EmbeddingLoaderEEEvPKiT_S5_iPK6__halfliS9_lPS7_llil':
+nvlink info    : used 36 registers, used 1 barriers, 0 stack, 0 bytes smem, 488 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_47__301beee4_19_embeddingKernels_cu_b0d63a4b_12029__ZN11trt_edgellm6kernel58_GLOBAL__N__301beee4_19_embeddingKernels_cu_b0d63a4b_1202925embeddingLookupKernelImplINS1_19Fp16EmbeddingLoaderEEEvPKiT_S5_iPK6__halfliS9_lPS7_llil':
+nvlink info    : used 30 registers, used 1 barriers, 0 stack, 0 bytes smem, 464 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__012bae8c_22_dartSelectorKernels_cu_69bdebea__ZN11trt_edgellm6kernel55_GLOBAL__N__012bae8c_22_dartSelectorKernels_cu_69bdebea14rowNormsKernelEPK6__halfPfi':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 160 bytes smem, 372 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_44__012bae8c_22_dartSelectorKernels_cu_69bdebea__ZN11trt_edgellm6kernel55_GLOBAL__N__012bae8c_22_dartSelectorKernels_cu_69bdebea15pivotDotsKernelEPK6__halfPKiPfii':
+nvlink info    : used 28 registers, used 1 barriers, 0 stack, 160 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__da49125c_20_dartGatherKernels_cu_69fba744__ZN11trt_edgellm6kernel53_GLOBAL__N__da49125c_20_dartGatherKernels_cu_69fba74421gatherRowsVec16KernelEP5uint4PKS2_PKil':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_42__da49125c_20_dartGatherKernels_cu_69fba744__ZN11trt_edgellm6kernel53_GLOBAL__N__da49125c_20_dartGatherKernels_cu_69fba74420gatherRowsByteKernelEPhPKhPKil':
+nvlink info    : used 16 registers, used 1 barriers, 0 stack, 0 bytes smem, 384 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '_ZN11trt_edgellm6kernel35calCuQCuKVSeqLensAndKVEndIdxsKernelEPKiS2_PiS3_S3_S3_ii':
+nvlink info    : used 34 registers, used 1 barriers, 0 stack, 0 bytes smem, 408 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_36__65486bd1_14_utilKernels_cu_ea4c5c22__ZN11trt_edgellm6kernel47_GLOBAL__N__65486bd1_14_utilKernels_cu_ea4c5c2228buildVisionBlockRangesKernelEPKiS3_PiS4_i':
+nvlink info    : used 20 registers, used 1 barriers, 0 stack, 0 bytes smem, 388 bytes cmem[0], 16 bytes cmem[2], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_43__4678d88a_15_argmaxKernel_cu_b0d63a4b_11905__ZN11trt_edgellm6kernel54_GLOBAL__N__4678d88a_15_argmaxKernel_cu_b0d63a4b_1190519rowwiseArgmaxKernelIfEEvPKT_Piii':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 256 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_43__4678d88a_15_argmaxKernel_cu_b0d63a4b_11905__ZN11trt_edgellm6kernel54_GLOBAL__N__4678d88a_15_argmaxKernel_cu_b0d63a4b_1190519rowwiseArgmaxKernelI6__halfEEvPKT_Piii':
+nvlink info    : used 24 registers, used 1 barriers, 0 stack, 256 bytes smem, 376 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_51__6c4a0eef_23_gemma4AudioAttention_cu_b0d63a4b_11834__ZN11trt_edgellm6kernel62_GLOBAL__N__6c4a0eef_23_gemma4AudioAttention_cu_b0d63a4b_1183416fusedChunkKernelI6__half7__half2EEvPKT_S7_S7_PKfS7_PKbPS5_iiiifff':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 436 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_51__6c4a0eef_23_gemma4AudioAttention_cu_b0d63a4b_11834__ZN11trt_edgellm6kernel62_GLOBAL__N__6c4a0eef_23_gemma4AudioAttention_cu_b0d63a4b_1183416fusedChunkKernelI13__nv_bfloat1614__nv_bfloat162EEvPKT_S7_S7_PKfS7_PKbPS5_iiiifff':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 436 bytes cmem[0], 0 bytes lmem
+nvlink info    : Function properties for '__nv_static_51__6c4a0eef_23_gemma4AudioAttention_cu_b0d63a4b_11834__ZN11trt_edgellm6kernel62_GLOBAL__N__6c4a0eef_23_gemma4AudioAttention_cu_b0d63a4b_1183416fusedChunkKernelIf6float2EEvPKT_S6_S6_PKfS6_PKbPS4_iiiifff':
+nvlink info    : used 40 registers, used 1 barriers, 0 stack, 0 bytes smem, 436 bytes cmem[0], 0 bytes lmem
+[ 77%] Linking CXX shared library ../libNvInfer_edgellm_plugin.so
+[100%] Built target NvInfer_edgellm_plugin
+[  6%] Built target edgellmBuilder
+[  6%] Building CUDA object cpp/CMakeFiles/edgellmCore.dir/kernels/int4GroupwiseGemmKernels/int4WoQGemvCuda.cu.o
+nvcc warning : Resource usage is not shown as the final resource allocation is not done.
+[  8%] Linking CXX static library libedgellmCore.a
+[ 98%] Built target edgellmCore
+[ 98%] Linking CUDA device code CMakeFiles/_edgellm_runtime.dir/cmake_device_link.o
+[ 98%] Linking CXX shared module ../../pybind/_edgellm_runtime.cpython-312-aarch64-linux-gnu.so
+[100%] Built target _edgellm_runtime

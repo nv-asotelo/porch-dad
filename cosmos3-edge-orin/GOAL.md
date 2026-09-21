@@ -65,3 +65,24 @@ A subsequent active goal requires at least **10% lower latency for each accepted
 The new paired comparison is complete: baseline geometric-mean p50 **1355.410 ms**, retained-partial top-K candidate **1348.917 ms**, an observed **0.48% reduction**. All measured answers and token counts matched, with no errors/OOM/swap, but the latency gain missed 10%. The first-failure stop rule therefore ended this phase after one candidate, and the original FP16 source/library were restored. The sampler itself improved 22.30% in controlled synthetic profiling; that subcomponent result does not satisfy the whole-answer goal. See [the complete follow-up](research/latency10-follow-up.md) and [comparison](results/latency10/comparison.json). This remains a bounded outcome rather than a global-optimality claim.
 
 Completion of the follow-up is verified by [selection and restoration evidence](results/latency10/selection.json). Three restored-service requests reproduced the baseline answers, both services are active, and the updated [28-slide presentation](output/cosmos3-edge-findings-with-latency-goal-2026-09-21T01-13-52-175Z.pptx) includes the completed 10% phase. No further marginal-gain iteration is scheduled.
+
+
+## New goal: MLP-only INT4, after frozen checkpoint
+
+The user selected MLP-only RTN INT4 as the new starting point and requested further latency and RAM optimization, stopping when the next step cannot improve p50 by 10%. This begins a new search after the completed FP16 phase. The existing code, measurements and 28-slide deck were frozen in local commit `a1048ff` and published as `9ed3ffd` on `codex/cosmos3-edge-checkpoint` before this work.
+
+The [frozen measurement contract](results/mlp-goal/plan.json) establishes a fresh baseline with three identical 1280×720 JPEGs, the Live VLM default prompt, a 512-token ceiling, temperature 0.7, top-p 0.9 and top-k 50. Each image receives five warmups and 30 measured requests. The historical 512×512 / 64-token greedy figures are outside this comparison. The agent initially required at least 10% lower geometric mean of the image-level median full-answer latencies for both continued search and deployment eligibility. The correction below separates those decisions.
+
+The prior MLP 18/19 synthetic fact score included a yellow-to-orange color mistake and fixed the FP16 flat-circle mistake. The user's selection accepts that baseline tradeoff. The historical FP16 equivalence rule does not silently select FP16 in this new search. The presentation distinguishes this phase from the earlier FP16 search and the supplied after-FP16 recording.
+
+### First MLP trial and interpretation correction
+
+The combined GEMV N4 and compact-buffer candidate preserved all 90 measured answers and actual token counts, reduced sampled peak shared RAM by 171,393,024 bytes (163.45 MiB, 3.119%), and reduced the aggregate p50 by 1.186%. The 10% stopping threshold is not met, so optimization stops after this single trial.
+
+The initial agent plan also used 10% as a deployment admission threshold. The user asked to stop searching below 10% and load the optimized model. Discarding the lower-memory candidate would undo a measured footprint benefit. A separate [policy clarification](results/mlp-goal/policy-clarification.json) records this interpretation correction after measurement. The original frozen plan and failed comparison remain unchanged. The [selection](results/mlp-goal/selection.json) retains the lower-memory MLP candidate without another optimization trial, subject to functional and stability validation. This is not a 10% latency win, and the small latency difference is not established as statistically significant.
+
+### Selected MLP deployment verification
+
+The leaner configuration is running directly at [the Orin HTTPS UI](https://192.168.6.252:8443). [Runtime verification](results/mlp-goal/verification.json) confirms the selected model, cache, native/plugin hashes and matching functional responses. [Browser verification](results/mlp-goal/browser-verification.json) passed image inference, incremental streaming, synthetic moving-camera stop/restart, the Live VLM defaults and live CPU/GPU/shared-RAM metrics.
+
+The new [600.5-second stability run](results/mlp-goal/soak-final.summary.json) passed all 569 requests with no errors, OOM, swapping or queued backlog. Available shared RAM stayed above 2,593,685,504 bytes (2.416 GiB). Median RSS decreased by 1,122,304 bytes across the defined windows. Both services remain enabled and active, with no restarts. These results do not grade semantic accuracy or establish a physical-camera or reboot test. The known color error and historical NVMe cold-load limitation remain disclosed.

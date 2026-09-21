@@ -1,0 +1,22 @@
+{
+  "selected_at_utc": "2026-09-21T04:06:38.438870+00:00",
+  "selected_candidate_id": "live-vlm-mlp-n4-compact",
+  "selected_config": "deployment/selected-config.json",
+  "decision": "stop_search_and_deploy_lower_memory_mlp",
+  "reason": "10percent continuation threshold notmet. Select lower-memory equivalent MLPcandidate without further optimization trials.",
+  "comparison_receipt": "results/mlp-goal/comparison-01.json",
+  "policy_clarification": "results/mlp-goal/policy-clarification.json",
+  "stop_rule_triggered": true,
+  "continuation_threshold_met": false,
+  "latency_reduction_percent": 1.1857373074991573,
+  "shared_ram_decrease_bytes": 171393024,
+  "verification_pending": false,
+  "service_verification": "results/mlp-goal/verification.json",
+  "browser_verification": "results/mlp-goal/browser-verification.json",
+  "service_verified": true,
+  "browser_verified": true,
+  "stability_verification_pending": false,
+  "stability_verified": true,
+  "stability_verification": "results/mlp-goal/soak-final.summary.json",
+  "verification_completed_at_utc": "2026-09-21T04:19:52.830705+00:00"
+}

@@ -1,0 +1,81 @@
+{
+  "observed_at_utc": "2026-09-21T04:07:47.612Z",
+  "entry_url": "http://192.168.6.252:8090",
+  "checks": {
+    "http_redirect_to_orin_https": true,
+    "secure_camera_context": true,
+    "live_vlm_defaults": true,
+    "camera_stream_stop": true,
+    "camera_restart": true,
+    "incremental_stream": true,
+    "defaults_reach_backend": true,
+    "fresh_camera_frames": true,
+    "serial_requests": true,
+    "live_cpu_gpu_shared_ram": true,
+    "no_browser_errors": true
+  },
+  "scope": "Real browser against Orin HTTPS and real model inference. Camera uses Chromium synthetic moving frames; local certificate is accepted by test context.",
+  "web_url": "https://192.168.6.252:8443/",
+  "upload_answer": "A man is holding a pair of scissors in front of his face.",
+  "upload_timings": "First visible token\n699 ms\nRequest → first text\nComplete answer\n1.17 s\nRequest → stream end\nFrame age\n1.11 s\nSince browser capture",
+  "metrics": {
+    "sampled_at": "2026-09-21T04:08:00.348931+00:00",
+    "status": "ok",
+    "cpu": {
+      "utilization_percent": 1
+    },
+    "gpu": {
+      "utilization_percent": 0
+    },
+    "memory": {
+      "used_bytes": 5300232192,
+      "total_bytes": 7912775680,
+      "utilization_percent": 67,
+      "shared": true,
+      "measurement": "MemTotal - MemAvailable"
+    },
+    "age_ms": 720,
+    "sample_interval_ms": 1000
+  },
+  "status": "passed",
+  "posts": [
+    {
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "prompt": "Describe what you see in this image in one sentence.",
+      "frame_sha256": "9a99df86c3fd38c8e81bd42c5e50d1284cfd7ce7daaaa31f313fcba2ec9bbe79"
+    },
+    {
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "prompt": "Describe what you see in this image in one sentence.",
+      "frame_sha256": "c4a1987ce471f7b571a1d21cdb6d8edc6c1e8bf8289777e0546cf31812fd2cee"
+    },
+    {
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "prompt": "Describe what you see in this image in one sentence.",
+      "frame_sha256": "e3b9b42be73c99ea8de9553c4b7440aea0994643d17b2059a58f56f922b014c0"
+    },
+    {
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "prompt": "Describe what you see in this image in one sentence.",
+      "frame_sha256": "5def6ff5b7a03f11329e7d1be97640a76e182715deac41dac214d5b3b2c42bd0"
+    },
+    {
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "prompt": "Describe what you see in this image in one sentence.",
+      "frame_sha256": "76cc9124618b406f9a6c1904fd501d31275c081b922bf781a8e90ea7e2af6211"
+    },
+    {
+      "max_tokens": 512,
+      "temperature": 0.7,
+      "prompt": "Describe what you see in this image in one sentence.",
+      "frame_sha256": "c4a1987ce471f7b571a1d21cdb6d8edc6c1e8bf8289777e0546cf31812fd2cee"
+    }
+  ],
+  "browser_errors": [],
+  "maximum_requests_in_flight": 1
+}

@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# Public upstream: NVIDIA/TensorRT-Edge-LLM e8b29522938901f6df19ebeedd4b69bc8edbcd97.
+# Base source SHA256: 3a55142d894fef9ae50ff8f609d385a7b2fbee9be09d73b69a3ea97fee7e595c.
+# Only batch-one N,K=(9216,2048)/(2048,9216); upstream MIT HAN Lab kernel/license retained.
+# Candidate, not a performance claim: validate bitwise equivalence and profile on target before selection.
+--- a/cpp/kernels/int4GroupwiseGemmKernels/int4WoQGemvCuda.cu
++++ b/cpp/kernels/int4GroupwiseGemmKernels/int4WoQGemvCuda.cu
+@@ -229,8 +229,19 @@
+     switch (m)
+     {
+     case 1:
+-        gemv_kernel<N_PER_BLOCK, 1, BLOCK_SIZE, 128>
+-            <<<num_blocks, num_threads, 0, stream>>>(in_feats, kernel, scaling_factors, out_feats, k, n);
++        if ((n == 9216 && k == 2048) || (n == 2048 && k == 9216))
++        {
++            // Group adjacent Cosmos MLP outputs without changing each output's accumulation or reduction order.
++            static constexpr int kMLP_N_PER_BLOCK = 4;
++            dim3 const mlpBlocks(n / kMLP_N_PER_BLOCK / K_INTERLEAVE);
++            gemv_kernel<kMLP_N_PER_BLOCK, 1, BLOCK_SIZE, 128>
++                <<<mlpBlocks, num_threads, 0, stream>>>(in_feats, kernel, scaling_factors, out_feats, k, n);
++        }
++        else
++        {
++            gemv_kernel<N_PER_BLOCK, 1, BLOCK_SIZE, 128>
++                <<<num_blocks, num_threads, 0, stream>>>(in_feats, kernel, scaling_factors, out_feats, k, n);
++        }
+         break;
+     case 2:
+         gemv_kernel<N_PER_BLOCK, 2, BLOCK_SIZE, 128>

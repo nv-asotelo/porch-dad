@@ -1,0 +1,7 @@
+{
+  "captured_by": "Chromium against actual Orin HTTPS service",
+  "browser_verification": "results/mlp-goal/browser-verification.json",
+  "file": "output/cosmos3-edge-mlp-current-ui.png",
+  "sha256": "37a3794c468175dc6e36898b6aec03a6f78560b8ef138cba15973a44458371c2",
+  "note": "Real image upload and model answer on selected MLP runtime. Visible timings and telemetry are single observations, not benchmark statistics."
+}
