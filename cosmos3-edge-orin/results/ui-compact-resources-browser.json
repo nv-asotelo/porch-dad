@@ -1,0 +1,381 @@
+{
+  "at_utc": "2026-09-21T17:00:17.711Z",
+  "scope": "Deployed Orin UI, real TensorRT inference, synthetic browser camera; functional and display validation only.",
+  "checks": {
+    "closed_caption_below_and_first_latency": true,
+    "cumulative_average_and_caption_retained_while_waiting": true,
+    "positions_move_one_caption_without_reset": true,
+    "three_live_hidpi_sparklines": true,
+    "resources_fill_right_column_in_closed_caption_modes": true,
+    "side_mode_full_width_and_mobile_stacking": true,
+    "chart_nodes_preserved_across_layout_changes": true,
+    "responsive_caption_and_charts": true,
+    "manual_and_live_stream_preserved": true,
+    "preset_reset_clears_timing_population": true,
+    "no_browser_errors": true
+  },
+  "charts": [
+    {
+      "id": "cpuHistory",
+      "label": "CPU usage, last 60 seconds. Chart scale 0 to 3.3 percent. Observed range 0.7 to 3.3 percent. Latest plotted value 0.7 percent.",
+      "width": 566,
+      "cssWidth": 283.03125,
+      "ink": 2359
+    },
+    {
+      "id": "gpuHistory",
+      "label": "GPU usage, last 60 seconds. Chart scale 0 to 99.7 percent. Observed range 0.0 to 99.7 percent. Latest plotted value 0.0 percent.",
+      "width": 524,
+      "cssWidth": 262.046875,
+      "ink": 1324
+    },
+    {
+      "id": "memoryHistory",
+      "label": "System shared RAM usage, last 60 seconds. Chart scale 0 to 67.9 percent. Observed range 67.9 to 67.9 percent. Latest plotted value 67.9 percent.",
+      "width": 1132,
+      "cssWidth": 566.078125,
+      "ink": 7472
+    }
+  ],
+  "layouts": [
+    {
+      "width": 1440,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1440,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1440,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1440,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1440,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1440,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1200,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 900,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 900,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 900,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 900,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 900,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 900,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 801,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 801,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 801,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 801,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 801,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 801,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 800,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 800,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 800,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 800,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 800,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 800,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 600,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 600,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 600,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 600,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 600,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 600,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "position": "below",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "position": "below",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "position": "above",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "position": "above",
+      "timing_details_expanded": true,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "position": "side",
+      "timing_details_expanded": false,
+      "passed": true
+    },
+    {
+      "width": 320,
+      "position": "side",
+      "timing_details_expanded": true,
+      "passed": true
+    }
+  ],
+  "status": "passed",
+  "timing_samples": [
+    {
+      "last": 1573,
+      "avg": 1573,
+      "count": 1
+    },
+    {
+      "last": 1204,
+      "avg": 1388,
+      "count": 2
+    }
+  ],
+  "requests": 4,
+  "errors": []
+}

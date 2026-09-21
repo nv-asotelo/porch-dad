@@ -1,0 +1,30 @@
+{
+  "at_utc": "2026-09-21T17:00:17.226494+00:00",
+  "scope": "UI asset deployment only; services and selected model were not restarted or reconfigured.",
+  "assets": {
+    "web/index.html": {
+      "sha256": "d09464d1856ffd95d09ca397d5a1a915115823a1e048d1c1d95c26df58b37020",
+      "served_sha256": "d09464d1856ffd95d09ca397d5a1a915115823a1e048d1c1d95c26df58b37020"
+    },
+    "web/app.js": {
+      "sha256": "a8643e17020a45fa756c4c59d9e8bfdb11df4d283b24cb1554caf1e7edca9b3f",
+      "served_sha256": "a8643e17020a45fa756c4c59d9e8bfdb11df4d283b24cb1554caf1e7edca9b3f"
+    },
+    "web/style.css": {
+      "sha256": "49b6c0ad1acae4704ef54809a41227baead3092abc3ef6c51806afaaa1b12d8c",
+      "served_sha256": "49b6c0ad1acae4704ef54809a41227baead3092abc3ef6c51806afaaa1b12d8c"
+    }
+  },
+  "services": {
+    "cosmos-edge-backend": "MainPID=101996\nNRestarts=0\nActiveState=active\nSubState=running",
+    "cosmos-edge-ui": "MainPID=84351\nNRestarts=0\nActiveState=active\nSubState=running"
+  },
+  "selected_candidate_id": "live-vlm-mlp-n4-compact",
+  "selected_config_sha256": "aacd98c583d1be9d2335d1042f98e05f30c8c6efd477d825771db21b48875f11",
+  "health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "status": "passed"
+}
