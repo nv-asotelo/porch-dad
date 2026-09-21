@@ -1,0 +1,111 @@
+{
+  "status": "passed",
+  "slides": 14,
+  "core_slides": 8,
+  "appendix_slides": 6,
+  "artifacts": {
+    "output": {
+      "path": "output/cosmos3-edge-two-hackathons-2026-09-21T18-45-11-750Z.pptx",
+      "sha256": "6181c7d0e3596d87560f824d59936f6c6ab6fd0bde91d814f3f27c1e66b2a7c6",
+      "bytes": 5216474
+    },
+    "pdf": {
+      "path": "output/cosmos3-edge-two-hackathons-2026-09-21T18-45-11-750Z.pdf",
+      "sha256": "b33efba6c23467063eee9f369ff32f3103e0c6ad4ec484f2f723240c8937e223",
+      "bytes": 972292
+    },
+    "presenter_guide": {
+      "path": "output/two-hackathons-presenter-guide-2026-09-21.md",
+      "sha256": "fb484442f6176cf72bb1b9c28cb54ad594beb4dd73d3c552142aa985fec9641a",
+      "bytes": 3211
+    }
+  },
+  "visual_review": {
+    "pptx_artifact_rendered_slides": 14,
+    "pptx_slides_inspected": 14,
+    "pdf_pages": 14,
+    "pdf_pages_inspected": 14,
+    "status": "passed",
+    "font": "Helvetica Neue",
+    "pdf_engine": "bundled LibreOfficeDev26.8",
+    "native_powerpoint_app_tested": false,
+    "factual_audit": "passed by independent runtime_controls_audit agent; jumper speaker-note corrected",
+    "notes": [
+      "Final revision changed only slide10 speaker-note provenance. All14 final rendered PNGs are byte-identical to the reviewed prior revision. PDF reused after exact visual equality check.",
+      "Native-table conservative overflow warning on slide10 reviewed against Artifact Tool and LibreOffice PDF render: no overlap or clipping.",
+      "Initial PDF font substitution rejected; corrected with task-private fontconfig pointing at system Helvetica Neue.",
+      "Superseded drafts moved to private build directory."
+    ]
+  },
+  "structural_package_check": {
+    "chart_count": 0,
+    "claim_boundary": "Structural package checks only; no slide text, notes, formulas, chart values, or native PowerPoint execution were inspected.",
+    "finding_count": 0,
+    "findings": [],
+    "notes_parts_skipped": 14,
+    "relationship_part_count": 33,
+    "slide_count": 14,
+    "status": "pass",
+    "exitCode": 0,
+    "findingCount": 0,
+    "warnings": []
+  },
+  "layout_check": {
+    "finding_count": 0,
+    "findings": [],
+    "font_policy": {
+      "checked_text_script_count": 227,
+      "native_font_rendering_verified": false,
+      "observed_font_families": [
+        "Helvetica Neue"
+      ],
+      "observed_font_use_counts": {
+        "Helvetica Neue": 227
+      },
+      "passed": true,
+      "performed": true
+    },
+    "slide_count": 14,
+    "slide_size_in": [
+      13.3333,
+      7.5
+    ],
+    "warning_count": 1,
+    "warnings": [
+      {
+        "available_bottom_in": 6.6146,
+        "columns": 2,
+        "declared_bottom_in": 6.375,
+        "estimated_native_bottom_in": 7.3824,
+        "footer_object_ids": [
+          "2",
+          "3",
+          "5"
+        ],
+        "kind": "native_table_overflow",
+        "overflow_in": 0.7678,
+        "rows": 8,
+        "slide": 10,
+        "table_id": "9"
+      }
+    ],
+    "exitCode": 0,
+    "findingCount": 0,
+    "fontPolicy": {
+      "checked_text_script_count": 227,
+      "native_font_rendering_verified": false,
+      "observed_font_families": [
+        "Helvetica Neue"
+      ],
+      "observed_font_use_counts": {
+        "Helvetica Neue": 227
+      },
+      "passed": true,
+      "performed": true
+    }
+  },
+  "source_and_factual_review": "Independent audit against pinned public branch, supplied screenshots/writeups and committed measurements. No matched cross-branch ranking claimed.",
+  "runtime_public_commit": "935ea4887e19038e93be2bcbe19a5ecbe4777ec5",
+  "oneshot_comparison_commit": "1375886c6941caa6f43688e5945c036a584399fe",
+  "notes": "Superseded finalization drafts are not included. Presentation retains the runtime source checkpoint; the final freeze adds meeting artifacts and cleanup evidence without changing serving code."
+}

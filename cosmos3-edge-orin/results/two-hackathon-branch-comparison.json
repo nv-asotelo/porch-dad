@@ -1,0 +1,411 @@
+{
+  "schema_version": 1,
+  "reviewed_utc": "2026-09-21T18:28:52.033954+00:00",
+  "scope": "Read-only source and existing-results review of the explicitly authorized public oneshot branch and current task. No other-branch code executed, reused or deployed. No new benchmark.",
+  "oneshot": {
+    "branch": "oneshot/cosmos3-edge-live-vlm-webui",
+    "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+    "quantized_linears": 169,
+    "quantization_scope": "attention, MLP, LM head",
+    "quantizer": "CPU group128 RTN plus per-group MSE clipping; W4A16 storage",
+    "int4_plugin_version": 2,
+    "power": "MAXN_SUPER, jetson_clocks",
+    "image_token_cap_reported": 320,
+    "encoder_cache": "Default native 256MiB; no override in committed shim",
+    "response_mode": "Complete JSON; no SSE streaming",
+    "historical_reported": {
+      "engine": "/opt/tensorrt-edgellm/models/default",
+      "power_mode": "MAXN_SUPER",
+      "load_at_start": [
+        0.48,
+        1.19,
+        3.5
+      ],
+      "runs": 40,
+      "best_ms": 249.2,
+      "p50_ms": 253.0,
+      "mean_ms": 387.4,
+      "p90_ms": 623.9,
+      "worst_ms": 713.5,
+      "stdev_ms": 177.7,
+      "prompt_tokens": 187,
+      "completion_tokens_median": 14.0,
+      "best_tok_s": 56.2,
+      "typical_tok_s": 55.3,
+      "cpu_peak_pct": 23.5,
+      "cpu_p50_pct": 15.0,
+      "gpu_peak_pct": 99.6,
+      "gpu_p50_pct": 97.7,
+      "ram_total_mb": 7546,
+      "ram_idle_used_mb": 4946,
+      "ram_peak_used_mb": 4949,
+      "ram_available_mb": 2597,
+      "shim_rss_idle_mb": 3852,
+      "shim_rss_load_mb": 3852,
+      "engine_config": {
+        "quantization": "INT4 W4A16",
+        "maxInputLen": 1536,
+        "maxKVCapacity": 2048,
+        "numDecoderLayers": 28,
+        "hiddenSize": 2048,
+        "numKVHeads": 8,
+        "headDim": 128
+      },
+      "measured_utc": "2026-09-14",
+      "quiesced": "only cosmos3-edge-shim + live-vlm-webui running",
+      "fit_over_live_session": {
+        "n_requests": 2818,
+        "model": "elapsed_ms = 200 + 13.49 * generated_tokens",
+        "correlation_gen_tok_vs_elapsed": 0.854,
+        "fixed_ms": 200,
+        "marginal_ms_per_token": 13.49,
+        "steady_state_tok_s": 74.1,
+        "live_median_ms": 442,
+        "live_best_ms": 245,
+        "live_p90_ms": 607
+      }
+    },
+    "evidence_limits": [
+      "40-request aggregate only; repeated JPEG in committed harness permits encoder cache reuse.",
+      "2818-request fit raw journal rows not committed; confidence intervals unavailable.",
+      "Fixed200+13.49ms/token live cohort is different from reported699-request fixed289+13.13ms/token cohort.",
+      "Build/configuration replay gaps are static review findings, not execution failures."
+    ]
+  },
+  "current": {
+    "branch": "codex/cosmos3-edge-orin",
+    "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+    "publication_status_at_review": "local immutable commit; public nested-source publication pending",
+    "selected_backend_id": "cosmos3-edge-mlp-n4",
+    "quantized_linears": 56,
+    "quantization_scope": "mlp-only",
+    "quantizer": "CPU group128 symmetric RTN without calibration; GPTQ-compatible storage",
+    "int4_plugin_version": 1,
+    "power": "dynamic stock25W ID1",
+    "image_token_cap": 512,
+    "encoder_cache_bytes": 0,
+    "ui_defaults": {
+      "capture_preset": "lightweight",
+      "camera_width": 640,
+      "camera_height": 480,
+      "camera_ideal_fps": 15,
+      "camera_max_fps": 30,
+      "frame_longest_side": 512,
+      "capture_interval_ms": 1000,
+      "jpeg_quality": 0.8,
+      "max_output_tokens": 64,
+      "prompt": "Describe the visible scene in one concise sentence. Focus on objects and actions."
+    },
+    "response_mode": "SSE incremental text",
+    "paired_ttft_evidence": {
+      "status": "passed",
+      "order": [
+        "original FP16",
+        "MLP INT4"
+      ],
+      "warmups_per_engine": 5,
+      "measured_per_engine": 30,
+      "primary_boundary": "native_start_to_server_text",
+      "results": {
+        "fp16": {
+          "backend_id": "cosmos3-edge-original-fp16",
+          "server_ttft_ms": {
+            "count": 30,
+            "mean": 249.416055,
+            "p50": 249.50099,
+            "p95": 250.5663975,
+            "minimum": 247.794464,
+            "maximum": 250.620526
+          },
+          "loopback_http_ttft_ms": {
+            "count": 30,
+            "mean": 268.05045256526984,
+            "p50": 267.6691169908736,
+            "p95": 271.67189794417936,
+            "minimum": 265.28016399242915,
+            "maximum": 272.89817997370847
+          },
+          "native_total_ms": {
+            "count": 30,
+            "mean": 1804.1716928,
+            "p50": 1804.557978,
+            "p95": 1811.3960224,
+            "minimum": 1788.259668,
+            "maximum": 1811.546123
+          },
+          "actual_completion_tokens": [
+            37
+          ],
+          "observed_image_tokens": [
+            256
+          ],
+          "other_completed_requests_during_run": 0
+        },
+        "mlp_int4": {
+          "backend_id": "cosmos3-edge-mlp-n4",
+          "server_ttft_ms": {
+            "count": 30,
+            "mean": 239.40216766666666,
+            "p50": 239.318147,
+            "p95": 240.71571125,
+            "minimum": 237.842459,
+            "maximum": 242.630536
+          },
+          "loopback_http_ttft_ms": {
+            "count": 30,
+            "mean": 280.96917249980226,
+            "p50": 261.6707909910474,
+            "p95": 265.38067189540016,
+            "minimum": 257.46873300522566,
+            "maximum": 849.357356026303
+          },
+          "native_total_ms": {
+            "count": 30,
+            "mean": 1006.9399375,
+            "p50": 1008.9662275000001,
+            "p95": 1012.5732816,
+            "minimum": 987.075424,
+            "maximum": 1013.731558
+          },
+          "actual_completion_tokens": [
+            31
+          ],
+          "observed_image_tokens": [
+            256
+          ],
+          "other_completed_requests_during_run": 1
+        }
+      },
+      "observed_median_ttft_reduction_ms": 10.182842999999991,
+      "observed_median_ttft_reduction_percent": 4.081283605327575,
+      "historical_original_fp16": {
+        "source": "results/raw/benchmark-final-service-01.jsonl",
+        "p50_ms": 265.540398,
+        "p95_ms": 267.364909,
+        "boundary": "loopback HTTP request start to first nonempty SSE text; broader than native server TTFT"
+      },
+      "caveats": [
+        "Sequential engine runs, not randomized engine order. Dynamic clocks in stock25W mode.",
+        "One additional logged, completed request started during MLP run; none during FP16. Detection uses logged request-start timestamps, not all possible overlapping activity. Native timing excludes admission queue; shared scheduling/clock effects remain possible. The849.36ms HTTP outlier is not conclusively attributed to that request.",
+        "Fixed512x512 synthetic image and shape/color prompt; livecamera workload can differ. Runtime imagecap512 produced256actual visualtokens.",
+        "Current instrumentation and native binary used for both; preserved engine artifacts reused.",
+        "FP16 generated37tokens; MLP generated31. Completeanswer durations do not isolate engine throughput.",
+        "Single answer length per engine cannot identify fixed milliseconds and marginal milliseconds per outputtoken. No fit is claimed.",
+        "No VRAM benchmark was rerun for this TTFT comparison. Historical memory evidence remains separately labeled."
+      ],
+      "stopping_rule": "Completed exactly5warmups+30measurements perengine; no further performance search.",
+      "final_engine": "MLP INT4 with original lightweight demo settings",
+      "sources": {
+        "results/runtime-controls/ttft-fp16/plan.json": "f890cac02b7e09e4a8f3f7108547e2eba562563e1e0cfe30e17d9bc24d2e333c",
+        "results/runtime-controls/ttft-fp16/receipt.json": "03a925c5f1a93984c878386de30fe187abb9160d6a9383406338a28ffd905cc6",
+        "results/runtime-controls/ttft-fp16/responses.jsonl": "065691f2ebae5b9b7b6dc4d181b1b467a5ed062f23d793da30179d5e0dc6ffed",
+        "results/runtime-controls/ttft-fp16/server-requests.jsonl": "0ba1e3c73d9c579719b2e441319dce48cb226c3d6b2b839c3466cb590700b331",
+        "results/runtime-controls/ttft-mlp/plan.json": "a1de7994d78b20bbf2f72d5e10ebbdf59847385fcefd7747ea670d2c97d8e1be",
+        "results/runtime-controls/ttft-mlp/receipt.json": "e02048d5899e67685f6b39e405b9160ab592e0159e171ba8fff138fc0f9cca6a",
+        "results/runtime-controls/ttft-mlp/responses.jsonl": "5677d27ffdbdf34206aa809a7a668065e7b13c92561bf5d848140393e2a26fe2",
+        "results/runtime-controls/ttft-mlp/server-requests.jsonl": "e97961c8f0d53a85da6976158c79dc1a1810b149bc5035185bee8edf472b18cd",
+        "results/runtime-controls/ttft-fp16/other-requests.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "results/runtime-controls/ttft-mlp/other-requests.jsonl": "04b279fc7cfedcb8c09c8d827ed5464d7503f1880aff9437756d3b5d1133f990"
+      }
+    },
+    "evidence_limits": [
+      "TTFT comparison is current-task FP16 versus MLP, not versus oneshot.",
+      "Single answer length per engine cannot identify fixed or marginal token cost.",
+      "No new memory benchmark with latest TTFT instrumentation."
+    ]
+  },
+  "cross_branch_comparison": {
+    "matched_benchmark_performed": false,
+    "normalized_fixed_marginal_fit_available": false,
+    "speed_ratio": null,
+    "quality_ranking": null,
+    "reason": "Different quantization, clocks, cache, capture/prompt/output lengths, cohorts and timing boundaries; no matched source logs for both."
+  },
+  "sources": {
+    "oneshot": [
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "README.md",
+        "sha256": "f4652b231af99ddb81abca5a572eb369027f1240cd27cbf3f214ca36b2363552",
+        "bytes": 4184,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/README.md"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "AGENTS.md",
+        "sha256": "dc761acd730c15306fb10c28ee8eb2cd958bb8b926b0cde7a3aedc5345e43525",
+        "bytes": 10010,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/AGENTS.md"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "ACKNOWLEDGEMENTS.md",
+        "sha256": "74a067469ffa21cdea50103c728284b4b8d85e780a1ed3c7f80cc933849915a8",
+        "bytes": 11959,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/ACKNOWLEDGEMENTS.md"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "serve/cosmos3_shim.py",
+        "sha256": "0e599f45fd3725007e5389f2d0e83978f98947bef8aeaf44e8bd4993b299985e",
+        "bytes": 6145,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/serve/cosmos3_shim.py"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "scripts/rtn_int4_quantize.py",
+        "sha256": "912e879518281b5bcccb78e6ac9c7e7f42caaf4bd57c4dbf12772a1319e356dc",
+        "bytes": 5736,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/scripts/rtn_int4_quantize.py"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "scripts/collect_perf.py",
+        "sha256": "217f07550653296bd5688647c40936fd08f3b58b97c9d1b6d8fb5e29001ca811",
+        "bytes": 1604,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/scripts/collect_perf.py"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "bench/bench_live_webui.py",
+        "sha256": "cead2878adeea8ca15e030c1b9c72573da304d4c6a9315bca8d752f33185b1c8",
+        "bytes": 6211,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/bench/bench_live_webui.py"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "bench/live-webui-quiesced.json",
+        "sha256": "4e42eabccc5dc3c5033a4e5ae55c036a9bf64947b99a5f3d25c144d6522ffe2c",
+        "bytes": 1196,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/bench/live-webui-quiesced.json"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "oneshot/verify.sh",
+        "sha256": "f57b5703e08693dfb990e0c9510f46b06fc8d92b35e31ff19c4d5818ff14a04f",
+        "bytes": 5353,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/oneshot/verify.sh"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "docs/report.md",
+        "sha256": "68b51b4887a1c0b2b5d54c5d8a8b7b97b07b2f5d264b23a4d3d2cfa5af339d7a",
+        "bytes": 27053,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/docs/report.md"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "docs/methodology.md",
+        "sha256": "0949c02c44f4def95c5e09447525e4335bcdda0dba0bfa968fdf4cafb69eb195",
+        "bytes": 33645,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/docs/methodology.md"
+      },
+      {
+        "commit": "1375886c6941caa6f43688e5945c036a584399fe",
+        "path": "systemd/live-vlm-webui.service",
+        "sha256": "a8f5b945579a21d727e769596919ede35088e5d7a9de2c9eeb126db4a2712f83",
+        "bytes": 595,
+        "url": "https://github.com/nv-asotelo/porch-dad/blob/1375886c6941caa6f43688e5945c036a584399fe/systemd/live-vlm-webui.service"
+      }
+    ],
+    "current": [
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "deployment/selected-config.json",
+        "sha256": "0453d59390471ddf1058b5eaa1728d05ec8884c646b5a9ef8828edd1244eef10",
+        "bytes": 4424,
+        "local_relative_path": "deployment/selected-config.json"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "deployment/selected.env",
+        "sha256": "5fa3ef1748cc800970442616da06b0cd80af3c9df01eff1f0a1c209b462f193d",
+        "bytes": 656,
+        "local_relative_path": "deployment/selected.env"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "scripts/cosmos_runtime.py",
+        "sha256": "913f00ecbc31fb2c48d2cebe1f3df490be8250b18dc767f5cdc423f450b07167",
+        "bytes": 17860,
+        "local_relative_path": "scripts/cosmos_runtime.py"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "scripts/rtn_backend.py",
+        "sha256": "179316796ac0d53a7a8a1cd6facb62d540e10c58d7f627504cb0dd9e1ce47014",
+        "bytes": 14857,
+        "local_relative_path": "scripts/rtn_backend.py"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "scripts/quantize_cosmos3_rtn.py",
+        "sha256": "01b07efea2e070903a9c347a3db9d1c4041e815a96dc9480dd5bacc8af4b2385",
+        "bytes": 18168,
+        "local_relative_path": "scripts/quantize_cosmos3_rtn.py"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "scripts/benchmark_ttft.py",
+        "sha256": "09655efed60db65f44f1e6414f902f5a9e0e381475faab10af6d2dcef307548e",
+        "bytes": 6937,
+        "local_relative_path": "scripts/benchmark_ttft.py"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "scripts/compare_server_timings.py",
+        "sha256": "f37fb3165e079e640fcab5e0ba81317b154265084b7b8371c2a72b51ac56eec9",
+        "bytes": 18238,
+        "local_relative_path": "scripts/compare_server_timings.py"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "web/app.js",
+        "sha256": "362665b0a55d07a450416a4a966bb9b9e0579062e044b2d606581b2c1cec84a4",
+        "bytes": 44341,
+        "local_relative_path": "web/app.js"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "web/index.html",
+        "sha256": "601dcb800441e4fc6315ce4e1739f9c41957783ecbcba5cc46a4e13fd3a54304",
+        "bytes": 13303,
+        "local_relative_path": "web/index.html"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "results/runtime-controls/ttft-comparison.json",
+        "sha256": "452ef72c87b988a7297b4e0bbafd3a22c87c52906850c17c7bf4f28161173a79",
+        "bytes": 4861,
+        "local_relative_path": "results/runtime-controls/ttft-comparison.json"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "results/mlp-goal/comparison-01.json",
+        "sha256": "98413e511ffca12ce657dcef6c4058c2d723719ad2ddb55327b7fee111281c34",
+        "bytes": 43289,
+        "local_relative_path": "results/mlp-goal/comparison-01.json"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "results/mlp-goal/selection.json",
+        "sha256": "c853fb0557c3d1d69e0e990c1f4a5a194e8b2884ab4f3eb405bab58981b34dc0",
+        "bytes": 1103,
+        "local_relative_path": "results/mlp-goal/selection.json"
+      },
+      {
+        "commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5",
+        "path": "results/mlp-goal/soak-final.summary.json",
+        "sha256": "4e0a430292881a801cb0ba21979acb179dde3e4f66dbe4f4d52511d5c9b05aac",
+        "bytes": 7135,
+        "local_relative_path": "results/mlp-goal/soak-final.summary.json"
+      }
+    ]
+  },
+  "current_publication": {
+    "commit": "935ea4887e19038e93be2bcbe19a5ecbe4777ec5",
+    "branch": "codex/cosmos3-edge-mlp",
+    "subtree": "cosmos3-edge-orin",
+    "exact_local_source_commit": "796be230dea9cde3531f73ebc4abc6638dc3aeb5"
+  }
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "user_filename": "INT4 MLP engine Astra Settings.png",
+    "file": "output/two-hackathons-evidence/mlp-user-settings.png",
+    "sha256": "5a13cfc9a6cf3392b2a431978705a13379b9c1677f45b677287abcecc6aadf40",
+    "interpretation": "User-provided screenshot observation; not a matched benchmark"
+  },
+  {
+    "user_filename": "BF16 original first version Astra.png",
+    "file": "output/two-hackathons-evidence/original-fp16-user-label-bf16.png",
+    "sha256": "323bf0fc5caa602071f7be5cf172668833117add2436c16041beefb215455974",
+    "interpretation": "User-provided screenshot observation; not a matched benchmark"
+  },
+  {
+    "user_filename": "INT4 MLP with original demo settings astra.png",
+    "file": "output/two-hackathons-evidence/mlp-original-demo-settings.png",
+    "sha256": "df1898db8e7bf5053ef6d9dc45577c76c5d62c52c4e90c2cfdd620ed2e6dbbbb",
+    "interpretation": "User-provided screenshot observation; not a matched benchmark"
+  },
+  {
+    "user_filename": "index.html",
+    "source_path": "/Users/asotelo/Desktop/work/Downloads/index.html",
+    "sha256": "bbb37170e85d30aa0dd3445a2984460a7f686e092a25ec6f6a55124dbd34b7ff",
+    "interpretation": "User-supplied historical writeup; claims separately checked against source and measurements"
+  },
+  {
+    "user_filename": "slides.html",
+    "source_path": "/Users/asotelo/Desktop/work/Downloads/slides.html",
+    "sha256": "92bfbb9e912f834b2ca775f32867f11293d41c2a8076a72a9fa867fc9df528a5",
+    "interpretation": "User-supplied historical writeup; claims separately checked against source and measurements"
+  }
+]

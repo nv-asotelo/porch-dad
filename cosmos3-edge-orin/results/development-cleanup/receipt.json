@@ -1,0 +1,104 @@
+{
+  "started_utc": "2026-09-21T18:42:03.864351+00:00",
+  "reason": "User requested removing unnecessary development activity for a clean engine/UI resource measurement. No model, runtime, clock, cache or power changes.",
+  "before_runtime": {
+    "engine_id": "bdcdecd205664a3a939e3b9e4be38f8b",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1.0,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "before_health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "units": {
+    "iperf3.service": {
+      "active_before": "active",
+      "enabled_before": "enabled",
+      "definition": "ExecStart={ path=/usr/bin/iperf3 ; argv[]=/usr/bin/iperf3 --server --interval 0 ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }\nDescription=iperf3 server\nFragmentPath=/usr/lib/systemd/system/iperf3.service",
+      "active_after": "inactive"
+    },
+    "fwupd-refresh.timer": {
+      "active_before": "active",
+      "enabled_before": "enabled",
+      "definition": "Description=Refresh fwupd metadata regularly\nFragmentPath=/usr/lib/systemd/system/fwupd-refresh.timer",
+      "active_after": "inactive"
+    },
+    "fwupd.service": {
+      "active_before": "active",
+      "enabled_before": "static",
+      "definition": "ExecStart={ path=/usr/libexec/fwupd/fwupd ; argv[]=/usr/libexec/fwupd/fwupd ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }\nDescription=Firmware update daemon\nFragmentPath=/usr/lib/systemd/system/fwupd.service",
+      "active_after": "inactive"
+    },
+    "kerneloops.service": {
+      "active_before": "active",
+      "enabled_before": "enabled",
+      "definition": "ExecStart={ path=/usr/sbin/kerneloops ; argv[]=/usr/sbin/kerneloops $DAEMON_ARGS ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }\nDescription=Tool to automatically collect and submit kernel crash signatures\nFragmentPath=/usr/lib/systemd/system/kerneloops.service",
+      "active_after": "inactive"
+    }
+  },
+  "stopped": [
+    "iperf3.service",
+    "fwupd-refresh.timer",
+    "fwupd.service",
+    "kerneloops.service"
+  ],
+  "restore_commands": [
+    "sudo systemctl start iperf3.service",
+    "sudo systemctl start fwupd-refresh.timer",
+    "sudo systemctl start fwupd.service",
+    "sudo systemctl start kerneloops.service"
+  ],
+  "policy": "Stopped for this session, without disabling/masking/removing packages. Original enablement preserved. Normal networking, SSH, cooling, GPU drivers, logging/security and platform services remain.",
+  "task_processes": [
+    " 143857       1 python3         /usr/bin/python3 /home/jetson/cosmos-edge/scripts/serve_ui.py --host 0.0.0.0 --port 8090 --allow-insecure-lan --https-port 8443 --cert /home/jetson/cosmos-edge/deployment/tls/orin.crt --key /home/jetson/cosmos-edge/deployment/tls/orin.key",
+    " 154576       1 python          /home/jetson/cosmos-edge/external/TensorRT-Edge-LLM/.venv/bin/python /home/jetson/cosmos-edge/scripts/rtn_backend.py serve --model /home/jetson/cosmos-edge/models/cosmos3-edge-rtn-mlp-int4 --cache-dir /home/jetson/cosmos-edge/data/engine-cache-mlp-compact --max-input-len 1024 --max-kv-capacity 1664 --host 127.0.0.1 --port 8000 --max-image-tokens 512 --max-image-tokens-per-image 512 --encoder-embedding-cache-budget-bytes 0"
+  ],
+  "after_runtime": {
+    "engine_id": "bdcdecd205664a3a939e3b9e4be38f8b",
+    "max_image_tokens_per_image": 512,
+    "max_image_tokens_per_image_limit": 512,
+    "max_image_tokens_per_image_min": 4,
+    "encoder_cache_bytes": 0,
+    "static_clocks": false,
+    "top_p": 1.0,
+    "timing_boundary": "native_inference",
+    "timing_source": "server_monotonic"
+  },
+  "after_health": {
+    "status": "ready",
+    "active_requests": 0,
+    "queued_requests": 0
+  },
+  "all_samples_no_active_or_queued_requests": true,
+  "cpu_percent": {
+    "minimum": 0.2,
+    "median": 0.5,
+    "maximum": 1.5
+  },
+  "gpu_percent": {
+    "minimum": 0.0,
+    "median": 0.0,
+    "maximum": 0.0
+  },
+  "shared_ram_used_bytes": {
+    "minimum": 5288165376,
+    "median": 5288615936.0,
+    "maximum": 5296701440
+  },
+  "shared_ram_total_bytes": 7912775680,
+  "swaps": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n",
+  "service_states": {
+    "cosmos-edge-backend.service": "MainPID=154576\nNRestarts=0\nActiveState=active\nSubState=running",
+    "cosmos-edge-ui.service": "MainPID=143857\nNRestarts=0\nActiveState=active\nSubState=running"
+  },
+  "measurement_note": "30 one-second reads of existing UI telemetry after5seconds settle. SSH and lightweight sampler remain during this window; CPU is aggregate across all cores and memory is MemTotal-MemAvailable, not dedicated VRAM. No page-cache drop, reboot or inference workload was introduced.",
+  "status": "passed",
+  "finished_utc": "2026-09-21T18:42:39.427129+00:00"
+}
