@@ -1,40 +1,37 @@
 #!/usr/bin/env bash
-# Install the selected Orin deployment, with explicitly selected static clocks.
+# Install units for a configured device. Never start services or change running clocks/power.
 set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ "${1:-}" == --help ]]; then
-  printf '%s\n' 'Usage: sudo bash scripts/install_services.sh' \
-    'Requires deployment/selected.env; backend validates its selected cache on startup.' \
-    'Installs cosmos-edge-backend and cosmos-edge-ui systemd services.' \
-    'Only exact COSMOS_STATIC_CLOCKS=1 adds a root oneshot jetson_clocks service.' \
-    'Unset or COSMOS_STATIC_CLOCKS=0 leaves clocks unchanged; no services are started.' \
-    'To restore dynamic clocks: set COSMOS_STATIC_CLOCKS=0 and rerun this installer,' \
-    'then sudo systemctl disable --now cosmos-edge-clocks.service and run:' \
-    'sudo /usr/bin/jetson_clocks --restore /home/jetson/cosmos-edge/data/power/stock25w.before.conf'
-  exit 0
+service_user="${SUDO_USER:-}"
+env_file=""
+dry_run=0
+usage() {
+  printf '%s\n' 'Usage: sudo bash scripts/install_services.sh [--user ACCOUNT] [--env-file ABSOLUTE_PATH] [--dry-run]' \
+    'Account defaults to SUDO_USER and must be an existing non-root account.' \
+    'Uses deployment/local.env when present, otherwise frozen deployment/selected.env.' \
+    'Installs/enables backend and loopback UI units; no services are started.' \
+    'Only literal COSMOS_STATIC_CLOCKS=1 installs a future static-clock dependency.' \
+    '--dry-run validates and prints units without writing systemd files; works without sudo.' \
+    'An existing LAN drop-in is preserved: reinstalling does not remove HTTP/HTTPS exposure.'
+}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --user|--env-file)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      if [[ "$1" == --user ]]; then service_user="$2"; else env_file="$2"; fi
+      shift 2 ;;
+    --dry-run) dry_run=1; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+if [[ "$dry_run" == 0 ]]; then
+  [[ $EUID == 0 && $(uname -m) == aarch64 ]] || { echo 'Run as root on the Orin.' >&2; exit 2; }
 fi
-[[ $EUID == 0 && $(uname -m) == aarch64 ]] || { echo 'Run as root on the Orin.' >&2; exit 2; }
-[[ "$project_dir" == /home/jetson/cosmos-edge ]] || { echo 'Unexpected deployment path.' >&2; exit 2; }
-[[ -f "$project_dir/deployment/selected.env" ]] || { echo 'Select and record a validated engine profile first.' >&2; exit 2; }
-# Read only this literal option. Never execute the selected environment as root.
-static_clocks="$(/usr/bin/python3 - "$project_dir/deployment/selected.env" <<'PY'
-from pathlib import Path
-import re
-import sys
-values = []
-for line in Path(sys.argv[1]).read_text().splitlines():
-    stripped = line.strip()
-    if not stripped or stripped.startswith(('#', ';')):
-        continue
-    if re.match(r'(?:export\s+)?COSMOS_STATIC_CLOCKS(?:\s|=|$)', stripped):
-        if line not in ('COSMOS_STATIC_CLOCKS=0', 'COSMOS_STATIC_CLOCKS=1'):
-            raise SystemExit('Use the exact unquoted line COSMOS_STATIC_CLOCKS=0 or COSMOS_STATIC_CLOCKS=1')
-        values.append(line[-1])
-if len(values) > 1:
-    raise SystemExit('Duplicate COSMOS_STATIC_CLOCKS assignments are not supported')
-print(values[0] if values else '0')
-PY
-)"
+validation_args=(--project-dir "$project_dir" --user "$service_user")
+if [[ -n "$env_file" ]]; then validation_args+=(--env-file "$env_file"); fi
+validated="$(/usr/bin/python3 "$project_dir/scripts/configure_deployment.py" _validate "${validation_args[@]}")"
+IFS=$'\t' read -r service_user service_group env_file static_clocks ignored_ip <<< "$validated"
 for script in run_selected_backend.sh run_backend.sh rtn_backend.py serve_backend.py cosmos_runtime.py serve_ui.py \
   preflight_cosmos_artifacts.py repair_cosmos_runtime_config.py repair_cosmos_chat_template.py build_model_cache.py; do
   [[ -f "$project_dir/scripts/$script" ]] || { printf 'Missing deployment script: %s\n' "$script" >&2; exit 2; }
@@ -49,14 +46,10 @@ if [[ "$static_clocks" == 1 ]]; then
   clock_after=" cosmos-edge-clocks.service"
   clock_requires="Requires=cosmos-edge-clocks.service"
 fi
-install -d -m 755 "$project_dir/results/service-install"
-for service in "${services[@]}"; do
-  if [[ -f "/etc/systemd/system/$service.service" ]]; then
-    cp -a "/etc/systemd/system/$service.service" "$project_dir/results/service-install/$service.before.$(date -u +%Y%m%dT%H%M%SZ)"
-  fi
-done
-if [[ "$static_clocks" == 1 ]]; then
-  cat > /etc/systemd/system/cosmos-edge-clocks.service <<EOF
+emit_unit() {
+  case "$1" in
+    cosmos-edge-clocks)
+      cat <<EOF
 [Unit]
 Description=Task-selected static clocks within the existing Orin power mode
 After=nvpmodel.service
@@ -72,8 +65,9 @@ TimeoutStartSec=30
 [Install]
 WantedBy=multi-user.target
 EOF
-fi
-cat > /etc/systemd/system/cosmos-edge-backend.service <<EOF
+      ;;
+    cosmos-edge-backend)
+      cat <<EOF
 [Unit]
 Description=Cosmos3-Edge TensorRT backend on Orin
 After=network.target$clock_after
@@ -83,10 +77,10 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
-User=jetson
-Group=jetson
+User=$service_user
+Group=$service_group
 WorkingDirectory=$project_dir
-EnvironmentFile=$project_dir/deployment/selected.env
+EnvironmentFile=$env_file
 ExecStart=/usr/bin/bash $project_dir/scripts/run_selected_backend.sh
 Restart=on-failure
 RestartSec=10
@@ -96,7 +90,9 @@ KillMode=control-group
 [Install]
 WantedBy=multi-user.target
 EOF
-cat > /etc/systemd/system/cosmos-edge-ui.service <<EOF
+      ;;
+    cosmos-edge-ui)
+      cat <<EOF
 [Unit]
 Description=Cosmos3-Edge streaming browser interface
 After=network.target cosmos-edge-backend.service
@@ -106,8 +102,8 @@ StartLimitBurst=3
 
 [Service]
 Type=simple
-User=jetson
-Group=jetson
+User=$service_user
+Group=$service_group
 WorkingDirectory=$project_dir
 ExecStart=/usr/bin/python3 $project_dir/scripts/serve_ui.py --host 127.0.0.1 --port 8090
 Restart=on-failure
@@ -117,24 +113,44 @@ TimeoutStopSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
+      ;;
+  esac
+}
+if [[ -f /etc/systemd/system/cosmos-edge-ui.service.d/lan.conf ]]; then
+  printf '%s\n' 'Existing LAN drop-in retained; HTTP/HTTPS exposure remains configured.' >&2
+fi
+if [[ "$dry_run" == 1 ]]; then
+  for service in "${services[@]}"; do
+    printf '# %s.service\n' "$service"
+    emit_unit "$service"
+  done
+  exit 0
+fi
+# Validate all staged units before changing any installed unit.
+staging_dir="$(mktemp -d)"
+trap 'rm -rf "$staging_dir"' EXIT
 unit_paths=()
 unit_names=()
 for service in "${services[@]}"; do
-  unit_paths+=("/etc/systemd/system/$service.service")
+  emit_unit "$service" > "$staging_dir/$service.service"
+  unit_paths+=("$staging_dir/$service.service")
   unit_names+=("$service.service")
 done
 systemd-analyze verify "${unit_paths[@]}"
+install -d -m 755 "$project_dir/results/service-install"
+for service in "${services[@]}"; do
+  if [[ -f "/etc/systemd/system/$service.service" ]]; then
+    cp -a "/etc/systemd/system/$service.service" "$project_dir/results/service-install/$service.before.$(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+  install -m 644 "$staging_dir/$service.service" "/etc/systemd/system/$service.service"
+done
 systemctl daemon-reload
 if [[ "$static_clocks" == 0 && -f /etc/systemd/system/cosmos-edge-clocks.service ]]; then
-  # Remove an earlier task-owned boot activation without stopping services or
-  # silently changing the current clocks. Restore the saved state separately.
   systemctl disable cosmos-edge-clocks.service
 fi
 systemctl enable "${unit_names[@]}"
-printf '%s\n' 'Installed and enabled. Stop the owned foreground servers before starting these units.'
+printf '%s\n' 'Installed and enabled. No services were started and current clocks/power were not changed.' \
+  'Fresh UI access uses an SSH tunnel to 127.0.0.1:8090. Existing LAN drop-ins remain in effect.'
 if [[ "$static_clocks" == 1 ]]; then
-  printf '%s\n' 'Selected static clocks will apply when the clocks/backend service is started; the current power mode and fan settings are unchanged by this installer.'
+  printf '%s\n' 'Selected static clocks apply only when the clocks/backend service is explicitly started.'
 fi
-printf '%s\n' 'Dynamic-clock restoration requires COSMOS_STATIC_CLOCKS=0 and reinstalling units, then disabling the clocks unit:' \
-  'sudo systemctl disable --now cosmos-edge-clocks.service' \
-  'sudo /usr/bin/jetson_clocks --restore /home/jetson/cosmos-edge/data/power/stock25w.before.conf'

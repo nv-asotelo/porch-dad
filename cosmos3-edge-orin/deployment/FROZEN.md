@@ -23,3 +23,11 @@ Exact observations and service restoration commands: `../results/development-cle
 ## Documentation privacy correction
 
 A subsequent explicit user request authorized removing device-specific addresses and local account paths from the public README while retaining the existing sharing URL. The branch and annotated freeze tag were advanced to the documentation correction; the implementation, original measurements and presentation artifacts were not changed. The README now distinguishes SSH forwarding from optional unauthenticated LAN listeners and requires certificate verification rather than blind acceptance. This correction does not purge earlier commits or redact historical artifacts elsewhere in the repository.
+
+## Authorized agent-deployment update, 22 September 2026
+
+The user explicitly authorized another commit to this frozen deployment to make installation and configuration agent-friendly on compatible Jetsons. The existing branch and named tag advance together to include the [agent runbook](../docs/agent-deployment.md), machine-readable compatibility checks, pinned reasoner download verification, target-local path configuration, portable service/HTTPS setup and focused tests. Resolve and record the tag's full commit SHA when deploying; the retained tag name is a sharing URL, not a promise that its target never changed.
+
+The Orin Nano 8 GB remains the hardware-tested reference. Orin NX and AGX Orin are SM87 build candidates subject to software, memory, native-build and fresh-inference gates; this update does not claim completed deployment on those boards. Thor, Xavier, TX2, original Nano and the 4 GB Orin Nano are outside this recipe. Preflight success is not inference validation.
+
+The selected engine implementation, six backend patches, model pins, frozen tuning, original results and presentation artifacts are preserved. New installations keep per-device paths in ignored `deployment/local.env` and private receipts. The running original Orin is not upgraded or restarted as part of this publication. Recorded 25 W results remain historical; the original device's later MAXN setting is not silently applied to another board.

@@ -13,6 +13,8 @@ results/raw/
 .codex-finalizer/
 data/
 .model-download/
+deployment/local.env
+deployment/tls/
 
 # Private provisioning research and local OS metadata.
 .compute-research/

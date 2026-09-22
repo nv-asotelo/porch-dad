@@ -3,6 +3,7 @@
 import configparser
 import json
 import os
+import pwd
 from pathlib import Path
 import shlex
 import shutil
@@ -97,7 +98,7 @@ class SelectedBackendTests(unittest.TestCase):
 
 
 class ServiceInstallTests(unittest.TestCase):
-    def install(self, selection, *, existing_clocks=False):
+    def install(self, selection, *, existing_clocks=False, local_selection=None, args=(), verify_fail=False):
         """Execute the real installer with all privileged paths/commands inert."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -106,7 +107,16 @@ class ServiceInstallTests(unittest.TestCase):
             units = root / "units"
             units.mkdir()
             (root / "deployment").mkdir()
-            (root / "deployment/selected.env").write_text(selection)
+            (root / "models/selected").mkdir(parents=True)
+            (root / "data/selected-cache").mkdir(parents=True)
+            base = (f"COSMOS_MODEL_DIR={root}/models/selected\n"
+                    f"COSMOS_CACHE_DIR={root}/data/selected-cache\n")
+            if "COSMOS_PROFILE=" not in selection:
+                base += "COSMOS_PROFILE=rtn-v1\n"
+            (root / "deployment/selected.env").write_text(base + selection)
+            if local_selection is not None:
+                (root / "deployment/local.env").write_text(base + local_selection)
+            shutil.copyfile(ROOT / "scripts/configure_deployment.py", scripts / "configure_deployment.py")
             for name in ("run_selected_backend.sh", "run_backend.sh", "rtn_backend.py",
                          "serve_backend.py", "serve_ui.py", "preflight_cosmos_artifacts.py",
                          "repair_cosmos_runtime_config.py", "repair_cosmos_chat_template.py",
@@ -121,7 +131,8 @@ class ServiceInstallTests(unittest.TestCase):
             recorder = root / "record.py"
             recorder.write_text("import json, os, sys\n"
                                 "with open(os.environ['SERVICE_TEST_LOG'], 'a') as log:\n"
-                                "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n")
+                                "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                                "if os.environ.get('SERVICE_VERIFY_FAIL') and sys.argv[1] == 'systemd-analyze': sys.exit(9)\n")
             for name in ("systemctl", "systemd-analyze", "jetson_clocks"):
                 executable = commands / name
                 executable.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable) + " " +
@@ -135,22 +146,53 @@ class ServiceInstallTests(unittest.TestCase):
             guard = "[[ $EUID == 0 && $(uname -m) == aarch64 ]] || { echo 'Run as root on the Orin.' >&2; exit 2; }"
             self.assertEqual(source.count(guard), 1)
             source = source.replace(guard, ": # Test-only platform guard bypass")
-            source = source.replace("/home/jetson/cosmos-edge", str(root))
             source = source.replace("/etc/systemd/system", str(units))
             source = source.replace("/usr/bin/jetson_clocks", str(clock_path))
             source = source.replace("/usr/bin/python3", shlex.quote(sys.executable))
             installer = scripts / "install_services.sh"
             installer.write_text(source)
             command_log = root / "commands.jsonl"
-            env = dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"],
-                       SERVICE_TEST_LOG=str(command_log))
-            result = subprocess.run(["bash", str(installer)], env=env, capture_output=True, text=True)
+            account = pwd.getpwuid(os.getuid()) if os.getuid() else pwd.getpwnam("nobody")
+            if os.getuid() == 0:
+                for path in [root, *root.rglob("*")]:
+                    os.chown(path, account.pw_uid, account.pw_gid)
+            env = dict(os.environ, SUDO_USER=account.pw_name, PATH=str(commands) + os.pathsep + os.environ["PATH"],
+                       SERVICE_TEST_LOG=str(command_log), SERVICE_VERIFY_FAIL="1" if verify_fail else "")
+            result = subprocess.run(["bash", str(installer), *args], env=env, capture_output=True, text=True)
             calls = [json.loads(line) for line in command_log.read_text().splitlines()] if command_log.exists() else []
             # Never execute clocks or start/stop/restart services, even in the inert fixture.
             self.assertFalse(any(call[0] == "jetson_clocks" for call in calls))
             self.assertFalse(any(call[0] == "systemctl" and any(value in call[1:] for value in
                              ("start", "stop", "restart", "--now")) for call in calls))
             return result, {path.name: path.read_text() for path in units.iterdir()}, calls, str(clock_path)
+
+    def test_local_environment_selected_and_actual_nonroot_account_rendered(self):
+        result, units, _, _ = self.install("COSMOS_STATIC_CLOCKS=0\n", local_selection="COSMOS_STATIC_CLOCKS=0\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        account = pwd.getpwuid(os.getuid()) if os.getuid() else pwd.getpwnam("nobody")
+        backend = units["cosmos-edge-backend.service"]
+        self.assertIn(f"User={account.pw_name}\n", backend)
+        self.assertIn("/deployment/local.env\n", backend)
+        self.assertNotIn("/home/jetson/cosmos-edge", backend)
+        self.assertIn("--host 127.0.0.1 --port 8090", units["cosmos-edge-ui.service"])
+
+    def test_dry_run_prints_units_and_invalid_account_writes_nothing(self):
+        result, units, calls, _ = self.install("COSMOS_STATIC_CLOCKS=0\n", args=("--dry-run",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("EnvironmentFile=", result.stdout)
+        self.assertEqual(units, {})
+        self.assertEqual(calls, [])
+        result, units, calls, _ = self.install("COSMOS_STATIC_CLOCKS=0\n", args=("--user", "root"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must not be root", result.stderr)
+        self.assertEqual(units, {})
+        self.assertEqual(calls, [])
+
+    def test_failed_staged_verification_writes_no_units(self):
+        result, units, calls, _ = self.install("COSMOS_STATIC_CLOCKS=0\n", verify_fail=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(units, {})
+        self.assertEqual([call[0] for call in calls], ["systemd-analyze"])
 
     def test_static_clocks_unit_and_backend_dependency_are_opt_in(self):
         result, units, calls, clock_path = self.install("COSMOS_STATIC_CLOCKS=1\n")
@@ -204,7 +246,8 @@ class ServiceInstallTests(unittest.TestCase):
 
     def test_selected_environment_is_never_executed(self):
         result, _, _, _ = self.install("UNRELATED=$(exit 87)\nexit 88\nCOSMOS_STATIC_CLOCKS=0\n")
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("literal", result.stderr)
 
 
 if __name__ == "__main__":

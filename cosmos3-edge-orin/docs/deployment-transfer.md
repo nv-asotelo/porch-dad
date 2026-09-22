@@ -1,5 +1,7 @@
 # Prepare and transfer the verified deployment
 
+For a fresh deployment on another account or directory, prefer the [agent deployment runbook](agent-deployment.md). The legacy transfer helper below intentionally retains its fixed `jetson` account and `/home/jetson/cosmos-edge` destination. It now also carries the portable configuration, preflight, model-verification and optional LAN helpers, but it still transfers source/original checkpoint only, not runnable MLP artifacts. Generate `deployment/local.env` on the target; it and TLS credentials are never part of the transfer allowlist.
+
 `scripts/deploy_transfer.py prepare --source-stage` stages the selected MLP deployment's source and verified original FP16 reasoner as a conversion input for a fresh target. It rechecks reasoner files against `results/model-download.json`, requires the pinned TensorRT-Edge-LLM checkout and its three exact clean submodule commits, and creates `data/deployment/manifest.json` plus a backend archive. Preparation is local; it performs no device access, download, installation or inference. The selected MLP INT4 derivative, native binaries and engine caches are not included, so this is explicitly **not ready to start the selected service**. Plain `prepare` rejects the MLP selection instead of silently packaging the wrong weights.
 
 ```sh
