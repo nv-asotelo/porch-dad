@@ -10,6 +10,21 @@ case "$project_dir" in
   *) echo "Run with sudo on the Orin in /home/jetson/cosmos-edge or /home/orin/nvr/ui." >&2; exit 2 ;;
 esac
 [[ $EUID == 0 && $(uname -m) == aarch64 ]] || { echo 'Run with sudo on the Orin (aarch64).' >&2; exit 2; }
+
+# Ports and interpreter differ per install. Upstream cosmos-edge owns 8090, but on porch-dad
+# 8090 is already the older Live VLM WebUI and binding it here would collide with a running
+# service - so this UI uses 8092 there, matching its unit. Override with argv 2 and 3.
+case "$project_dir" in
+  /home/orin/nvr/ui)
+    http_port="${2:-8092}"; https_port="${3:-8443}"
+    python_bin=/home/orin/TensorRT-Edge-LLM/.venv/bin/python ;;
+  *)
+    http_port="${2:-8090}"; https_port="${3:-8443}"
+    python_bin=/usr/bin/python3 ;;
+esac
+for p in "$http_port" "$https_port"; do
+  [[ "$p" =~ ^[0-9]+$ ]] || { echo "Bad port: $p" >&2; exit 2; }
+done
 lan_ip="$(python3 - "${1:?Usage: sudo bash scripts/enable_lan_ui.sh ORIN_LAN_IPV4}" <<'PY'
 import ipaddress, sys
 address = ipaddress.IPv4Address(sys.argv[1])
@@ -39,8 +54,8 @@ fi
 cat > "$dropin" <<EOF
 [Service]
 ExecStart=
-ExecStart=/usr/bin/python3 $project_dir/scripts/serve_ui.py --host 0.0.0.0 --port 8090 --allow-insecure-lan --https-port 8443 --cert $tls_dir/orin.crt --key $tls_dir/orin.key
+ExecStart=$python_bin $project_dir/scripts/serve_ui.py --host 0.0.0.0 --port $http_port --allow-insecure-lan --https-port $https_port --cert $tls_dir/orin.crt --key $tls_dir/orin.key
 EOF
 systemd-analyze verify /etc/systemd/system/cosmos-edge-ui.service
 systemctl daemon-reload
-printf 'Configured HTTP http://%s:8090 and HTTPS https://%s:8443. Restart cosmos-edge-ui at an idle interval to apply.\n' "$lan_ip" "$lan_ip"
+printf 'Configured HTTP http://%s:%s and HTTPS https://%s:%s. Restart cosmos-edge-ui at an idle interval to apply.\n' "$lan_ip" "$http_port" "$lan_ip" "$https_port"
