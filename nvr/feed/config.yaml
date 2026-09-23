@@ -70,6 +70,25 @@ engines:
       to exist, not accuracy. It spends the most tokens per frame (320), which ought to mean
       a sharper look, but that did not show up as a single extra correct call on this eval.
 
+  # The newer quantization, and a different animal from the three above. Those are W4A16 across
+  # the model with the weights serialised INTO an 838 MB llm.engine. This one is RTN GPTQ scoped
+  # to "mlp-only" (group 128, symmetric, calibration-free), and its engine is weight-stripped:
+  # llm.engine is ~16 MB and refits at load time from a 3.08 GB model.safetensors sitting beside
+  # it. Both files must be present or the shim loads an engine with no weights in it.
+  #
+  # No profile line here on purpose. The three above carry measured numbers from one identical
+  # 23-frame set; this build has not been run against that set on this box, and inventing a
+  # figure would make it look comparable when it is not. Measure it before quoting it.
+  mlp:
+    name: "MLP-INT4"
+    path: "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-RTN-MLP-INT4/engines/reasoning"
+    profile: ""
+    notes: >-
+      RTN GPTQ, mlp-only scope, group size 128, symmetric, calibration-free. Built in the
+      cosmos-edge tree rather than by scripts/rtn_int4_quantize.py, so it is not a drop-in
+      sibling of v1/v2/v3 - it needs its model.safetensors alongside the stripped engine.
+      Shows as unbuilt, and refuses to switch, on any box where that pair is absent.
+
 # Moorebot Scouts. One entry per robot; the command centre renders a card each. Each has its own
 # bridge container on this box (nvr/scout/), behind the `scout` compose profile, so a card shows
 # as unreachable until its bridge is started - the honest state rather than a hidden feature.
@@ -154,6 +173,17 @@ services:
     port: 8090
     heavy_mb: 200
     note: "nv-asotelo fork: adds push + stream-URL capture sources."
+  - key: livevision
+    label: "Live Vision (new UI)"
+    kind: systemd
+    unit: cosmos-edge-ui.service
+    port: 8092
+    heavy_mb: 150
+    note: >-
+      Off by default. The unit is installed but not enabled, so it shows stopped until you
+      start it here - same treatment as porch-dad.service. Binds loopback only; LAN access
+      needs nvr/ui/enable_lan_ui.sh run deliberately. Port 8092 keeps it clear of the older
+      Live VLM WebUI on 8090, so both can run side by side while they are compared.
   - key: bridge
     label: "porch-dad feed"
     kind: systemd
