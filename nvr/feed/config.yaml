@@ -85,16 +85,16 @@ engines:
     profile: ""
     notes: >-
       RTN GPTQ, mlp-only scope, group size 128, symmetric, calibration-free. Built in the
-      cosmos-edge tree rather than by scripts/rtn_int4_quantize.py.
-      DOES NOT LOAD in cosmos3_shim_v1.py as shipped - tested 2026-09-22, not predicted.
-      The shim hardcodes CHECKPOINT_DIR to Cosmos3-Edge/onnx/reasoning/llm and reuses it for
-      every engine, so the runtime pairs this engine with the wrong checkpoint and aborts:
-      "Runtime component checkpoint does not match build provider ...: missing tensor
-      embed_tokens.weight". The tensor is NOT actually missing - the checkpoint here has all
-      810 including embed_tokens.weight; the shim simply never looks at it. Making this
-      selectable for real needs the shim to derive CHECKPOINT_DIR per engine. Listed here so
-      the command centre shows it and the next person sees why it fails, rather than finding
-      out by taking the model offline for two minutes.
+      cosmos-edge tree rather than by scripts/rtn_int4_quantize.py, and weight-stripped: a
+      ~16 MB llm.engine that refits from the model/ directory beside it, not an 838 MB engine
+      with the weights inside. Needs nvr/shim/cosmos3_shim_v1.py at or after the per-engine
+      checkpoint fix; the older shim hardcoded one checkpoint for every engine and aborted
+      with "missing tensor embed_tokens.weight" - misleading, since this checkpoint has all
+      810 tensors including that one and was simply never consulted.
+      Measured 2026-09-22 on this box: loads in 69 s, answers, and sits at 4.19 GB resident -
+      about 1 GB MORE than v3, because mlp-only leaves attention at higher precision. That is
+      the whole trade, and it is why there is still no profile line: latency and tokens/frame
+      have not been run against the 23-frame set the other three are scored on.
 
 # Moorebot Scouts. One entry per robot; the command centre renders a card each. Each has its own
 # bridge container on this box (nvr/scout/), behind the `scout` compose profile, so a card shows
@@ -261,6 +261,10 @@ links:
   - {name: "Frigate NVR",        port: 5000,  scheme: "http",  path: "/"}
   - {name: "Frigate (auth UI)",  port: 8971,  scheme: "https", path: "/"}
   - {name: "Live VLM WebUI",     port: 8090,  scheme: "https", path: "/"}
+  # The newer streaming UI. http, not https: the unit binds loopback and issues no cert until
+  # nvr/ui/scripts/enable_lan_ui.sh is run on purpose. Shows down until you start it, which is
+  # correct - it ships installed but disabled.
+  - {name: "Live Vision (new UI)", port: 8092, scheme: "http",  path: "/"}
   - {name: "Home Assistant",     port: 8123,  scheme: "http",  path: "/"}
   - {name: "Cosmos3-Edge API",   port: 8000,  scheme: "http",  path: "/v1/models"}
   # Health rather than /mjpeg: probing the stream would open a video connection on every poll.
