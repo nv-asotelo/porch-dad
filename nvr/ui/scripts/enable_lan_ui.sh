@@ -2,7 +2,14 @@
 # Task-owned LAN listeners. Keeps inference on loopback and the selected engine resident.
 set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[[ $EUID == 0 && $(uname -m) == aarch64 && "$project_dir" == /home/jetson/cosmos-edge ]] || { echo 'Run with sudo on the Orin in /home/jetson/cosmos-edge.' >&2; exit 2; }
+# Path guard. Upstream this was pinned to /home/jetson/cosmos-edge; porch-dad installs the
+# same tree at /home/orin/nvr/ui, so both are accepted. The point of the check is that we are
+# root, on the Orin, and pointed at a real copy of this UI - not the literal path.
+case "$project_dir" in
+  /home/jetson/cosmos-edge|/home/orin/nvr/ui) : ;;
+  *) echo "Run with sudo on the Orin in /home/jetson/cosmos-edge or /home/orin/nvr/ui." >&2; exit 2 ;;
+esac
+[[ $EUID == 0 && $(uname -m) == aarch64 ]] || { echo 'Run with sudo on the Orin (aarch64).' >&2; exit 2; }
 lan_ip="$(python3 - "${1:?Usage: sudo bash scripts/enable_lan_ui.sh ORIN_LAN_IPV4}" <<'PY'
 import ipaddress, sys
 address = ipaddress.IPv4Address(sys.argv[1])

@@ -85,9 +85,16 @@ engines:
     profile: ""
     notes: >-
       RTN GPTQ, mlp-only scope, group size 128, symmetric, calibration-free. Built in the
-      cosmos-edge tree rather than by scripts/rtn_int4_quantize.py, so it is not a drop-in
-      sibling of v1/v2/v3 - it needs its model.safetensors alongside the stripped engine.
-      Shows as unbuilt, and refuses to switch, on any box where that pair is absent.
+      cosmos-edge tree rather than by scripts/rtn_int4_quantize.py.
+      DOES NOT LOAD in cosmos3_shim_v1.py as shipped - tested 2026-09-22, not predicted.
+      The shim hardcodes CHECKPOINT_DIR to Cosmos3-Edge/onnx/reasoning/llm and reuses it for
+      every engine, so the runtime pairs this engine with the wrong checkpoint and aborts:
+      "Runtime component checkpoint does not match build provider ...: missing tensor
+      embed_tokens.weight". The tensor is NOT actually missing - the checkpoint here has all
+      810 including embed_tokens.weight; the shim simply never looks at it. Making this
+      selectable for real needs the shim to derive CHECKPOINT_DIR per engine. Listed here so
+      the command centre shows it and the next person sees why it fails, rather than finding
+      out by taking the model offline for two minutes.
 
 # Moorebot Scouts. One entry per robot; the command centre renders a card each. Each has its own
 # bridge container on this box (nvr/scout/), behind the `scout` compose profile, so a card shows

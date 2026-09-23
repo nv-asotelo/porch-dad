@@ -13,7 +13,7 @@ WorkingDirectory=/home/orin/nvr/ui
 # Binds loopback only. LAN exposure is opt-in and deliberate: run enable_lan_ui.sh,
 # which writes a cosmos-edge-ui.service.d/lan.conf drop-in and issues a self-signed
 # cert. Nothing on the LAN can reach this until that is done on purpose.
-ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/python /home/orin/nvr/ui/serve_ui.py --host 127.0.0.1 --port 8092
+ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/python /home/orin/nvr/ui/scripts/serve_ui.py --host 127.0.0.1 --port 8092
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=10
