@@ -7,6 +7,7 @@ bindings and serves every request against the warm, resident model.
 """
 import asyncio
 import base64
+import json
 import os
 import re
 import sys
@@ -21,7 +22,7 @@ sys.path.insert(0, "/home/orin/TensorRT-Edge-LLM/build/pybind")
 
 import _edgellm_runtime as rt  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
 
 MODEL_ID = "nvidia/Cosmos3-Edge"
 ENGINE_DIR = "/opt/tensorrt-edgellm/models/default"
@@ -87,6 +88,30 @@ def _startup():
     _init_runtime()
 
 
+@app.get("/health/ready")
+def health_ready():
+    """Readiness, as the Live Vision UI defines it.
+
+    That UI refuses to run inference until this returns 200 with status "ready" - it polls
+    /health/ready, /v1/models and /api/runtime together and treats a failure of the first two
+    as "backend unavailable". This shim only ever served /v1/models and /v1/chat/completions,
+    so the UI sat there reporting the backend down while the model was loaded and answering.
+
+    Reports the real thing: _runtime is None until _init_runtime() finishes constructing
+    LLMRuntime, which takes ~40-70s after a restart, so 503 during that window is accurate
+    rather than a formality.
+
+    /api/runtime is deliberately NOT implemented. The UI tolerates it (null-checked, and
+    applyRuntime is try/caught), and answering it means publishing engine_id, an image-token
+    limit, a static_clocks flag and an encoder cache size. The first is knowable here; the
+    rest are not, and inventing them would push wrong limits into the UI's controls. Missing
+    endpoint costs only the image-token presets falling back to defaults.
+    """
+    if _runtime is None:
+        return JSONResponse({"status": "loading"}, status_code=503)
+    return JSONResponse({"status": "ready"})
+
+
 def _build_request(messages, max_tokens, temperature, top_p, top_k=50):
     """Translate OpenAI-style messages into an LLMGenerationRequest."""
     images = []
@@ -131,6 +156,86 @@ async def list_models():
     return {"object": "list", "data": [{"id": MODEL_ID, "object": "model", "owned_by": "local"}]}
 
 
+def _sse(payload: dict) -> str:
+    return "data: " + json.dumps(payload, separators=(",", ":")) + "\n\n"
+
+
+async def _stream_completion(req, body, t_start):
+    """Server-sent events, for clients that will not accept a single JSON body.
+
+    The Live Vision UI only ever sends stream=true and refuses anything that is not SSE, so
+    without this the model would answer correctly and its proxy would discard the result as a
+    502. Frigate GenAI and porch-feed send no stream flag and must keep getting exactly the
+    body they always got, which is why this is a separate path rather than a rewrite.
+
+    The runtime streams through a StreamChannel attached to the request: handle_request runs
+    on the same single-slot pool as before, while this coroutine pops chunks as they are
+    produced. wait_pop is blocking, so it goes to the default executor rather than the
+    inference pool - putting it on _pool would deadlock against the generation it is waiting on.
+    """
+    channel = rt.StreamChannel.create()
+    channel.set_stream_interval(1)
+    req.stream_channels = [channel]
+
+    cid = "chatcmpl-" + uuid.uuid4().hex
+    created = int(time.time())
+    head = {"id": cid, "object": "chat.completion.chunk", "created": created, "model": MODEL_ID}
+    want_usage = bool((body.get("stream_options") or {}).get("include_usage"))
+
+    async def frames():
+        loop = asyncio.get_running_loop()
+        gen_tok = prompt_tok = 0
+        reason = "stop"
+        await _lock.acquire()
+        try:
+            yield _sse({**head, "choices": [{"index": 0, "delta": {"role": "assistant"},
+                                             "finish_reason": None}]})
+            fut = loop.run_in_executor(_pool, _runtime.handle_request, req)
+            while True:
+                chunk = await loop.run_in_executor(None, channel.wait_pop, 250)
+                if chunk is None:
+                    # No chunk within the timeout. Only stop if generation is actually over,
+                    # otherwise this is just a slow token and the stream continues.
+                    if fut.done() and channel.is_finished():
+                        break
+                    continue
+                if getattr(chunk, "prompt_token_count", 0):
+                    prompt_tok = chunk.prompt_token_count
+                if chunk.text:
+                    gen_tok += len(chunk.token_ids) if chunk.token_ids else 1
+                    yield _sse({**head, "choices": [{"index": 0, "delta": {"content": chunk.text},
+                                                     "finish_reason": None}]})
+                if chunk.finished:
+                    if getattr(chunk, "reason", None) == rt.FinishReason.LENGTH:
+                        reason = "length"
+                    break
+            try:
+                await fut          # surface an inference error rather than ending the stream silently
+            except Exception as e:
+                yield _sse({**head, "choices": [{"index": 0, "delta": {},
+                                                 "finish_reason": "error"}],
+                            "error": {"message": f"inference failed: {e}"}})
+                yield "data: [DONE]\n\n"
+                return
+            yield _sse({**head, "choices": [{"index": 0, "delta": {}, "finish_reason": reason}]})
+            if want_usage:
+                yield _sse({**head, "choices": [],
+                            "usage": {"prompt_tokens": prompt_tok, "completion_tokens": gen_tok,
+                                      "total_tokens": prompt_tok + gen_tok}})
+            yield "data: [DONE]\n\n"
+            elapsed = (time.time() - t_start) * 1000.0
+            mspt = (elapsed / gen_tok) if gen_tok else float("nan")
+            print(f"[perf] stream elapsed_ms={elapsed:.0f} prompt_tok={prompt_tok} "
+                  f"gen_tok={gen_tok} ms_per_tok={mspt:.1f}", flush=True)
+        finally:
+            if not channel.is_finished():
+                channel.cancel()
+            _lock.release()
+
+    return StreamingResponse(frames(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     _t_start = time.time()
@@ -145,6 +250,9 @@ async def chat_completions(request: Request):
         )
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": {"message": f"bad request: {e}"}})
+
+    if body.get("stream"):
+        return await _stream_completion(req, body, _t_start)
 
     loop = asyncio.get_running_loop()
     async with _lock:
