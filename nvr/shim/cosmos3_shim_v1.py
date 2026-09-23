@@ -190,6 +190,11 @@ async def _stream_completion(req, body, t_start):
         try:
             yield _sse({**head, "choices": [{"index": 0, "delta": {"role": "assistant"},
                                              "finish_reason": None}]})
+            # The native boundary the UI insists on. Started here, after _build_request has
+            # already decoded and loaded the JPEG, so this measures generation and not image
+            # work or transport - which is exactly the distinction its comments demand.
+            t_native = time.monotonic()
+            first_text_at = None
             fut = loop.run_in_executor(_pool, _runtime.handle_request, req)
             while True:
                 chunk = await loop.run_in_executor(None, channel.wait_pop, 250)
@@ -202,6 +207,8 @@ async def _stream_completion(req, body, t_start):
                 if getattr(chunk, "prompt_token_count", 0):
                     prompt_tok = chunk.prompt_token_count
                 if chunk.text:
+                    if first_text_at is None:
+                        first_text_at = time.monotonic()
                     gen_tok += len(chunk.token_ids) if chunk.token_ids else 1
                     yield _sse({**head, "choices": [{"index": 0, "delta": {"content": chunk.text},
                                                      "finish_reason": None}]})
@@ -217,7 +224,21 @@ async def _stream_completion(req, body, t_start):
                             "error": {"message": f"inference failed: {e}"}})
                 yield "data: [DONE]\n\n"
                 return
-            yield _sse({**head, "choices": [{"index": 0, "delta": {}, "finish_reason": reason}]})
+            # Live Vision reads data.cosmos_metrics and validates every field before it will
+            # display a latency at all - wrong types or a missing key silently render "-".
+            # timing_source must say server_monotonic because these come from time.monotonic().
+            native_ms = (time.monotonic() - t_native) * 1000.0
+            metrics = {"timing_boundary": "native_inference",
+                       "timing_source": "server_monotonic",
+                       "request_id": cid,
+                       "completion_tokens": int(gen_tok),
+                       "prompt_tokens": int(prompt_tok),
+                       "native_inference_ms": round(native_ms, 3)}
+            if first_text_at is not None:
+                metrics["first_text_timing_boundary"] = "native_start_to_server_text"
+                metrics["server_first_text_ms"] = round((first_text_at - t_native) * 1000.0, 3)
+            yield _sse({**head, "cosmos_metrics": metrics,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": reason}]})
             if want_usage:
                 yield _sse({**head, "choices": [],
                             "usage": {"prompt_tokens": prompt_tok, "completion_tokens": gen_tok,
