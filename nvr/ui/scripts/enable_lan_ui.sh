@@ -17,10 +17,12 @@ esac
 case "$project_dir" in
   /home/orin/nvr/ui)
     http_port="${2:-8092}"; https_port="${3:-8443}"
-    python_bin=/home/orin/TensorRT-Edge-LLM/.venv/bin/python ;;
+    python_bin=/home/orin/TensorRT-Edge-LLM/.venv/bin/python
+    svc_user=orin ;;
   *)
     http_port="${2:-8090}"; https_port="${3:-8443}"
-    python_bin=/usr/bin/python3 ;;
+    python_bin=/usr/bin/python3
+    svc_user=jetson ;;
 esac
 for p in "$http_port" "$https_port"; do
   [[ "$p" =~ ^[0-9]+$ ]] || { echo "Bad port: $p" >&2; exit 2; }
@@ -34,13 +36,13 @@ print(address)
 PY
 )"
 tls_dir="$project_dir/deployment/tls"
-install -d -o jetson -g jetson -m 700 "$tls_dir"
+install -d -o "$svc_user" -g "$svc_user" -m 700 "$tls_dir"
 if [[ ! -f "$tls_dir/orin.crt" || ! -f "$tls_dir/orin.key" ]]; then
   openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 365 \
     -keyout "$tls_dir/orin.key" -out "$tls_dir/orin.crt" \
     -subj '/CN=Cosmos3 Edge Orin' \
     -addext "subjectAltName=IP:$lan_ip,DNS:jetson.local,DNS:localhost,IP:127.0.0.1"
-  chown jetson:jetson "$tls_dir/orin.key" "$tls_dir/orin.crt"
+  chown "$svc_user:$svc_user" "$tls_dir/orin.key" "$tls_dir/orin.crt"
   chmod 600 "$tls_dir/orin.key"
   chmod 644 "$tls_dir/orin.crt"
 fi
