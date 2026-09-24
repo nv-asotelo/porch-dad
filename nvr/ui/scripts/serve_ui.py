@@ -3,6 +3,12 @@
 
 No model, cloud fallback, downloaded dependency or synthetic inference lives here.
 Run on the Jetson alongside tensorrt-edgellm-serve. See research/ui-feasibility.md.
+
+It also relays the Reachy Mini bridge (nvr/reachy/reachy_mjpeg_bridge.py) under /reachy/.
+The bridge listens on loopback and the Docker gateway only, and a same-origin relay is what
+lets the page draw the robot's frames into a canvas for inference without tainting it.
+Those routes need this process's token, which only the page itself can read (/api/access),
+and a Host that DNS rebinding cannot fake: see RELAY_TOKEN and host_allowed().
 """
 
 import argparse
@@ -15,12 +21,13 @@ import json
 import math
 from pathlib import Path
 import re
+import secrets
 import select
 import socket
 import ssl
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1] / "web"
 MAX_BODY = 2 * 1024 * 1024
@@ -29,6 +36,44 @@ MAX_SECONDS = 120
 GENERATION_LOCK = threading.Lock()
 GENERATION_WAIT_LOCK = threading.Lock()
 HANDOFF_SECONDS = 0.75
+
+# Reachy bridge routes: page path -> (bridge path, the only Content-Type accepted from it).
+REACHY_FETCHES = {"/reachy/healthz": ("/healthz", "application/json"),
+                  "/reachy/still.jpg": ("/still.jpg", "image/jpeg")}
+REACHY_STREAMS = {"/reachy/mjpeg": ("/mjpeg", "multipart/x-mixed-replace"),
+                  "/reachy/audio.mp3": ("/audio.mp3", "audio/mpeg")}
+REACHY_SECONDS = 3
+# Each open stream pins a handler thread (and a disconnect watcher) for as long as a tab
+# watches or listens, in a process capped at MemoryMax=256M with a listen queue of 8. The cap
+# is per process, so the HTTP and HTTPS listeners share it, and inference never waits on it.
+MAX_REACHY_STREAMS = 4
+REACHY_STREAM_SLOTS = threading.BoundedSemaphore(MAX_REACHY_STREAMS)
+# Replacing an <img> src closes the old stream and opens the new one at once, but the old
+# stream's watcher needs up to 0.2 s to notice and hand its slot back. A full cap waits this
+# long for that handoff before it refuses, so a tab reopening its own stream is not turned away.
+STREAM_HANDOFF_SECONDS = 0.5
+# The bridge writes nothing while it has no new frame or no microphone audio. A stream silent
+# this long gives its slot back; the page reopens it when the bridge reports live again.
+STREAM_IDLE_SECONDS = 20
+STREAM_CHUNK = 16384
+# Open streams by the page's ?stream= token -> [monotonic time of the last byte relayed].
+# An MJPEG <img> tells the page nothing when its stream ends cleanly (a restart of this
+# server, say) and keeps showing the last frame, so the page asks here instead: each
+# /reachy/healthz?stream=<token> answer carries X-Reachy-Stream: closed | idle_ms=<n>.
+RELAYED_STREAMS = {}
+RELAYED_STREAMS_LOCK = threading.Lock()
+STREAM_TOKEN = re.compile(r"[A-Za-z0-9_-]{8,64}")
+# Streams holding a slot, for X-Reachy-Slots on /reachy/healthz. The semaphore cannot be asked
+# how many it has given out, so this is counted beside it, under RELAYED_STREAMS_LOCK: taken
+# after the slot, given up before it, so it never shows more open than there really are.
+OPEN_REACHY_STREAMS = 0
+# The relay's key, new in every process. The robot's camera and microphone must not be open to
+# every page a LAN browser visits: an <img> or <audio> on another site carries no Origin, and a
+# DNS-rebound name looks same-origin to the browser. /api/access hands this to the page, which
+# only a same-origin page can read, and every /reachy/ URL must carry it as ?token=. As with the
+# command centre's control token, this stops drive-by pages, not a determined LAN attacker.
+RELAY_TOKEN = secrets.token_urlsafe(24)
+HOSTNAME = re.compile(r"[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.?")
 
 
 class DeviceTelemetry:
@@ -200,6 +245,33 @@ def validate_request(payload):
         raise ValueError("Invalid or oversized JPEG image.")
 
 
+def parse_host(host_header):
+    """(host, IP address or None) named by a Host header, which may carry a port."""
+    if not isinstance(host_header, str) or not host_header or any(
+            ord(char) <= 32 or ord(char) == 127 or char == "\\" for char in host_header):
+        raise ValueError("Invalid Host header.")
+    try:
+        parsed = urlsplit("//" + host_header)
+        host = parsed.hostname
+        parsed.port  # Validate the caller's port before anything relies on the authority.
+        if not host or parsed.username is not None or parsed.password is not None or \
+                parsed.path or parsed.query or parsed.fragment:
+            raise ValueError("Invalid host authority")
+        try:
+            return host, ipaddress.ip_address(host)
+        except ValueError:
+            if len(host) > 253 or not HOSTNAME.fullmatch(host):
+                raise ValueError("Invalid hostname")
+            return host, None
+    except ValueError as exc:
+        raise ValueError("Invalid Host header.") from exc
+
+
+def is_localhost_name(host):
+    name = host.rstrip(".").lower()
+    return name == "localhost" or name.endswith(".localhost")
+
+
 def camera_redirect_url(host_header, https_port):
     """Upgrade the same requested LAN host, preserving secure-context localhost.
 
@@ -208,31 +280,57 @@ def camera_redirect_url(host_header, https_port):
     """
     if not https_port:
         return None
-    if not isinstance(host_header, str) or not host_header or any(
-            ord(char) <= 32 or ord(char) == 127 or char == "\\" for char in host_header):
-        raise ValueError("Invalid Host header.")
-    try:
-        parsed = urlsplit("//" + host_header)
-        host = parsed.hostname
-        parsed.port  # Validate the caller's port before building our authority.
-        if not host or parsed.username is not None or parsed.password is not None or \
-                parsed.path or parsed.query or parsed.fragment:
-            raise ValueError("Invalid host authority")
-        try:
-            address = ipaddress.ip_address(host)
-        except ValueError:
-            if len(host) > 253 or not re.fullmatch(r"[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.?", host):
-                raise ValueError("Invalid hostname")
-            if host.rstrip(".").lower() == "localhost" or host.rstrip(".").lower().endswith(".localhost"):
-                return None
-            authority = host
-        else:
-            if address.is_loopback:
-                return None
-            authority = f"[{host}]" if address.version == 6 else host
-    except ValueError as exc:
-        raise ValueError("Invalid Host header.") from exc
+    host, address = parse_host(host_header)
+    if address is None:
+        if is_localhost_name(host):
+            return None
+        authority = host
+    else:
+        if address.is_loopback:
+            return None
+        authority = f"[{host}]" if address.version == 6 else host
     return f"https://{authority}:{https_port}/"
+
+
+def host_allowed(host_header, allowed_hosts=frozenset()):
+    """Whether the browser asked for this server by a name that cannot be DNS-rebound.
+
+    Rebinding points an attacker's own name at this address: the browser then treats the
+    attacker's page as same-origin here, sends Sec-Fetch-Site: same-origin, and would let it
+    read /api/access. The one thing it cannot change is the name it asked for, in Host. An IP
+    literal or localhost resolves nowhere else; any other name must be one the operator listed.
+    """
+    try:
+        host, address = parse_host(host_header)
+    except ValueError:
+        return False
+    return address is not None or is_localhost_name(host) or host.rstrip(".").lower() in allowed_hosts
+
+
+def allowed_host_name(value):
+    """An --allowed-host value: one DNS name, no scheme or port, as Host will be compared."""
+    name = value.strip().rstrip(".").lower()
+    if not name or len(name) > 253 or not HOSTNAME.fullmatch(name):
+        raise ValueError(f"--allowed-host takes a bare host name such as orin.local, not {value!r}")
+    return name
+
+
+def bridge_address(url):
+    """(host, port) of the Reachy bridge. Plain HTTP only: it never leaves the Jetson."""
+    message = "--reachy-url must look like http://127.0.0.1:8099"
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port or 80
+    except ValueError as exc:
+        raise ValueError(message) from exc
+    if parsed.scheme != "http" or not parsed.hostname or parsed.username is not None or \
+            parsed.password is not None or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError(message)
+    return parsed.hostname, port
+
+
+def media_type(response):
+    return response.getheader("Content-Type", "").split(";")[0].strip().lower()
 
 
 class Server(ThreadingHTTPServer):
@@ -244,6 +342,8 @@ class Server(ThreadingHTTPServer):
         self.owns_telemetry = telemetry is None
         self.telemetry = telemetry if telemetry is not None else DeviceTelemetry().start()
         self.https_port = None
+        # Names besides IP literals and localhost that /reachy/ and /api/access answer to.
+        self.allowed_hosts = frozenset()
 
     def server_close(self):
         if getattr(self, "owns_telemetry", False):
@@ -255,10 +355,12 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_request(self, code="-", size="-"):
-        # Polling is routine; do not write a system journal line every second.
-        if self.path == "/api/metrics" and code == 200:
+        # Polling is routine; do not write a system journal line every second or two.
+        if self.path.partition("?")[0] in {"/api/metrics", "/reachy/healthz"} and code == 200:
             return
-        super().log_request(code, size)
+        # Nor the relay token that every /reachy/ URL carries: more can read the journal than this page.
+        self.log_message('"%s" %s %s', re.sub(r"([?&]token=)[^&\s]*", r"\1<redacted>", self.requestline),
+                         str(getattr(code, "value", code)), str(size))
 
     def setup(self):
         super().setup()
@@ -294,6 +396,27 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return False
 
+    def fetch_site_allowed(self):
+        # An <img> or <audio> request carries no Origin header, so origin_allowed() alone cannot
+        # stop another site embedding the robot's camera or microphone and using up its stream
+        # slots. Browsers send Fetch Metadata over HTTPS: only this page, or a typed URL, passes.
+        # Plain HTTP gets no Fetch Metadata from most browsers, which is why the token exists.
+        return self.headers_in.get("Sec-Fetch-Site", "same-origin") in {"same-origin", "none"}
+
+    def host_refused(self):
+        """Answer 421 unless Host names this server in a way DNS rebinding cannot fake."""
+        if host_allowed(self.headers_in.get("Host"), self.server.allowed_hosts):
+            return False
+        self.json_error(421, "Live Vision does not answer to this host name. Open it by IP address, "
+                             "or start it with --allowed-host for this name.")
+        return True
+
+    @staticmethod
+    def relay_token_valid(query):
+        supplied = parse_qs(query).get("token") or []
+        # Bytes: compare_digest refuses str with non-ASCII characters, which a query can carry.
+        return len(supplied) == 1 and secrets.compare_digest(supplied[0].encode(), RELAY_TOKEN.encode())
+
     def do_GET(self):
         self.headers_in = self.headers
         if not self.origin_allowed():
@@ -311,23 +434,51 @@ class Handler(BaseHTTPRequestHandler):
         if self.path in {"/health/ready", "/v1/models", "/api/runtime"}:
             self.proxy(self.path)
             return
+        # The page makes every stream URL it opens unique, so a reopened stream is really
+        # fetched again; the video's ?stream= token also names it for X-Reachy-Stream.
+        # Every route also needs the relay's ?token= (RELAY_TOKEN), checked after Host and Fetch
+        # Metadata so those refusals keep saying what is wrong. Queries never reach the bridge.
+        route, _, query = self.path.partition("?")
+        if route in REACHY_FETCHES or route in REACHY_STREAMS:
+            stream = (parse_qs(query).get("stream") or [""])[0]
+            stream = stream if STREAM_TOKEN.fullmatch(stream) else None
+            if self.host_refused():
+                return
+            if not self.fetch_site_allowed():
+                self.json_error(403, "Cross-site requests are disabled.")
+            elif not self.relay_token_valid(query):
+                # Also what a page still open across a restart of this server gets: it asks
+                # /api/access again for the new token.
+                self.json_error(401, "Missing or out-of-date relay token. Reload Live Vision.")
+            elif route in REACHY_STREAMS:
+                self.reachy_stream(*REACHY_STREAMS[route], stream)
+            else:
+                self.reachy_fetch(*REACHY_FETCHES[route], stream)
+            return
         if self.path == "/api/metrics":
             body = json.dumps(self.server.telemetry.snapshot()).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
         if self.path == "/api/access":
-            body = json.dumps({"https_port": self.server.https_port}).encode()
+            # The relay token goes only to a page that can read this answer: a cross-origin page
+            # cannot, and a rebound name is refused here before it gets the chance.
+            if self.host_refused():
+                return
+            body = json.dumps({"https_port": self.server.https_port, "reachy_token": RELAY_TOKEN}).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
+        # Only the bare page is upgraded to HTTPS above, for the camera. A link such as
+        # /?source=reachy is served where it was asked for: the robot needs no secure
+        # context, and a detour through a self-signed certificate would only add a warning.
         assets = {"/": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8")}
-        if self.path not in assets:
+        if route not in assets:
             self.json_error(404, "Not found.")
             return
-        name, content_type = assets[self.path]
+        name, content_type = assets[route]
         data = (ROOT / name).read_bytes()
         self.send_headers(200, content_type, len(data))
         self.wfile.write(data)
@@ -485,6 +636,133 @@ class Handler(BaseHTTPRequestHandler):
             if watcher:
                 watcher.join(timeout=0.5)
 
+    def reachy_refusal(self, status, raw):
+        # Pass the bridge's own status and words through: its 503 says why there is no frame
+        # ("no fresh frame (dormant: camera held by the robot app 'x')"), which is the useful part.
+        text = raw[:MAX_RESPONSE].decode("utf-8", "replace").strip()[:300]
+        self.json_error(status if 400 <= status <= 599 else 502,
+                        f"Reachy bridge: {text or f'HTTP {status}'}")
+
+    def reachy_fetch(self, path, content_type, token=None):
+        """One bounded answer from the bridge: its health, or its newest frame."""
+        extra_headers = {}
+        with RELAYED_STREAMS_LOCK:
+            entry = RELAYED_STREAMS.get(token) if token else None
+            idle = None if entry is None else time.monotonic() - entry[0]
+            slots = OPEN_REACHY_STREAMS
+        if token:
+            extra_headers["X-Reachy-Stream"] = "closed" if idle is None else f"idle_ms={round(idle * 1000)}"
+        if path == "/healthz":
+            # A refused <img> cannot see its 503, so health says whether the cap is why.
+            extra_headers["X-Reachy-Slots"] = f"{slots}/{MAX_REACHY_STREAMS}"
+        connection = http.client.HTTPConnection(*self.server.reachy_address, timeout=REACHY_SECONDS)
+        response = None
+        try:
+            try:
+                connection.request("GET", path, headers={"Accept": content_type})
+                response = connection.getresponse()
+                data = response.read(MAX_RESPONSE + 1)
+            except (OSError, http.client.HTTPException):
+                self.json_error(502, "Reachy bridge is not reachable.")
+                return
+            if len(data) > MAX_RESPONSE:
+                self.json_error(502, "Reachy bridge response exceeded the size limit.")
+            elif response.status != 200:
+                self.reachy_refusal(response.status, data)
+            elif media_type(response) != content_type:
+                self.json_error(502, "Reachy bridge returned an unexpected content type.")
+            else:
+                self.send_headers(200, content_type, len(data), extra_headers)
+                self.wfile.write(data)
+        except OSError:
+            pass  # The browser has gone; nobody is left to tell.
+        finally:
+            if response:
+                response.close()
+            connection.close()
+
+    def reachy_stream(self, path, content_type, token=None):
+        """Relay an endless bridge stream (MJPEG or MP3) until the browser or the bridge stops.
+
+        Never takes GENERATION_LOCK: watching or listening to the robot must neither wait for
+        inference nor hold it up. Every way out - browser gone, bridge restarted, idle timeout -
+        ends the same way: both sockets closed, the slot returned, the token forgotten.
+        """
+        global OPEN_REACHY_STREAMS
+        if not REACHY_STREAM_SLOTS.acquire(timeout=STREAM_HANDOFF_SECONDS):
+            self.json_error(503, f"{MAX_REACHY_STREAMS} Reachy streams are already open on this server. "
+                                 "Close another Live Vision tab or turn Listen off.")
+            return
+        with RELAYED_STREAMS_LOCK:
+            OPEN_REACHY_STREAMS += 1
+        connection = http.client.HTTPConnection(*self.server.reachy_address, timeout=REACHY_SECONDS)
+        finished = threading.Event()
+        response = None
+        watcher = None
+        started = False
+        entry = [time.monotonic()]
+        if token:
+            with RELAYED_STREAMS_LOCK:
+                RELAYED_STREAMS[token] = entry
+        try:
+            connection.connect()
+            upstream_socket = connection.sock
+            connection.request("GET", path, headers={"Accept": content_type})
+            response = connection.getresponse()
+            if response.status != 200:
+                self.reachy_refusal(response.status, response.read(MAX_RESPONSE + 1))
+                return
+            # Relayed whole, because the multipart boundary lives in it.
+            upstream_type = response.getheader("Content-Type", "")
+            if media_type(response) != content_type or not re.fullmatch(r"[\x20-\x7e]{1,200}", upstream_type):
+                self.json_error(502, "Reachy bridge returned an unexpected content type.")
+                return
+            upstream_socket.settimeout(STREAM_IDLE_SECONDS)
+
+            def watch_disconnect():
+                # The browser sends nothing after its GET on this close-after-response
+                # connection, so readable means gone: Stop, img.src = "", a closed tab.
+                # Shutting the bridge socket unblocks the relay now, not at the next frame,
+                # which may be minutes away while the robot is dormant.
+                while not finished.wait(0.2):
+                    if self.client_disconnected():
+                        break
+                if not finished.is_set():
+                    try:
+                        upstream_socket.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+            watcher = threading.Thread(target=watch_disconnect, name="reachy-stream-watch", daemon=True)
+            watcher.start()
+            self.send_headers(200, upstream_type)
+            started = True
+            while True:
+                data = response.read1(STREAM_CHUNK)
+                if not data:
+                    break
+                self.wfile.write(data)
+                entry[0] = time.monotonic()
+        except (OSError, http.client.HTTPException):
+            if not started:
+                try:
+                    self.json_error(502, "Reachy bridge is not reachable.")
+                except OSError:
+                    pass
+        finally:
+            finished.set()
+            if token:
+                with RELAYED_STREAMS_LOCK:
+                    if RELAYED_STREAMS.get(token) is entry:
+                        del RELAYED_STREAMS[token]
+            if response:
+                response.close()
+            connection.close()
+            if watcher:
+                watcher.join(timeout=0.5)
+            with RELAYED_STREAMS_LOCK:
+                OPEN_REACHY_STREAMS -= 1
+            REACHY_STREAM_SLOTS.release()
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -497,11 +775,24 @@ def main():
                         help="Add HTTPS on this port while the primary port serves HTTP.")
     parser.add_argument("--allow-insecure-lan", action="store_true",
                         help="Explicitly allow LAN HTTP for image uploads. Cameras need HTTPS.")
+    parser.add_argument("--reachy-url", default="http://127.0.0.1:8099",
+                        help="Reachy Mini bridge relayed under /reachy/ (plain HTTP on the Jetson).")
+    parser.add_argument("--allowed-host", action="append", default=[], metavar="NAME",
+                        help="A host name (such as orin.local) that /reachy/ and /api/access answer "
+                             "to, besides IP addresses and localhost. Repeat for more names.")
     args = parser.parse_args()
+    try:
+        allowed_hosts = frozenset(allowed_host_name(name) for name in args.allowed_host)
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         loopback = args.host == "localhost" or ipaddress.ip_address(args.host).is_loopback
     except ValueError:
         parser.error("--host must be an IP address or localhost.")
+    try:
+        reachy_address = bridge_address(args.reachy_url)
+    except ValueError as exc:
+        parser.error(str(exc))
     if any(not 1 <= port <= 65535 for port in
            (args.port, args.backend_port, *([args.https_port] if args.https_port is not None else []))):
         parser.error("Ports must be from 1 to 65535.")
@@ -525,13 +816,17 @@ def main():
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
+        server.reachy_address = reachy_address
         server.https_port = args.https_port
+        server.allowed_hosts = allowed_hosts
         if primary_tls:
             server.socket = context.wrap_socket(server.socket, server_side=True)
         if args.https_port is not None:
             secure = Server((args.host, args.https_port), Handler, telemetry=server.telemetry)
             servers.append(secure)
             secure.backend_port = args.backend_port
+            secure.reachy_address = reachy_address
+            secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
             worker = threading.Thread(target=secure.serve_forever, name="https-ui", daemon=True)
             worker.start()
@@ -539,6 +834,7 @@ def main():
             print(f"Camera UI: https://{args.host}:{args.https_port}", flush=True)
         scheme = "https" if primary_tls else "http"
         print(f"UI: {scheme}://{args.host}:{args.port}; backend: http://127.0.0.1:{args.backend_port}", flush=True)
+        print(f"Reachy Mini bridge: {args.reachy_url}, relayed under /reachy/", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:

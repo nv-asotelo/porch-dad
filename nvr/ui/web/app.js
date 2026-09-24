@@ -69,6 +69,67 @@ class FrameCadence {
   }
 }
 
+// Reachy Mini arrives as MJPEG through serve_ui.py's /reachy/ relay of the robot bridge,
+// which publishes about 5 FPS. An <img> has no requestVideoFrameCallback, so the Live VLM
+// WebUI "every 30 video frames" becomes the 6 s those 30 frames take, labelled as time-based.
+const REACHY_BRIDGE_FPS = 5;
+const REACHY_SAMPLE_MS = 30 / REACHY_BRIDGE_FPS * 1000;
+const REACHY_HEALTH_MS = 2000;
+// A health answer older than this no longer vouches for the stream.
+const REACHY_HEALTH_STALE_MS = 6000;
+// An MJPEG <img> fires load for its first frame only, and nothing at all when its stream ends
+// cleanly (a restart of the relay, say) while it goes on showing the last frame. So each
+// health poll also asks the relay about this page's stream. One it no longer has, or one that
+// has relayed nothing for this long while the bridge is live, is reopened, and its picture is
+// not sent for inference meanwhile. The relay is only asked about a stream open long enough to
+// have reached it, and a new stream has the grace period to deliver its first frame.
+const REACHY_STREAM_IDLE_MS = 3000;
+const REACHY_STREAM_SETTLE_MS = 1000;
+const REACHY_STREAM_GRACE_MS = 5000;
+
+// X-Reachy-Stream from serve_ui.py: "closed", or "idle_ms=<n>" since it last relayed a byte.
+// Anything else (an older server, a failed poll) is null: unknown, so no action is taken.
+function readRelayStream(header) {
+  if (header === "closed") return {open: false, idleMs: null};
+  const match = /^idle_ms=(\d{1,9})$/.exec(header || "");
+  return match ? {open: true, idleMs: Number(match[1])} : null;
+}
+
+// X-Reachy-Slots from serve_ui.py: "<open>/<max>" Reachy streams on the whole server, every
+// tab's video and audio. A refused <img> cannot see its 503, so this is how the page tells a
+// full cap from a broken bridge. Anything else is null: unknown.
+const REACHY_SLOTS_RETRY_MS = 10000;
+function readRelaySlots(header) {
+  const match = /^(\d{1,3})\/(\d{1,3})$/.exec(header || "");
+  if (!match || Number(match[2]) < 1) return null;
+  const open = Number(match[1]), max = Number(match[2]);
+  return {open, max, full: open >= max};
+}
+
+// Why a live sample got no answer when the reason lies with the server, not the source: the one
+// inference slot is taken (by another tab, say: 429), the model backend is down or restarting
+// (502/503), or nothing answered at all. The sample is skipped and the source keeps running.
+// Anything else is a real failure, and null here.
+function skippedSampleReason(err) {
+  if (err?.status === 429) return "another inference is running";
+  if (err?.status === 502 || err?.status === 503) return "the model backend is unavailable";
+  if (err?.network === true) return "the Live Vision server is not reachable";
+  return null;
+}
+
+// One status line from the bridge's /healthz. Only live (a fresh frame at the bridge) allows
+// inference; anything else says why, in the bridge's own words where it gives them.
+function describeReachyHealth(health) {
+  if (!health || typeof health !== "object" || typeof health.state !== "string" || !health.state.trim()) {
+    return {live: false, text: "bridge status unreadable"};
+  }
+  const stateName = health.state.trim().slice(0, 40);
+  if (health.live === true) return {live: true, text: "live"};
+  const reason = typeof health.reason === "string" ? health.reason.trim().slice(0, 300) : "";
+  const why = reason || (stateName === "live" ? "no fresh frame in the last 5 s" : "");
+  return {live: false, text: why ? `${stateName} · ${why}` : stateName};
+}
+
 const ADVANCED_DEFAULTS = {imageTokens: 512, imageTokenLimit: 512, topP: 1};
 
 function validateAdvancedSettings(imageTokens, topP, limit = ADVANCED_DEFAULTS.imageTokenLimit) {
@@ -352,7 +413,7 @@ function startDeviceTelemetry() {
   resume();
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -360,8 +421,40 @@ if (typeof document !== "undefined") {
     abort: null, captureAt: null, completed: 0, imageURL: null, checking: false, cameraGeneration: 0,
     preset: "lightweight", frameCallback: null, sampled: 0, skipped: 0,
     liveStreaming: true, activeTrigger: null, engineId: null, timingGroup: 0,
-    advanced: {...ADVANCED_DEFAULTS}, advancedValid: true};
+    advanced: {...ADVANCED_DEFAULTS}, advancedValid: true, source: "camera"};
   const canvas = document.createElement("canvas");
+  // The Reachy source while state.source === "reachy": bridge health, the relayed MJPEG
+  // in #reachyImage, and the microphone. It shares running/cameraGeneration with the
+  // camera, so the stop paths (Stop, preset change, a manual failure, pagehide) end it.
+  // A failed live sample does not: see analyze().
+  const reachy = {poll: null, polling: null, cadence: null, live: false, wasLive: false, healthAt: 0,
+    audioLive: false, statusText: "checking the bridge…", streamToken: null, streamURL: null, openedAt: 0,
+    streamOK: false, listening: false, audioURL: null, audioOpens: 0,
+    streamRefused: false, slotsFull: 0, retryAt: 0};
+  // /api/access: the HTTPS port for the camera link, and the token serve_ui.py wants on every
+  // /reachy/ URL. Only this page can read it, which is what keeps other sites and rebound host
+  // names off the robot's camera and microphone. Asked for at load; a failure is asked again by
+  // the next Reachy poll, and so is a 401, which is how a restarted server refuses an old token.
+  let access = null, accessRequest = null;
+  function loadAccess() {
+    if (access) return Promise.resolve(access);
+    accessRequest ??= fetch("/api/access", {cache: "no-store", signal: AbortSignal.timeout(3000)})
+      .then(async response => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(body?.error?.message || `Live Vision server returned HTTP ${response.status}.`);
+        if (typeof body?.reachy_token !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(body.reachy_token)) {
+          throw new Error("Live Vision server sent no relay token.");
+        }
+        return access = body;
+      })
+      .finally(() => { accessRequest = null; });
+    return accessRequest;
+  }
+  function reachyURL(path, params = {}) {
+    return `${path}?${new URLSearchParams({...params, token: access.reachy_token})}`;
+  }
+  // ?source=reachy (the command centre's link) selects the robot once inference can run.
+  let reachyRequested = new URLSearchParams(window.location.search).get("source") === "reachy";
   const duration = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
   const latency = new LatencySummary();
   let serverFirstTextMs = null;
@@ -474,11 +567,17 @@ if (typeof document !== "undefined") {
   function error(message = "") { $("error").textContent = message; $("error").hidden = !message; }
   function controls() {
     $("startButton").disabled = state.running || state.busy;
+    $("reachyButton").disabled = state.running || state.busy;
     $("stopButton").disabled = !state.running && !state.busy;
-    const sourceReady = state.running ? Boolean(state.media && $("video").readyState >= 2) : Boolean(state.imageURL);
+    const sourceReady = state.running
+      ? (state.source === "reachy" ? reachyFrameReady() : Boolean(state.media && $("video").readyState >= 2))
+      : Boolean(state.imageURL);
     $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid;
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
+    $("listenButton").hidden = !reachyActive();
+    $("listenButton").setAttribute("aria-pressed", String(reachy.listening));
+    $("listenButton").textContent = `Listen: ${reachy.listening ? "On" : "Off"}`;
   }
   async function checkBackend() {
     if (state.checking) return;
@@ -513,6 +612,11 @@ if (typeof document !== "undefined") {
       $("runtimeStatus").textContent = "Waiting for the backend to report active engine settings. Load defaults are shown above.";
       if (!state.busy) $("runStatus").textContent = "Waiting for local backend";
     } finally { state.checking = false; controls(); }
+    // Honoured once, and only if nothing else was chosen while the backend was loading.
+    if (state.ready && reachyRequested) {
+      reachyRequested = false;
+      if (!state.running && !state.busy && !state.imageURL) startReachy();
+    }
   }
   function capture(source) {
     const width = source.videoWidth || source.naturalWidth;
@@ -544,11 +648,19 @@ if (typeof document !== "undefined") {
   }
   async function analyze(source, trigger = "manual") {
     if (state.busy || !state.ready || !state.advancedValid) return;
+    // Never send the robot's last picture as if it were current; the status says why not.
+    if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return; }
+    // A live Reachy sample never ends the source: the robot's video and microphone stay open
+    // through a bad sample, and the next one tries again. Only Stop, a preset change, pagehide
+    // or a failed manual request do. The camera keeps stopping on a real failure, as before;
+    // both skip what the server turned away for now (skippedSampleReason).
+    const keepSource = trigger === "live" && state.source === "reachy";
     const prompt = $("prompt").value.trim();
     const maxTokens = Number($("maxTokens").value);
     if (!prompt || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 512) {
       error("Enter a prompt and an output token limit from 1 to 512.");
-      stop(); return;
+      if (!keepSource) stop();
+      return;
     }
     // Freeze request settings and group ownership before capture. Later UI or
     // engine changes affect the next request and cannot mix timing populations.
@@ -560,11 +672,14 @@ if (typeof document !== "undefined") {
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
     $("runStatus").textContent = "Reading frame…";
-    let reader;
+    let reader, counted = false;
+    // Nothing answered at all: the network failed, not this request (see skippedSampleReason).
+    const network = err => { if (err?.name === "TypeError") err.network = true; throw err; };
     try {
       const image = capture(source);
       state.captureAt = image.capturedAt;
-      if (state.running && source === $("video")) state.sampled += 1;
+      counted = state.running && source === liveSource();
+      if (counted) state.sampled += 1;
       const started = performance.now();
       let firstToken = null, done = false, output = "", finishReason = null, serverMetrics = null;
       const response = await fetch("/v1/chat/completions", {
@@ -575,12 +690,13 @@ if (typeof document !== "undefined") {
           max_tokens: maxTokens, messages: [{role: "user", content: [
             {type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}
           ]}]})
-      });
+      }).catch(network);
       controller.signal.throwIfAborted();
       if (state.abort !== controller) return;
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error?.message || `Backend returned HTTP ${response.status}.`);
+        throw Object.assign(new Error(body.error?.message || `Backend returned HTTP ${response.status}.`),
+          {status: response.status});
       }
       if (!response.headers.get("content-type")?.includes("text/event-stream")) throw new Error("Backend did not return a token stream.");
       if (!response.body) throw new Error("Streaming responses are not supported in this browser.");
@@ -603,7 +719,7 @@ if (typeof document !== "undefined") {
       });
       reader = response.body.getReader();
       while (!done) {
-        const chunk = await reader.read();
+        const chunk = await reader.read().catch(network);
         controller.signal.throwIfAborted();
         if (state.abort !== controller) return;
         if (chunk.done) { parser.feed(decoder.decode(), true); break; }
@@ -629,8 +745,18 @@ if (typeof document !== "undefined") {
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
     } catch (err) {
       if (state.abort !== controller) return;
+      const skipped = trigger === "live" ? skippedSampleReason(err) : null;
       if (err.name === "AbortError" || controller.signal.aborted) $("runStatus").textContent = "Stopped · partial answer";
-      else { error(err.message); $("runStatus").textContent = "Request failed"; state.running = false; }
+      else if (skipped) {
+        // Counted as skipped, not sent: it got no answer. Video, audio and sampling go on.
+        if (counted) state.sampled -= 1;
+        state.skipped += 1;
+        $("runStatus").textContent = `Skipped · ${skipped}`;
+        renderLiveCounts();
+      } else {
+        error(err.message); $("runStatus").textContent = "Request failed";
+        if (!keepSource) state.running = false;
+      }
     } finally {
       // Browser cancellation can remain pending after a fetch abort. It must
       // never hold the controls busy or clean up a later request's state.
@@ -643,10 +769,12 @@ if (typeof document !== "undefined") {
       }
     }
   }
+  // Lightweight cadence for either live source: capture after each answer, at most once
+  // per interval. A Reachy frame only counts as ready while the bridge reports live.
   async function cameraLoop(generation) {
     while (state.running && generation === state.cameraGeneration) {
       const start = performance.now();
-      if (state.liveStreaming && state.ready && $("video").readyState >= 2) await analyze($("video"), "live");
+      if (state.liveStreaming && state.ready && liveFrameReady()) await analyze(liveSource(), "live");
       const delay = Math.max(100, Number($("interval").value) - (performance.now() - start));
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -668,12 +796,205 @@ if (typeof document !== "undefined") {
     }
     state.frameCallback = video.requestVideoFrameCallback(frame);
   }
+  // Live VLM WebUI cadence for Reachy: the frame-counting loop above needs a <video>, so this
+  // samples every REACHY_SAMPLE_MS instead, still skipping (and counting) samples while busy.
+  // Ticks while the bridge is not live send nothing and are not counted as skipped.
+  function reachyCadenceLoop(generation) {
+    function tick() {
+      reachy.cadence = null;
+      if (!state.running || generation !== state.cameraGeneration) return;
+      if (state.liveStreaming && reachyFrameReady()) {
+        if (state.busy) state.skipped += 1;
+        else if (state.ready) void analyze($("reachyImage"), "live");
+      }
+      renderReachySampling();
+      reachy.cadence = setTimeout(tick, REACHY_SAMPLE_MS);
+    }
+    reachy.cadence = setTimeout(tick, REACHY_SAMPLE_MS);
+  }
+  function reachyActive() { return state.running && state.source === "reachy"; }
+  function liveSource() { return state.source === "reachy" ? $("reachyImage") : $("video"); }
+  function liveFrameReady() { return state.source === "reachy" ? reachyFrameReady() : $("video").readyState >= 2; }
+  // Only a frame this connection delivered (load) while the bridge is live and the relay still
+  // has the stream: never the last picture of a stream that has quietly ended.
+  function reachyFrameReady() {
+    return reachy.live && performance.now() - reachy.healthAt < REACHY_HEALTH_STALE_MS &&
+      reachy.streamURL !== null && reachy.streamOK && $("reachyImage").naturalWidth > 0;
+  }
+  function openReachyStream() {
+    // Without the relay token (a poll has just dropped a stale one) the next poll opens it.
+    if (!access) return;
+    // A random token per connection names it when the health poll asks the relay about it,
+    // and makes the URL new, so the browser really fetches rather than reusing an old stream.
+    // Replacing src also ends the previous connection.
+    reachy.streamToken = Array.from(crypto.getRandomValues(new Uint32Array(3)),
+      word => word.toString(36).padStart(7, "0")).join("");
+    reachy.streamURL = reachyURL("/reachy/mjpeg", {stream: reachy.streamToken});
+    reachy.openedAt = performance.now(); reachy.streamOK = false;
+    $("reachyImage").src = reachy.streamURL;
+  }
+  function closeReachyStream() {
+    reachy.streamToken = null; reachy.streamURL = null; reachy.streamOK = false;
+    // Clearing src is what ends an <img>'s MJPEG request, so the relay and the bridge let go.
+    $("reachyImage").src = "";
+  }
+  function openReachyAudio() {
+    if (!access) return;   // As for the video: the next poll that reports audio opens it.
+    const url = reachy.audioURL = reachyURL("/reachy/audio.mp3", {open: ++reachy.audioOpens});
+    $("reachyAudio").src = url;
+    $("reachyAudio").play().catch(err => {
+      // Stop and Listen off interrupt play() on purpose. A failed stream is retried by the
+      // next health poll that reports microphone audio; a blocked one needs the user.
+      if (reachy.audioURL !== url || err.name === "AbortError") return;
+      reachy.audioURL = null;
+      if (err.name === "NotAllowedError") {
+        reachy.listening = false;
+        error("This browser blocked audio playback. Press Listen again to allow it.");
+      }
+      renderReachyStatus(); controls();
+    });
+  }
+  function closeReachyAudio() {
+    reachy.audioURL = null;
+    const audio = $("reachyAudio");
+    // Removing src and reloading is what aborts a media fetch. The bridge only runs its
+    // MP3 encoder while somebody listens, so turning Listen off must really disconnect.
+    audio.pause(); audio.removeAttribute("src"); audio.load();
+  }
+  function renderReachyStatus() {
+    if (!reachyActive()) return;
+    const image = $("reachyImage");
+    // The <img> keeps its last frame when the robot goes quiet; do not let it look live.
+    image.classList.toggle("stale", !reachyFrameReady());
+    const parts = ["Reachy Mini", reachy.statusText];
+    if (reachy.live) {
+      if (document.visibilityState !== "visible") parts.push("video paused while this tab is hidden");
+      else if (reachy.slotsFull && !reachy.streamOK) {
+        parts.push(`All ${reachy.slotsFull} Reachy streams on this server are in use – close another Live Vision tab or turn Listen off`);
+      } else if (reachy.streamURL === null) parts.push("video reconnecting");
+      else if (!reachy.streamOK || !image.naturalWidth) parts.push("waiting for video");
+      else parts.push(`${image.naturalWidth}×${image.naturalHeight}`);
+    }
+    if (reachy.listening) {
+      parts.push(reachy.audioURL === null ? "audio reconnecting" : reachy.audioLive ? "listening" : "listening · microphone silent");
+    }
+    $("sourceStatus").textContent = parts.join(" · ");
+  }
+  function renderReachySampling() {
+    if (!reachyActive()) return;
+    let text;
+    if (!reachyFrameReady()) {
+      text = !reachy.healthAt ? "Checking the Reachy bridge"
+        : reachy.live ? "Not sending · waiting for Reachy video" : "Not sending · Reachy Mini is not live";
+    } else if (!state.liveStreaming) text = "Live streaming off · use Run inference";
+    else if (state.preset === "live-vlm") {
+      text = `${state.sampled} frames sent · ${state.skipped} skipped while busy · every ${REACHY_SAMPLE_MS / 1000} s, time-based (30 frames at the bridge's ~${REACHY_BRIDGE_FPS} FPS)`;
+    } else text = "Capture after each answer";
+    $("samplingStatus").textContent = text;
+  }
+  // The sampling line after a skipped live sample; each live loop otherwise writes its own.
+  function renderLiveCounts() {
+    if (state.source === "reachy") renderReachySampling();
+    else if (state.preset === "live-vlm" && state.liveStreaming) {
+      $("samplingStatus").textContent = `${state.sampled} frames sent · ${state.skipped} skipped while busy`;
+    }
+  }
+  function applyReachyHealth(health, failure, relay, slots, stream, askedAt) {
+    const status = failure ? {live: false, text: failure} : describeReachyHealth(health);
+    const now = performance.now();
+    reachy.live = status.live; reachy.statusText = status.text; reachy.healthAt = now;
+    reachy.audioLive = !failure && health?.audio?.live === true;
+    // A hidden tab keeps its video closed (visibilitychange below); it reopens when shown.
+    if (status.live && document.visibilityState === "visible") {
+      // The relay's answer is about the stream this poll named; a reopen since makes it moot.
+      const judged = relay && stream === reachy.streamToken && askedAt - reachy.openedAt > REACHY_STREAM_SETTLE_MS;
+      const dead = judged && (!relay.open || relay.idleMs > REACHY_STREAM_IDLE_MS);
+      if (dead) reachy.streamOK = false;
+      const stillborn = !reachy.streamOK && now - reachy.openedAt > REACHY_STREAM_GRACE_MS;
+      // The <img> was refused while every stream slot was taken: say so, and try again in 10 s
+      // rather than at every poll, each of which would only be turned away again.
+      if (reachy.streamRefused) {
+        reachy.streamRefused = false;
+        reachy.slotsFull = slots?.full ? slots.max : 0;
+        if (slots?.full) reachy.retryAt = now + REACHY_SLOTS_RETRY_MS;
+      }
+      // Reopen when the bridge comes back (the relay drops a stream silent for 20 s), when the
+      // stream failed or went quiet, or when a new one delivered no frame within the grace.
+      if (now >= reachy.retryAt && (!reachy.wasLive || reachy.streamURL === null || dead || stillborn)) {
+        openReachyStream();
+      }
+    }
+    reachy.wasLive = status.live;
+    if (reachy.listening && reachy.audioURL === null && reachy.audioLive) openReachyAudio();
+    $("liveIndicator").hidden = !status.live;
+    renderReachyStatus(); renderReachySampling(); controls();
+  }
+  async function pollReachy(generation) {
+    // Hidden, the page has closed its video; only Listen still needs the bridge's state.
+    if (reachy.polling || (document.visibilityState !== "visible" && !reachy.listening)) return;
+    const poll = reachy.polling = {};
+    const stream = reachy.streamToken, askedAt = performance.now();
+    let health = null, failure = null, relay = null, slots = null;
+    try {
+      await loadAccess();
+      const response = await fetch(reachyURL("/reachy/healthz", stream ? {stream} : {}),
+        {cache: "no-store", signal: AbortSignal.timeout(2500)});
+      const body = await response.json().catch(() => null);
+      if (response.status === 401) {
+        // This server restarted since the page read its token: drop it, the next poll asks again.
+        access = null;
+        throw new Error("Live Vision server restarted · reconnecting");
+      }
+      if (!response.ok) throw new Error(body?.error?.message || `Live Vision server returned HTTP ${response.status}.`);
+      health = body; relay = readRelayStream(response.headers.get("X-Reachy-Stream"));
+      slots = readRelaySlots(response.headers.get("X-Reachy-Slots"));
+    } catch (err) {
+      failure = err.name === "TimeoutError" ? "bridge did not answer in time"
+        : err instanceof TypeError ? "Live Vision server not reachable" : err.message;
+    } finally {
+      if (reachy.polling === poll) reachy.polling = null;
+    }
+    if (!reachyActive() || generation !== state.cameraGeneration) return;
+    applyReachyHealth(health, failure, relay, slots, stream, askedAt);
+  }
+  function startReachy() {
+    // No getUserMedia: the robot's video comes from the Jetson, so this works over plain HTTP.
+    error(); reachyRequested = false;
+    state.running = true; state.source = "reachy";
+    const generation = ++state.cameraGeneration;
+    Object.assign(reachy, {polling: null, live: false, wasLive: false, healthAt: 0, audioLive: false,
+      statusText: "checking the bridge…", openedAt: 0, streamOK: false, listening: false,
+      streamRefused: false, slotsFull: 0, retryAt: 0});
+    state.sampled = 0; state.skipped = 0;
+    $("video").hidden = true; $("uploadedImage").hidden = true; $("placeholder").hidden = true;
+    $("reachyImage").hidden = false;
+    renderReachyStatus(); renderReachySampling(); controls();
+    reachy.poll = setInterval(() => pollReachy(generation), REACHY_HEALTH_MS);
+    void pollReachy(generation);
+    if (state.preset === "live-vlm") reachyCadenceLoop(generation); else cameraLoop(generation);
+  }
+  // Safe to call repeatedly: an aborted request's cleanup releases a second time.
+  function releaseReachy() {
+    const active = reachy.poll !== null;
+    clearInterval(reachy.poll); reachy.poll = null;
+    clearTimeout(reachy.cadence); reachy.cadence = null;
+    Object.assign(reachy, {polling: null, live: false, wasLive: false, listening: false,
+      streamRefused: false, slotsFull: 0, retryAt: 0});
+    if (reachy.streamURL !== null || $("reachyImage").getAttribute("src")) closeReachyStream();
+    if (reachy.audioURL !== null || $("reachyAudio").hasAttribute("src")) closeReachyAudio();
+    if (active) {
+      $("reachyImage").hidden = true;
+      if (state.imageURL) $("uploadedImage").hidden = false; else $("placeholder").hidden = false;
+    }
+  }
   function releaseCamera() {
     if (state.frameCallback !== null) $("video").cancelVideoFrameCallback?.(state.frameCallback);
     state.frameCallback = null;
     if (state.media) state.media.getTracks().forEach(track => track.stop());
     state.media = null; $("video").srcObject = null; $("liveIndicator").hidden = true;
-    $("sourceStatus").textContent = state.imageURL ? "Selected image" : "Camera stopped";
+    releaseReachy();
+    $("sourceStatus").textContent = state.imageURL ? "Selected image"
+      : state.source === "reachy" ? "Reachy Mini stopped" : "Camera stopped";
   }
   function stop() { state.running = false; state.cameraGeneration += 1; state.abort?.abort(); releaseCamera(); controls(); }
   function applyPreset(name, reset = true) {
@@ -707,12 +1028,12 @@ if (typeof document !== "undefined") {
   $("liveVlmPreset").addEventListener("change", () => { if ($("liveVlmPreset").checked) applyPreset("live-vlm"); });
   $("lightweightPreset").addEventListener("change", () => { if ($("lightweightPreset").checked) applyPreset("lightweight"); });
   $("startButton").addEventListener("click", async () => {
-    error();
+    error(); reachyRequested = false;
     if (!navigator.mediaDevices?.getUserMedia) { error("Camera access needs HTTPS or http://localhost. You can choose an image instead."); return; }
     if (state.preset === "live-vlm" && !$("video").requestVideoFrameCallback) {
       error("This browser cannot count video frames. Use a current browser or choose Lightweight."); return;
     }
-    state.running = true; const generation = ++state.cameraGeneration; controls();
+    state.running = true; state.source = "camera"; const generation = ++state.cameraGeneration; controls();
     try {
       const media = await navigator.mediaDevices.getUserMedia({audio: false,
         video: CAPTURE_PRESETS[state.preset].cameraConstraints});
@@ -729,8 +1050,49 @@ if (typeof document !== "undefined") {
       if (state.preset === "live-vlm") frameCameraLoop(generation); else cameraLoop(generation);
     } catch (err) { if (generation === state.cameraGeneration) { stop(); error(`Camera unavailable: ${err.message}. You can choose an image instead.`); } }
   });
+  $("reachyButton").addEventListener("click", () => { if (!state.running && !state.busy) startReachy(); });
+  $("listenButton").addEventListener("click", () => {
+    if (!reachyActive()) return;
+    error();
+    reachy.listening = !reachy.listening;
+    if (reachy.listening) openReachyAudio(); else closeReachyAudio();
+    renderReachyStatus(); controls();
+  });
+  $("reachyImage").addEventListener("load", () => {
+    // The first frame of this connection: proof that it delivers. Until the relay says
+    // otherwise, the picture it shows is current.
+    if (!reachyActive() || $("reachyImage").getAttribute("src") !== reachy.streamURL) return;
+    reachy.streamOK = true; reachy.slotsFull = 0;
+    renderReachyStatus(); renderReachySampling(); controls();
+  });
+  $("reachyImage").addEventListener("error", () => {
+    // src = "" on Stop fires this too; only the current stream failing counts. Its cause
+    // (bridge down, stream cap, a restarted server) is not visible here, so the next poll
+    // retries, and its X-Reachy-Slots says whether the cap was why.
+    if (!reachyActive() || reachy.streamURL === null || $("reachyImage").getAttribute("src") !== reachy.streamURL) return;
+    reachy.streamToken = null; reachy.streamURL = null; reachy.streamOK = false; reachy.streamRefused = true;
+    renderReachyStatus(); renderReachySampling(); controls();
+  });
+  // A hidden tab shows nobody the robot's video, but its MJPEG stream would go on holding one of
+  // the server's few stream slots. Close it, which also pauses live inference: with no stream
+  // there is no frame to send. Listen keeps its audio playing, which is what it is for with the
+  // tab in the background. Shown again, a poll now reopens the video.
+  document.addEventListener("visibilitychange", () => {
+    if (!reachyActive()) return;
+    if (document.visibilityState === "visible") { void pollReachy(state.cameraGeneration); return; }
+    if (reachy.streamURL !== null) closeReachyStream();
+    renderReachyStatus(); renderReachySampling(); controls();
+  });
+  for (const type of ["error", "ended"]) {
+    $("reachyAudio").addEventListener(type, () => {
+      // An idle relay ends the stream after 20 s of silence; reopened when audio returns.
+      if (!reachyActive() || reachy.audioURL === null || $("reachyAudio").getAttribute("src") !== reachy.audioURL) return;
+      reachy.audioURL = null;
+      renderReachyStatus();
+    });
+  }
   $("stopButton").addEventListener("click", stop);
-  $("analyzeButton").addEventListener("click", () => analyze(state.running ? $("video") : $("uploadedImage")));
+  $("analyzeButton").addEventListener("click", () => analyze(state.running ? liveSource() : $("uploadedImage")));
   $("liveToggleButton").addEventListener("click", () => {
     state.liveStreaming = !state.liveStreaming;
     // Pause automatic requests without stopping the preview or interrupting
@@ -739,11 +1101,13 @@ if (typeof document !== "undefined") {
     $("samplingStatus").textContent = state.liveStreaming
       ? (state.preset === "live-vlm" ? "Every 30 frames · live streaming on" : "Capture after each answer")
       : "Live streaming off · use Run inference";
+    renderReachySampling();
     controls();
   });
   $("imageInput").addEventListener("change", async event => {
     const file = event.target.files[0];
     if (!file) return;
+    reachyRequested = false;
     stop(); error();
     if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 12 * 1024 * 1024) { error("Choose a JPEG, PNG or WebP image smaller than 12 MiB."); return; }
     if (state.imageURL) URL.revokeObjectURL(state.imageURL);
@@ -758,13 +1122,18 @@ if (typeof document !== "undefined") {
   window.addEventListener("pagehide", stop);
   setInterval(() => { if (state.captureAt !== null) $("frameAge").textContent = duration(performance.now() - state.captureAt); }, 100);
   applyPreset("lightweight", false);
+  if (reachyRequested) $("sourceStatus").textContent = "Reachy Mini · starts when the local backend is ready";
   setInterval(checkBackend, 5000); checkBackend(); controls();
+  // Read once at load: the relay token, and over plain HTTP the camera's HTTPS link. If this
+  // fails, the Reachy poll asks again when it needs the token; the link is not retried.
+  const accessLoaded = loadAccess();
+  accessLoaded.catch(() => {});
   if (!window.isSecureContext) {
-    $("cameraHelp").textContent = "Image upload works here. Camera access requires HTTPS.";
-    fetch("/api/access", {signal: AbortSignal.timeout(3000)}).then(r => r.json()).then(access => {
-      if (!Number.isInteger(access.https_port) || access.https_port < 1 || access.https_port > 65535) return;
+    $("cameraHelp").textContent = "Image upload and Reachy Mini work here. Camera access requires HTTPS.";
+    accessLoaded.then(info => {
+      if (!Number.isInteger(info.https_port) || info.https_port < 1 || info.https_port > 65535) return;
       const url = new URL(window.location.href);
-      url.protocol = "https:"; url.port = String(access.https_port); url.pathname = "/"; url.search = ""; url.hash = "";
+      url.protocol = "https:"; url.port = String(info.https_port); url.pathname = "/"; url.search = ""; url.hash = "";
       const link = document.createElement("a");
       link.href = url.href; link.textContent = "Open HTTPS for camera access";
       $("cameraHelp").append(" ", link, ". This device uses a local certificate.");

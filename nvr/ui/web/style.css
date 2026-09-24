@@ -27,7 +27,13 @@
 .caption-options label{display:flex;align-items:center;gap:8px;min-height:42px;padding:10px 14px;border:1px solid var(--line);border-radius:7px;font-size:12px;cursor:pointer}
 .caption-options label:has(input:checked){border-color:var(--green);background:#243322}
 .caption-options input{margin:0;accent-color:var(--green);flex:none}
-#liveToggleButton[aria-pressed="true"]{color:var(--green);border-color:var(--green);background:#243322}
+#liveToggleButton[aria-pressed="true"],#listenButton[aria-pressed="true"]{color:var(--green);border-color:var(--green);background:#243322}
+/* Bridge reasons can be long ("camera held by the robot app ..."); wrap instead of overflowing. */
+#sourceStatus{text-align:right;overflow-wrap:anywhere}
+/* No alt-text box while the Reachy stream is not open yet; a failed stream still shows as broken. */
+#reachyImage:not([src]),#reachyImage[src=""]{visibility:hidden}
+/* Its last frame while the bridge is not live or the stream is being reopened: not current. */
+#reachyImage.stale{opacity:.45;filter:grayscale(1)}
 .prompt-presets{margin-bottom:18px}.prompt-presets select{display:block;width:100%;margin-top:9px}.settings .prompt-presets .hint{margin:8px 0 0}
 #cameraPanel,#captionPanel{min-width:0}
 #workspace[data-caption-position="side"]{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr)}
