@@ -396,17 +396,31 @@ Orin (it asks for `pollen`'s password, `root` on the stock image, and stores not
 | Where | What |
 |---|---|
 | Orin | `/home/orin/.ssh/reachy_recover_ed25519`, and the robot's host key in `known_hosts` |
-| Robot `~pollen/.ssh/authorized_keys` | That key, with `command="sudo -n /usr/bin/systemctl restart reachy-mini-daemon.service",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding`: whatever a client asks for, the key runs that and only that |
+| Robot `~pollen/.ssh/authorized_keys` | That key, as `restrict,from="<the Orin>",command="sudo -n /usr/bin/systemctl restart --no-block reachy-mini-daemon.service"`: no pty, forwarding or user rc, accepted only from the Orin's address, and whatever a client asks for it runs that and only that. A re-run replaces the line (matched by its tag), so it also repairs it; nobody else's key is touched |
 | Robot `/etc/systemd/system/reachy-mini-daemon.service.d/porch-dad-nofile.conf` | `LimitNOFILE=16384`: the leak takes 16x as long to wedge the daemon. Applies from the next daemon restart |
 
 The bridge unit passes `--recover-ssh pollen@192.168.6.162 --recover-key <that key>`; `/healthz`
-reports `recovery: {configured, attempts, last_result}`. Both robot-side files survive daemon
-updates (they are outside its venv) but not a reinstall of the robot's OS: run the script again.
+reports `recovery: {configured, attempts, last_result}`, and `reason` says what recovery is doing.
 
-Verified 2026-09-24/25 on the device: the bridge's own recovery call restarted the daemon (exit 0,
-7.6 s); its REST API answered 10 s later; the running bridge was live again ~9 s after that, pushing
-to the WebUI, without being touched; the new process runs with `Max open files 16384` and held 157
-descriptors. The first recovery that day was not this: the wedged daemon restarted by itself
+| Case | What the bridge does |
+|---|---|
+| Exhaustion first seen, no robot app running | Restarts the daemon (`--no-block`: exit 0 means systemd queued it), then watches for the new pid |
+| A robot app is running | Defers: a restart would end the app (apps are the daemon's children). Retries in 2 min |
+| ssh failed (Wi-Fi, timeout, a changed host key) | Rebuilds the robot's camera for its local apps, retries the restart in 2 min |
+| Restarted less than 15 min ago | Waits out the 15 min, then tries again. The time is kept in `/var/lib/reachy-bridge` (`StateDirectory=`), so restarting the bridge does not reset it |
+| No key configured | The old behaviour: rebuild the camera, and `reason` asks for a power-cycle |
+
+Both robot-side files survive daemon updates (they are outside its venv) but not a reinstall of the
+robot's OS. After a reinstall the robot's host key also changes, and the script and the bridge both
+refuse it on purpose: read the new fingerprint at the robot (`ssh-keygen -lf
+/etc/ssh/ssh_host_ed25519_key.pub`), run `ssh-keygen -R 192.168.6.162` on the Orin, re-run the
+script and compare the fingerprint it shows first.
+
+Verified 2026-09-24/25 on the device, twice. First with a blocking restart: exit 0 in 7.6 s, REST
+back 10 s later, the running bridge live again ~9 s after that without being touched, the new
+process at `Max open files 16384` holding 157 descriptors. Then with the final key
+(`restrict,from=`, `--no-block`) through the bridge's own `_try_recovery`: issued in 1.6 s, daemon
+pid 106501 -> 107178 about 18 s later, the production bridge live and pushing again. The first recovery that day was not this: the wedged daemon restarted by itself
 (most likely a crash and systemd's restart), and the bridge picked the camera up on its own.
 
 When the robot itself is the problem:

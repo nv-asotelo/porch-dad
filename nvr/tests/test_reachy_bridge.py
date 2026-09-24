@@ -785,7 +785,7 @@ class FdExhaustionTest(unittest.IsolatedAsyncioTestCase):
         task = asyncio.create_task(self.bridge._supervise())
         try:
             await wait_until(lambda: self.recover_calls == 1, what="one restart over SSH")
-            self.assertIn("restarted it over SSH", self.bridge.reason)
+            self.assertIn("Restarted it over SSH", self.bridge.reason)
             # A restart supersedes the media rebuild.
             self.assertNotIn("/api/media/release", self.daemon.requests)
             # The robot comes back as a new process; its journal still holds the old lines.
@@ -799,11 +799,12 @@ class FdExhaustionTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_second_restart_inside_the_interval(self):
         self._configure_recovery([(0, ""), (0, "")])
-        self.bridge._recovered_at = time.monotonic()          # one just happened
+        self.bridge._next_recover_at = time.monotonic() + 1000   # one just happened
         self.daemon.log_lines = journal(90001, EMFILE_LINE)
         self.assertTrue(await self.bridge._note_fd_exhaustion())
         self.assertEqual(self.recover_calls, 0)
-        self.assertIn("not repeating it yet", self.bridge.reason)
+        self.assertIn("the next is allowed in", self.bridge.reason)
+        self.assertNotIn("Power-cycle", self.bridge.reason)
         self.assertIn("/api/media/release", self.daemon.requests)   # falls back to the repair
 
     async def test_failed_restart_falls_back_to_the_repair(self):
@@ -812,8 +813,75 @@ class FdExhaustionTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await self.bridge._note_fd_exhaustion())
         self.assertEqual(self.recover_calls, 1)
         self.assertIn("Permission denied", self.bridge.reason)
+        self.assertIn("retrying in", self.bridge.reason)
         self.assertIn("failed", self.bridge.recovery["last_result"])
         self.assertIn("/api/media/release", self.daemon.requests)
+
+    async def test_a_failed_restart_is_retried_from_the_hold(self):
+        # The review's case: one ssh failure (a Wi-Fi blip) must not leave the robot for a person.
+        self._configure_recovery([(255, "ssh: connect to host robot port 22: Connection timed out"),
+                                  (0, "")])
+        self.daemon.log_lines = journal(76389, EMFILE_LINE)
+        with mock.patch.object(rb, "RECOVER_RETRY_S", 0.3):
+            task = asyncio.create_task(self.bridge._supervise())
+            try:
+                await wait_until(lambda: self.recover_calls == 1, what="the first attempt")
+                self.assertIn("failed", self.bridge.reason)
+                await wait_until(lambda: self.recover_calls == 2, what="the retry")
+                await wait_until(lambda: "Restarted it over SSH" in (self.bridge.reason or ""),
+                                 what="the reason to say so")
+                self.assertEqual(self.bridge.sessions, 1, "dialled while still exhausted")
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_a_running_app_defers_the_restart(self):
+        # A restart ends robot apps (they are the daemon's children); wait for the app to finish.
+        self._configure_recovery([(0, "")])
+        self.daemon.lock = {"state": "local_app", "holder_name": "reachy_mini_testbench"}
+        self.bridge.fd_exhausted_pid = "76389"
+        self.assertFalse(await self.bridge._try_recovery())
+        self.assertEqual(self.recover_calls, 0)
+        self.assertIn("deferred while the robot app 'reachy_mini_testbench' runs",
+                      self.bridge._fd_reason())
+        self.daemon.lock = {"state": "free", "holder_name": None}
+        self.bridge._next_recover_at = 0.0                    # its retry wait is over
+        self.assertTrue(await self.bridge._try_recovery())
+        self.assertEqual(self.recover_calls, 1)
+
+    async def test_the_recovery_note_survives_the_dormant_loop(self):
+        self._configure_recovery([(0, "")])
+        self.daemon.log_lines = journal(76389, EMFILE_LINE)
+        self.assertTrue(await self.bridge._note_fd_exhaustion())
+        # Several dormant polls later, with the same exhausted pid, it still says what happened.
+        for _ in range(3):
+            reason, _ = await self.bridge.camera_unavailable()
+        self.assertIn("Restarted it over SSH", reason)
+        self.assertNotIn("Power-cycle", reason)
+
+    async def test_a_timeout_counts_as_issued(self):
+        self._configure_recovery([(-1, "timeout")])
+        self.daemon.log_lines = journal(76389, EMFILE_LINE)
+        self.assertTrue(await self.bridge._note_fd_exhaustion())
+        self.assertIn("(unconfirmed)", self.bridge.reason)
+        self.assertNotIn("/api/media/release", self.daemon.requests)   # no rebuild mid-restart
+
+    async def test_the_rate_limit_survives_a_bridge_restart(self):
+        with tempfile.TemporaryDirectory() as state:
+            with mock.patch.dict(os.environ, {"STATE_DIRECTORY": state}):
+                first = rb.Bridge(LOCAL, free_port(), fps=5, daemon_port=free_port())
+                first.fd_exhausted_pid = "76389"
+                first.recover_ssh, first.recover_key = "pollen@robot", "/k"
+                first.recovery["configured"] = True
+                async def ok():
+                    return 0, ""
+                first._run_recover_command = ok
+                first.session = self.bridge.session
+                self.assertTrue(await first._try_recovery())
+                # A new bridge process: it must not restart the daemon again straight away.
+                second = rb.Bridge(LOCAL, free_port(), fps=5, daemon_port=free_port())
+                self.assertGreater(second._next_recover_at - time.monotonic(),
+                                   rb.RECOVER_MIN_INTERVAL_S - 60)
 
     async def test_no_media_rebuild_while_an_app_runs(self):
         self.daemon.lock = {"state": "local_app", "holder_name": "reachy_mini_testbench"}

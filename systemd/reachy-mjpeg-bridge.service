@@ -23,6 +23,9 @@ ExecStart=/home/orin/reachy_env/bin/python /home/orin/nvr/reachy/reachy_mjpeg_br
 # SIGTERM unwinds the robot session (endSession) before exit. The robot gives every consumer its
 # own hardware H.264 encoder, and a consumer killed mid-stream can leave one allocated.
 KillSignal=SIGTERM
+# /var/lib/reachy-bridge: when the robot daemon was last restarted over SSH, so the 15 min limit
+# on those restarts holds across bridge restarts too (STATE_DIRECTORY in the environment).
+StateDirectory=reachy-bridge
 TimeoutStopSec=10
 Restart=always
 RestartSec=5

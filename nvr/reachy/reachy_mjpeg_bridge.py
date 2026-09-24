@@ -33,6 +33,7 @@ import argparse
 import asyncio
 import errno
 import logging
+import os
 import re
 import sys
 import time
@@ -89,7 +90,10 @@ MEDIA_REBUILD_PAUSE_S = 3.0
 # setup_robot_recovery.sh). At most once per interval, so a daemon that wedges again at once (or a
 # restart that does not take) cannot turn into a restart loop.
 RECOVER_MIN_INTERVAL_S = 900.0
-RECOVER_TIMEOUT_S = 30.0
+# After an attempt that restarted nothing (ssh failed, or a robot app was running), try again sooner.
+RECOVER_RETRY_S = 120.0
+# The forced command is `systemctl restart --no-block`, which returns at once; this only bounds ssh.
+RECOVER_TIMEOUT_S = 60.0
 _DAEMON_PID = re.compile(r"(?:launcher\.sh|python\d*)\[(\d+)\]")
 
 # Live VLM WebUI push: the pause after a refusal (an HTTP error, a 409 from Stop), and the slower
@@ -356,9 +360,22 @@ class Bridge:
         self.fd_exhausted_pid: str | None = None
         self._fd_checked_at = 0.0
         self.recover_ssh, self.recover_key = recover_ssh, recover_key
-        self._recovered_at: float | None = None
         self.recovery = {"configured": bool(recover_ssh and recover_key), "attempts": 0,
                          "last_result": None}
+        # What recovery is doing, carried in `reason` for as long as the hold lasts.
+        self._recovery_note: str | None = None
+        # Earliest monotonic time for the next restart. A restart's time is also written to systemd's
+        # StateDirectory, so the 15 min limit holds across bridge restarts, not just within one run.
+        self._state_file = (Path(os.environ["STATE_DIRECTORY"].split(":")[0]) / "last_recover"
+                            if os.environ.get("STATE_DIRECTORY") else None)
+        self._next_recover_at = 0.0
+        try:
+            # A clock step can make the age slightly negative; that is "just now", not "never".
+            ago = max(0.0, time.time() - float(self._state_file.read_text()))
+            if ago < RECOVER_MIN_INTERVAL_S:
+                self._next_recover_at = time.monotonic() + RECOVER_MIN_INTERVAL_S - ago
+        except (AttributeError, OSError, ValueError):
+            pass
         # When a robot app was last seen holding the robot, and which (LOCK_FREE_GRACE_S).
         self._lock_seen_at = 0.0
         self._last_holder: str | None = None
@@ -483,11 +500,16 @@ class Bridge:
             return False
         self.fd_exhausted_pid = pid or "unknown"
         self._fd_checked_at = time.monotonic()
-        self.state, self.reason = "dormant", fd_exhausted_reason(self.fd_exhausted_pid)
+        issued = await self._try_recovery()
+        self.state, self.reason = "dormant", self._fd_reason()
         _LOG.error("%s", self.reason)
-        if not await self._recover_robot_daemon():
+        if not issued:
             await self._repair_robot_camera()
         return True
+
+    def _fd_reason(self) -> str:
+        return fd_exhausted_reason(self.fd_exhausted_pid,
+                                   self._recovery_note if self.recovery["configured"] else None)
 
     async def _run_recover_command(self) -> tuple[int, str]:
         """Run the recovery key once. What runs on the robot is fixed by the key's forced command."""
@@ -501,40 +523,64 @@ class Bridge:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            return -1, f"no answer within {RECOVER_TIMEOUT_S:.0f}s"
+            return -1, "timeout"
         return proc.returncode, err.decode(errors="replace").strip()[-300:]
 
-    async def _recover_robot_daemon(self) -> bool:
-        """Restart the robot's daemon over SSH, if configured and not tried too recently.
+    async def _try_recovery(self) -> bool:
+        """Restart the exhausted daemon over SSH when that is allowed now. True if one was issued.
 
-        True when a restart was issued: the new process will not be exhausted, and
-        _still_fd_exhausted() lifts the hold as soon as it sees a new pid.
+        Called when the exhaustion is first seen and again on every dormant poll while it lasts, so a
+        failed or deferred attempt is retried instead of leaving the robot for a power-cycle.
         """
         if not self.recovery["configured"]:
             return False
         now = time.monotonic()
-        if self._recovered_at is not None and now - self._recovered_at < RECOVER_MIN_INTERVAL_S:
-            _LOG.warning("robot daemon exhausted again %.0fs after a restart; not restarting it "
-                         "again within %.0fs", now - self._recovered_at, RECOVER_MIN_INTERVAL_S)
-            self.reason += (" A restart was already tried "
-                            f"{(now - self._recovered_at) / 60:.0f} min ago; not repeating it yet.")
+        if now < self._next_recover_at:
+            if self._recovery_note is None:
+                self._recovery_note = (f"A restart over SSH was issued less than "
+                                       f"{RECOVER_MIN_INTERVAL_S / 60:.0f} min ago; the next is "
+                                       f"allowed in {self._next_recover_at - now:.0f}s.")
             return False
-        self._recovered_at = now
+        # A restart ends any running robot app (apps are the daemon's children). The media rebuild
+        # already defers to a running app; a restart must too, and the hold retries it later.
+        try:
+            lock = await self._get_json("/api/daemon/robot-app-lock-status")
+            if lock.get("state") == "local_app":
+                self._next_recover_at = now + RECOVER_RETRY_S
+                self._recovery_note = (f"Automatic restart deferred while the robot app "
+                                       f"{lock.get('holder_name')!r} runs; retrying in "
+                                       f"{RECOVER_RETRY_S:.0f}s.")
+                self.recovery["last_result"] = f"deferred: app {lock.get('holder_name')!r} running"
+                return False
+        except Exception:
+            pass
         self.recovery["attempts"] += 1
         try:
             rc, err = await self._run_recover_command()
         except (OSError, ValueError) as e:
             rc, err = -1, f"{type(e).__name__}: {e}"
-        if rc != 0:
-            self.recovery["last_result"] = f"failed (exit {rc}): {err}"
+        stamp = time.strftime("%H:%M:%S")
+        if rc != 0 and err != "timeout":
+            self._next_recover_at = now + RECOVER_RETRY_S
+            self._recovery_note = (f"Automatic restart over SSH failed at {stamp} ({err}); "
+                                   f"retrying in {RECOVER_RETRY_S:.0f}s.")
+            self.recovery["last_result"] = f"failed at {stamp} (exit {rc}): {err}"
             _LOG.error("could not restart the robot daemon over SSH: %s", err)
-            self.reason += f" Automatic restart over SSH failed: {err}"
             return False
-        self.recovery["last_result"] = f"restarted daemon pid {self.fd_exhausted_pid}"
-        self.reason = (f"robot daemon (pid {self.fd_exhausted_pid}) ran out of file descriptors; "
-                       f"restarted it over SSH, waiting for the new process")
-        _LOG.warning("%s", self.reason)
+        # Exit 0 means systemd queued the restart. A timeout means it may have: either way the new
+        # pid is what proves it, so watch for one now rather than guess.
+        self._next_recover_at = now + RECOVER_MIN_INTERVAL_S
+        self._recovery_note = (f"Restarted it over SSH at {stamp}{' (unconfirmed)' if rc else ''}; "
+                               f"waiting for the new process.")
+        self.recovery["last_result"] = (f"restart {'issued, unconfirmed' if rc else 'issued'} at "
+                                        f"{stamp} for pid {self.fd_exhausted_pid}")
+        _LOG.warning("robot daemon pid %s: %s", self.fd_exhausted_pid, self._recovery_note)
         self._fd_checked_at = 0.0     # look for the new pid on the next poll, not in a minute
+        try:
+            if self._state_file is not None:
+                self._state_file.write_text(f"{time.time():.3f}")
+        except OSError as e:
+            _LOG.warning("could not record the restart time: %s", e)
         return True
 
     async def _repair_robot_camera(self) -> None:
@@ -565,20 +611,26 @@ class Bridge:
             _LOG.warning("could not rebuild the robot's media: %s", e)
 
     async def _still_fd_exhausted(self) -> str | None:
-        """The reason while the same daemon process is still running, None once it has changed."""
-        if time.monotonic() - self._fd_checked_at < FD_EXHAUSTED_RECHECK_S:
-            return fd_exhausted_reason(self.fd_exhausted_pid)
-        self._fd_checked_at = time.monotonic()
-        pid = daemon_pid(await self._daemon_log_tail() or [])
-        if pid is not None and pid == self.fd_exhausted_pid:
-            return fd_exhausted_reason(pid)
-        # A new process, or no way to tell: stop holding back. If it is still exhausted, the next
-        # session fails and this state comes straight back, at the cost of one more attempt.
-        _LOG.info("robot daemon pid %s -> %s: trying the camera again", self.fd_exhausted_pid, pid)
-        self.fd_exhausted_pid = None
-        self.failed_streak = 0
-        self._backoff = MIN_BACKOFF_S
-        return None
+        """The reason while the same daemon process is still running, None once it has changed.
+
+        Also where recovery is retried: a failed, deferred or rate-limited restart gets another go
+        from here once its wait is over, so the hold never becomes permanent by itself.
+        """
+        if time.monotonic() - self._fd_checked_at >= FD_EXHAUSTED_RECHECK_S:
+            self._fd_checked_at = time.monotonic()
+            pid = daemon_pid(await self._daemon_log_tail() or [])
+            if pid is None or pid != self.fd_exhausted_pid:
+                # A new process, or no way to tell: stop holding back. If it is still exhausted,
+                # the next session fails and this state comes straight back.
+                _LOG.info("robot daemon pid %s -> %s: trying the camera again",
+                          self.fd_exhausted_pid, pid)
+                self.fd_exhausted_pid, self._recovery_note = None, None
+                self.failed_streak = 0
+                self._backoff = MIN_BACKOFF_S
+                return None
+        if self.recovery["configured"] and time.monotonic() >= self._next_recover_at:
+            await self._try_recovery()
+        return self._fd_reason()
 
     async def _supervise(self) -> None:
         while True:
@@ -810,16 +862,23 @@ def daemon_pid(lines: list[str]) -> str | None:
 
 
 def fd_exhausted(lines: list[str], pid: str | None = None) -> bool:
-    """The tell-tale line, from process `pid` when given (its lines carry it: python[pid])."""
+    """The tell-tale line, from process `pid` when given.
+
+    On this robot every daemon journal line carries the Python daemon's own pid, whether journald
+    tags it `launcher.sh[pid]` or `python[pid]` (seen 2026-09-25: launcher 106494, daemon 106501,
+    lines `launcher.sh[106501]`), so one pid identifies one daemon process.
+    """
     return any(FD_EXHAUSTED_MARK in line and (pid is None or (
         (m := _DAEMON_PID.search(line)) is not None and m.group(1) == pid)) for line in lines)
 
 
-def fd_exhausted_reason(pid: str | None) -> str:
+def fd_exhausted_reason(pid: str | None, recovery_note: str | None = None) -> str:
+    """`recovery_note` is what automatic recovery is doing; without recovery, a person must act."""
     return (f"robot daemon (pid {pid}) is out of file descriptors - '{FD_EXHAUSTED_MARK}' in its "
             f"log. Every new viewer fails, and its failed setup stops the robot's camera for its "
-            f"local apps too, so the bridge is not trying. Power-cycle the robot; the bridge "
-            f"resumes on its own once the daemon runs as a new process.")
+            f"local apps too, so the bridge is not dialling. "
+            + (recovery_note or "Power-cycle the robot; the bridge resumes on its own once the "
+                                "daemon runs as a new process."))
 
 
 def _client_gone(request: web.Request) -> bool:
