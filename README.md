@@ -98,8 +98,9 @@ the community checkpoint was unvalidated. See [docs/optimizations.md](docs/optim
 | [`deploy/03-install-trt-edge-llm.md`](deploy/03-install-trt-edge-llm.md) | Building/installing TensorRT-Edge-LLM 0.10.1 and its plugin library |
 | [`deploy/04-quantize-and-build-engines.md`](deploy/04-quantize-and-build-engines.md) | INT4 quantization, ONNX export, on-device engine build |
 | [`deploy/05-serve-and-webui.md`](deploy/05-serve-and-webui.md) | Running the shim + Live VLM WebUI under systemd |
-| [`deploy/07-reachy-homeassistant-and-orin-changes.md`](deploy/07-reachy-homeassistant-and-orin-changes.md) | Camera bridge, Home Assistant integrations (two patched in place), and the system-level changes on the Orin that no repo file captures |
-| [`nvr/reachy/reachy_mjpeg_bridge.py`](nvr/reachy/reachy_mjpeg_bridge.py) | Reachy Mini WebRTC → MJPEG bridge, so ffmpeg-based tools can read the robot camera |
+| [`deploy/07-reachy-homeassistant-and-orin-changes.md`](deploy/07-reachy-homeassistant-and-orin-changes.md) | Camera and microphone bridge, feeding the Live UIs and Frigate from it, swapping the camera between systems, Home Assistant integrations (two patched in place), the system-level changes on the Orin that no repo file captures, and the boot / cloned-SD-card checklist |
+| [`nvr/reachy/reachy_mjpeg_bridge.py`](nvr/reachy/reachy_mjpeg_bridge.py) | Reachy Mini bridge: one WebRTC session to the robot, served as MJPEG, stills, MP3 audio and a push feed to everything on the Orin |
+| [`scripts/reachy_smoke.py`](scripts/reachy_smoke.py) | Read-only smoke check of the Reachy path, the Live UIs, the shim, Frigate and boot state; run it after any clone boot |
 | [`deploy/06-reachy-mini-sdk.md`](deploy/06-reachy-mini-sdk.md) | Pointing a [Reachy Mini](https://huggingface.co/docs/reachy_mini) robot's camera at the shim, via Live VLM WebUI and then natively |
 | [`reachy/cosmos_bridge.py`](reachy/cosmos_bridge.py) | Native Reachy Mini camera → Cosmos3-Edge bridge (no browser) |
 | [`reachy/release_camera_for_webui.py`](reachy/release_camera_for_webui.py) | Frees Reachy Mini's camera so a browser/Live VLM WebUI can open it directly |

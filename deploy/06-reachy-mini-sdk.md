@@ -1,5 +1,15 @@
 # 06 — Reachy Mini SDK: pointing its camera at Cosmos3-Edge
 
+> **On the Orin, the robot is wired differently: see
+> [`deploy/07`](07-reachy-homeassistant-and-orin-changes.md).** There, `reachy-mjpeg-bridge.service`
+> holds one WebRTC session to the robot and serves its camera and microphone over HTTP to Frigate,
+> the Live VLM WebUI, Live Vision and the command centre (§1, §5–§7), and §8 is the boot checklist.
+> This page is the SDK route, for a machine next to the robot. Two parts of it touch the Orin's
+> path: `release_camera_for_webui.py` (§2 below) makes the daemon release its media, which the
+> bridge treats as a reason to go dormant until the media is back; and an SDK client using the
+> camera over the network is one more WebRTC session on a daemon that leaks sockets per session
+> (`deploy/07` §1 and §7).
+
 This step is separate from the core recipe in `deploy/01`–`05`: it does not change the shim or
 the engines, it wires a second camera source — [Reachy Mini](https://huggingface.co/docs/reachy_mini)'s
 onboard camera, accessed through its Python SDK — into the same Cosmos3-Edge shim those steps
