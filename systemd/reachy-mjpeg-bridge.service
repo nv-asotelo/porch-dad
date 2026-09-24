@@ -1,17 +1,26 @@
 [Unit]
-Description=Reachy Mini camera -> MJPEG bridge (for Frigate)
-After=network-online.target
+Description=Reachy Mini camera + microphone bridge (one robot session, fanned out to Frigate and the Live UIs)
+# docker only for ordering: 172.17.0.1 exists once dockerd is up. The bridge waits for that address
+# rather than failing, so it does not Want docker and cannot drag it in.
+After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=orin
 WorkingDirectory=/home/orin/nvr/reachy
-# Binds the docker bridge gateway (172.17.0.1), not 0.0.0.0: Frigate runs in a bridged
-# Nothing outside the Jetson needs it, and the robot camera should not be exposed on the LAN.
+# Loopback for the Live UIs and porch-feed on this host; the docker gateway for Frigate, whose
+# container's 127.0.0.1 is not the host's. Never 0.0.0.0: the robot camera stays off the LAN.
+# The push URL feeds the Live VLM WebUI's `reachy` session. When the WebUI is stopped the bridge
+# notes it and keeps serving everything else.
 ExecStart=/home/orin/reachy_env/bin/python /home/orin/nvr/reachy/reachy_mjpeg_bridge.py \
-  --robot-host 192.168.6.162 --listen 172.17.0.1 --listen-port 8099 --fps 5
-Restart=on-failure
+  --robot-host 192.168.6.162 --listen 127.0.0.1 --listen 172.17.0.1 --listen-port 8099 --fps 5 \
+  --push-url "https://127.0.0.1:8090/api/push/frame?session_id=reachy&source_name=reachy-mini"
+# SIGTERM unwinds the robot session (endSession) before exit. The robot gives every consumer its
+# own hardware H.264 encoder, and a consumer killed mid-stream can leave one allocated.
+KillSignal=SIGTERM
+TimeoutStopSec=10
+Restart=always
 RestartSec=5
 # Small, but this board runs a 3.6 GB model; cap it so a leak cannot threaten that.
 MemoryMax=300M
