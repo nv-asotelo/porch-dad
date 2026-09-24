@@ -148,6 +148,9 @@ reachy_trigger_cameras: []
 # Only used to build the "open in" link; the preview no longer depends on it being up.
 reachy_webui_url: "https://127.0.0.1:8090"
 reachy_session: "reachy"
+# The Reachy card's "Open in Live Vision" link. Written as loopback like the WebUI URL above; only
+# its scheme, port, path and query are used, with the host swapped for links_host.
+reachy_live_vision_url: "https://127.0.0.1:8443/?source=reachy"
 
 # These stay on continuous RTSP no matter what; the toggle is locked in the UI.
 always_powered_cameras:
@@ -165,6 +168,12 @@ always_powered_cameras:
 # `heavy_mb` is the memory a process is expected to hand back when stopped. It is used to sanity
 # check that a stop actually reclaimed RAM on an 8 GB board, where the whole reason to stop
 # something is to get its memory back.
+#
+# `boot_follows_intent` makes a reboot keep the last deliberate choice. The two UIs below are
+# switched off on purpose much of the time, so any fixed boot state is wrong one way or the other:
+# enabled brings back a UI somebody stopped, disabled loses one they started. With it set, a
+# verified ON/RESTART also runs `sudo -n systemctl enable` and a verified OFF runs `disable`.
+# systemd units only, and never honoured for `self` (see boot_command in porch_feed.py).
 services:
   - key: shim
     label: "Cosmos3-Edge API"
@@ -179,6 +188,7 @@ services:
     unit: live-vlm-webui-fork.service
     port: 8090
     heavy_mb: 200
+    boot_follows_intent: true
     note: "nv-asotelo fork: adds push + stream-URL capture sources."
   - key: livevision
     label: "Live Vision (new UI)"
@@ -186,11 +196,12 @@ services:
     unit: cosmos-edge-ui.service
     port: 8092
     heavy_mb: 150
+    boot_follows_intent: true
     note: >-
-      Off by default. The unit is installed but not enabled, so it shows stopped until you
-      start it here - same treatment as porch-dad.service. Binds loopback only; LAN access
-      needs nvr/ui/enable_lan_ui.sh run deliberately. Port 8092 keeps it clear of the older
-      Live VLM WebUI on 8090, so both can run side by side while they are compared.
+      Starts at boot only if it was last turned ON here (boot_follows_intent). Binds loopback
+      only; LAN access needs nvr/ui/scripts/enable_lan_ui.sh run deliberately. Port 8092 keeps
+      it clear of the older Live VLM WebUI on 8090, so both can run side by side while they are
+      compared.
   - key: bridge
     label: "porch-dad feed"
     kind: systemd

@@ -101,6 +101,15 @@ go2rtc:
     # Idle until something consumes it; the camera below is what turns the work on.
     reachy_mini:
       - "ffmpeg:http://host.docker.internal:8099/mjpeg#video=h264"
+    # The same picture plus the robot's microphone, as its own stream rather than a second source
+    # on reachy_mini. Frigate's live player asks for audio on every view, muted or not, so a mic
+    # source on reachy_mini would run an MP3->Opus ffmpeg (and the bridge's MP3 encoder) whenever
+    # anyone looked. Here it runs only when "Video + mic" is picked in the live view. The video is
+    # reachy_mini's, taken over go2rtc's own RTSP, so it is not encoded twice. Exposure: Frigate's
+    # :5000 is unauthenticated on the LAN, so picking this makes the room audible to the LAN.
+    reachy_mini_mic:
+      - "rtsp://127.0.0.1:8554/reachy_mini"
+      - "ffmpeg:http://host.docker.internal:8099/audio.mp3#audio=opus"
     # Moorebot Scout (robot room, 2F). A helper on this box turns a transport ffmpeg cannot open
     # (a ROS1 topic) into HTTP. h264 passthrough, not MJPEG: the robot already encodes, so go2rtc
     # only remuxes - encoding the 1920x1080 MJPEG in software cost 33.8% of a CPU and pushed
@@ -314,6 +323,11 @@ cameras:
     # transcode, on a board whose detector already runs ~100 ms per inference, so it is opt-in.
     # Detect only: no record role, person tracking only, 2 fps.
     enabled: false
+    # Live view offers the mic as a choice, not a default (see reachy_mini_mic above).
+    live:
+      streams:
+        Video: reachy_mini
+        Video + mic: reachy_mini_mic
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/reachy_mini

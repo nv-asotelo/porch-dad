@@ -78,6 +78,9 @@ INTENT_PATH = Path(CFG.get("service_intent_path")
 LINKS = CFG.get("links") or []
 LINKS_HOST = CFG.get("links_host") or "127.0.0.1"
 REACHY_WEBUI = str(CFG.get("reachy_webui_url") or "").rstrip("/")
+# Live Vision opened on the Reachy source. Like reachy_webui_url it is written as loopback; only its
+# scheme, port, path and query are used, re-pointed at links_host (see lan_link).
+REACHY_LIVE_VISION = str(CFG.get("reachy_live_vision_url") or "").strip()
 REACHY_CAM = str(CFG.get("reachy_camera_url") or "").rstrip("/")
 REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
 _reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
@@ -519,6 +522,58 @@ SERVICES = {s["key"]: s for s in (CFG.get("services") or [])}
 ACTIONS = ("start", "stop", "restart")
 
 
+# Boot state that follows intent.
+#
+# The Live VLM WebUI and Live Vision are switched off on purpose much of the time, so any FIXED boot
+# state is wrong half the time: enabled resurrects a UI somebody stopped, disabled loses one they
+# started. For services marked boot_follows_intent the control plane makes the unit's enablement
+# match the last deliberate ON/OFF, so a reboot keeps the choice instead of undoing it.
+#
+# The three helpers below are pure (no globals, no I/O) so nvr/tests/test_porch_feed_boot.py can
+# exercise them without importing this module, which reads the live config at import time.
+def boot_command(service: dict, action: str) -> list[str] | None:
+    """The `systemctl enable|disable` that carries this action across a reboot, or None.
+
+    None for anything not opted in, and always for this page itself: disabling porch-feed would
+    remove the only browser route to turning anything back on after the next boot. Docker services
+    are left alone too - their restart policy lives in the container, not in systemd.
+    """
+    if not service.get("boot_follows_intent") or service.get("self"):
+        return None
+    if service.get("kind") != "systemd" or not service.get("unit"):
+        return None
+    if action in ("start", "restart"):
+        verb = "enable"
+    elif action == "stop":
+        verb = "disable"
+    else:
+        return None
+    return ["sudo", "-n", "systemctl", verb, service["unit"]]
+
+
+def boot_enabled_from(is_enabled_output: str) -> bool | None:
+    """Will the unit start at the next boot, read from `systemctl is-enabled`. None if unclear.
+
+    enabled-runtime counts as off: its symlink lives in /run, which a reboot wipes. States such as
+    static or indirect do not answer the question either way, so they stay None rather than being
+    rendered as a confident "off at boot".
+    """
+    lines = (is_enabled_output or "").strip().splitlines()
+    state = lines[-1].strip() if lines else ""
+    return {"enabled": True, "disabled": False, "masked": False, "masked-runtime": False,
+            "enabled-runtime": False}.get(state)
+
+
+def boot_note(action: str, ok: bool, detail: str = "") -> str:
+    """Suffix for the action's message. A failure is reported, but the start/stop itself stands:
+    the service really did start or stop, and saying otherwise would invite a pointless retry."""
+    on = action != "stop"
+    if ok:
+        return "; starts at boot" if on else "; off at boot"
+    return (f"; but could not {'enable' if on else 'disable'} it at boot, so a reboot may undo "
+            f"this: {(detail or '').strip()[:200] or 'no detail'}")
+
+
 def load_intent() -> dict:
     try:
         return json.loads(INTENT_PATH.read_text())
@@ -601,6 +656,15 @@ def service_status(key: str) -> dict:
     else:
         health = "down"
 
+    # Only asked for services whose boot state this page manages: /api/status is polled every 10 s,
+    # and is-enabled is cheap but not free. None means "not managed here" or "unclear".
+    follows = bool(s.get("boot_follows_intent")) and s["kind"] == "systemd"
+    boot_state = boot_enabled = None
+    if follows:
+        _ok, out = run(["systemctl", "is-enabled", s["unit"]], timeout=10)
+        boot_enabled = boot_enabled_from(out)
+        boot_state = (out.strip().splitlines() or ["unknown"])[-1][:60]
+
     intent = load_intent().get(key) or {}
     return {
         "key": key,
@@ -625,6 +689,9 @@ def service_status(key: str) -> dict:
         "self": bool(s.get("self")),
         "note": s.get("note", ""),
         "heavy_mb": s.get("heavy_mb"),
+        "boot_follows_intent": follows,
+        "boot_enabled": boot_enabled,
+        "boot_state": boot_state,
     }
 
 
@@ -660,12 +727,27 @@ def _deferred_self_action(unit: str, action: str) -> tuple[bool, str]:
                   + ("; start it again over SSH." if action == "stop" else "; reload in ~10s."))
 
 
+def _follow_intent_at_boot(s: dict, action: str) -> str:
+    """Make the unit's boot state match a verified action. Returns a note for the message.
+
+    Runs only after verification, so a start that never came up does not also get enabled at boot.
+    """
+    cmd = boot_command(s, action)
+    if not cmd:
+        return ""
+    ok, msg = run(cmd, timeout=30)
+    if not ok:
+        print(f"[feed] {' '.join(cmd[2:])} failed: {msg.strip()[:200]}", flush=True)
+    return boot_note(action, ok, msg)
+
+
 def set_service(key: str, action: str) -> tuple[bool, str]:
     """Run a control action and then *verify* it, rather than trusting the exit code.
 
     Verification is the whole point: it confirms the port reached the expected state, and reports
     how much memory actually came back. On an 8 GB board a "successful" stop that frees nothing is
-    a failure worth seeing.
+    a failure worth seeing. Once verified, a boot_follows_intent service also has its boot state
+    set to match (see boot_command), so the next reboot keeps what was chosen here.
     """
     if key not in SERVICES or action not in ACTIONS:
         return False, "bad request"
@@ -703,22 +785,27 @@ def set_service(key: str, action: str) -> tuple[bool, str]:
 
     if action == "stop":
         if not reached:
+            # The stop itself succeeded and the intent is recorded as stopped, so the boot state
+            # follows it even though something still holds the port. Otherwise the page could not
+            # fix it: OFF is disabled for a service that is no longer running.
             return False, (f"{label}: {s['kind']} reported stopped, but port {port} is still "
                            f"accepting connections — something is still holding it. "
-                           f"Memory is at {after} MB free.")
+                           f"Memory is at {after} MB free." + _follow_intent_at_boot(s, action))
         freed = f"reclaimed {delta} MB" if delta > 0 else "no memory reclaimed"
         expect = s.get("heavy_mb")
         warn = ""
         if expect and delta < expect * 0.5:
             warn = (f" — expected about {expect} MB back; the kernel may still be releasing "
                     f"page cache, re-check the memory readout in a few seconds")
-        return True, f"{label} stopped, port {port or '—'} closed, {freed} ({after} MB free){warn}"
+        return True, (f"{label} stopped, port {port or '—'} closed, {freed} ({after} MB free){warn}"
+                      + _follow_intent_at_boot(s, action))
 
     if not reached:
         return False, (f"{label}: {action} issued but port {port} never started listening. "
                        f"Check `journalctl -u {s.get('unit') or s.get('name')}`.")
     cost = f"used {-delta} MB" if delta < 0 else f"memory unchanged ({delta:+d} MB)"
-    return True, f"{label} {action}ed, port {port or '—'} listening, {cost} ({after} MB free)"
+    return True, (f"{label} {action}ed, port {port or '—'} listening, {cost} ({after} MB free)"
+                  + _follow_intent_at_boot(s, action))
 
 
 # --------------------------------------------------------------------------- camera power
@@ -1165,28 +1252,76 @@ def reachy_latest():
                     headers={"Cache-Control": "no-store"})
 
 
+# lan_link and reachy_health_summary are pure for the same reason as boot_command: the tests
+# compile them out of this file rather than import it. Hence the local urllib import.
+def lan_link(url: str, host: str) -> str | None:
+    """The same URL with its host swapped for one a browser elsewhere on the LAN can reach.
+
+    Config writes these as loopback because that is what this service itself talks to; handed to a
+    browser on another machine, 127.0.0.1 points it at its own localhost. Scheme, port, path and
+    query are kept, so a new link is a config line rather than another hand-built f-string.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+    if not url or not host:
+        return None
+    u = urlsplit(url)
+    try:
+        port = u.port
+    except ValueError:          # a typo such as ":84o3" - no link beats a wrong one
+        return None
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return None             # "127.0.0.1:8443/x" parses with no host at all; same rule
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"      # an IPv6 links_host needs brackets before a port can follow
+    return urlunsplit((u.scheme, f"{host}:{port}" if port else host,
+                       u.path or "/", u.query, u.fragment))
+
+
+def reachy_health_summary(d: dict) -> dict:
+    """The bridge's /healthz, reduced to what the Reachy card shows.
+
+    `connected` follows the bridge's own `live` (a session that is delivering fresh frames). A
+    bridge from before that field only reports has_frame, which is the best answer it has.
+    `reason` is the part worth reading when it is not live: "camera held by the robot app" and
+    "robot daemon unreachable" call for different responses, and neither is fixed by a restart.
+    """
+    audio = d.get("audio") if isinstance(d.get("audio"), dict) else None
+    push = d.get("push") if isinstance(d.get("push"), dict) else None
+    return {
+        "connected": bool(d["live"]) if "live" in d else bool(d.get("has_frame")),
+        "live": d.get("live"),
+        "frames": d.get("frames", 0),
+        "state": d.get("state"),
+        "reason": d.get("reason"),
+        "failed_streak": d.get("failed_streak"),
+        "audio": ({"live": bool(audio.get("live")), "listeners": audio.get("listeners", 0)}
+                  if audio is not None else None),
+        "push": {"state": push.get("state")} if push is not None else None,
+    }
+
+
 @app.get("/api/reachy")
 def api_reachy():
-    """Whether the Reachy Mini push source is currently delivering frames."""
-    # The link is built from links_host, not from reachy_webui_url. The latter is a loopback
-    # address so this service can fetch frames locally; handing that to a browser on another
-    # machine points it at its own localhost.
-    port = REACHY_WEBUI.rsplit(":", 1)[-1] if ":" in REACHY_WEBUI else "8090"
-    scheme = "https" if REACHY_WEBUI.startswith("https") else "http"
+    """Whether the Reachy Mini camera bridge is live, and why not when it is not."""
+    webui = f"{REACHY_WEBUI}/?session={REACHY_SESSION}" if REACHY_WEBUI else ""
     out = {"configured": bool(REACHY_CAM), "session": REACHY_SESSION,
-           "connected": False, "fps": None, "frames": 0, "resolution": None,
+           "connected": False, "live": None, "fps": None, "frames": 0, "resolution": None,
+           "state": None, "reason": None, "failed_streak": None, "audio": None, "push": None,
            "source": "reachy-mjpeg-bridge",
-           "link": (f"{scheme}://{LINKS_HOST}:{port}/?session={REACHY_SESSION}"
-                    if REACHY_WEBUI else None)}
+           "link": lan_link(webui, LINKS_HOST),
+           "live_vision_link": lan_link(REACHY_LIVE_VISION, LINKS_HOST)}
     if not REACHY_CAM:
         return out
     try:
-        r = requests.get(f"{REACHY_CAM}/healthz", timeout=4)
-        d = r.json()
-        # The bridge reports a running frame count; "has_frame" is what makes the preview useful.
-        out.update(connected=bool(d.get("has_frame")), frames=d.get("frames", 0))
-    except (requests.RequestException, ValueError):
-        pass
+        d = requests.get(f"{REACHY_CAM}/healthz", timeout=4).json()
+        if not isinstance(d, dict):
+            raise ValueError("healthz did not answer a JSON object")
+        out.update(reachy_health_summary(d))
+    except (requests.RequestException, ValueError) as e:
+        # Distinct from any state the bridge reports about itself: here there is no bridge to ask.
+        out.update(state="unreachable",
+                   reason=(f"reachy-mjpeg-bridge not answering at {REACHY_CAM} "
+                           f"({type(e).__name__}) - is reachy-mjpeg-bridge.service running?"))
     return out
 
 
@@ -1790,7 +1925,13 @@ button.mini{padding:3px 9px;font-size:11.5px}
   <div class="card" id="reachyCard">
     <div class="row" style="justify-content:space-between;align-items:center">
       <span id="reachyState" class="hint">checking…</span>
-      <a id="reachyLink" class="chip" href="#" target="_blank" rel="noreferrer">Open in Live VLM WebUI</a>
+      <!-- hrefs come from /api/reachy, built on links_host (see lan_link): the URLs in config are
+           loopback, which on a phone would point at the phone. -->
+      <div class="row">
+        <a id="reachyLink" class="chip" href="#" target="_blank" rel="noreferrer">Open in Live VLM WebUI</a>
+        <a id="reachyVisionLink" class="chip" href="#" target="_blank" rel="noreferrer"
+           style="display:none">Open in Live Vision</a>
+      </div>
     </div>
     <img id="reachyImg" class="still" alt="Reachy Mini camera" style="display:none">
     <p class="hint" id="reachyHint" style="display:none">
@@ -1931,6 +2072,10 @@ button.mini{padding:3px 9px;font-size:11.5px}
      who did it and when; the card then shows a "stopped by user" badge, turning it back on asks
      for confirmation, and <code>/api/status</code> exposes the same flag so automation can check
      before restarting something deliberately shut down.</p>
+  <p class="hint"><b>Some choices also survive a reboot.</b> Services showing <i>starts at boot</i> /
+     <i>off at boot</i> follow the last ON/OFF here: once the action is verified, ON enables the
+     unit at boot and OFF disables it, so a reboot neither brings back a UI you stopped nor loses
+     one you started.</p>
   <p class="hint">Every action is verified against the <b>port</b>, not against systemd — a unit can
      report <i>active</i> while the shim is still loading engines and cannot answer. Stops report
      how much RAM actually came back; starting is refused when free memory is low, because the
@@ -2539,10 +2684,21 @@ async function load(){
     } else if (s.intent === 'running' && s.contradicts_intent) {
       intentBadge = `<div class="intent off">▶ started by ${esc(s.intent_by||'user')} · ${when} — <b>but it is down</b></div>`;
     }
+    // Boot state, only for services whose ON/OFF here also enables/disables them at boot. A
+    // mismatch with the recorded intent is the case this exists for: the next reboot would
+    // quietly undo the choice (enable/disable failed, or someone changed it over SSH).
+    let boot = '';
+    if (s.boot_follows_intent) {
+      boot = s.boot_enabled === true ? 'starts at boot'
+           : s.boot_enabled === false ? 'off at boot' : 'boot: ' + (s.boot_state || 'unknown');
+      if (s.intent && s.boot_enabled != null && (s.intent === 'running') !== s.boot_enabled)
+        boot += s.boot_enabled ? ' — a reboot would bring it back' : ' — a reboot would leave it off';
+      boot = ' · ' + esc(boot);
+    }
     return `<div class="svc${s.intent==='stopped'?' held':''}">
       <div class="svc-id">
         <div class="svc-name">${dot} ${esc(s.label)}</div>
-        <div class="hint">${esc(s.unit||'')} · ${s.state} · ${portTxt}${s.note?' · '+esc(s.note):''}</div>
+        <div class="hint">${esc(s.unit||'')} · ${s.state} · ${portTxt}${boot}${s.note?' · '+esc(s.note):''}</div>
         ${intentBadge}
       </div>
       <div class="row">
@@ -2550,7 +2706,8 @@ async function load(){
                 onclick="${s.intent==='stopped'?`if(!window.confirm('${esc(s.label)} was stopped on purpose. Turn it back on?'))return;`:''}post('/api/service/${s.key}/start')">ON</button>
         <button class="${!s.running?'off':'warn'}" ${!s.running?'disabled':''}
                 onclick="${confirm}post('/api/service/${s.key}/stop')">OFF</button>
-        <button onclick="${confirm}post('/api/service/${s.key}/restart')">RESTART</button>
+        <button ${!s.running?'disabled title="not running - use ON"':''}
+                onclick="${confirm}post('/api/service/${s.key}/restart')">RESTART</button>
       </div></div>`;}).join('');
 
   document.getElementById('cameras').innerHTML = Object.entries(st.cameras).map(([n,c])=>{
@@ -2577,17 +2734,36 @@ async function load(){
     const st  = document.getElementById('reachyState');
     const hint= document.getElementById('reachyHint');
     document.getElementById('reachyLink').href = rc.link || '#';
+    const lv = document.getElementById('reachyVisionLink');
+    lv.href = rc.live_vision_link || '#';
+    lv.style.display = rc.live_vision_link ? '' : 'none';
+    // The retry streak goes in the tooltip, not the line: the bridge already writes it into
+    // `reason` once it gets long enough to mean the robot needs a power-cycle.
+    st.title = rc.state ? `bridge ${rc.state}` + (rc.failed_streak ? ` · ${rc.failed_streak} `
+                          + `session(s) in a row without video` : '') : '';
     if(rc.connected){
-      st.textContent = `● live · ${rc.frames} frames · via ${rc.source||'bridge'}`;
+      const a = rc.audio, p = rc.push;
+      st.textContent = `● live · ${rc.frames} frames · via ${rc.source||'bridge'}`
+        + (a ? (a.live ? ' · 🎙 mic live' + (a.listeners ? ` (${a.listeners} listening)` : '')
+                       : ' · 🎙 no mic audio') : '')
+        // "idle" is a bridge started without --push-url; nothing to report.
+        + (p && p.state && p.state !== 'idle' ? ` · WebUI push: ${p.state}` : '');
       st.style.color = 'var(--g)';
       img.style.display = 'block'; hint.style.display = 'none';
       // Only fetch the still while frames are actually arriving; otherwise this proxies a 404
       // every second for no reason.
       img.src = `/reachy/latest.jpg?t=${Date.now()}`;
     } else {
-      st.textContent = rc.configured ? '○ no frames yet — is reachy-mjpeg-bridge.service running?'
-                                     : '○ not configured';
-      st.style.color = 'var(--mut)';
+      // Say WHY it is not live. "Camera held by the robot app", "daemon unreachable" and "bridge
+      // not running" each need a different fix, and none of them is "wait longer".
+      st.textContent = !rc.configured ? '○ not configured'
+        : rc.reason ? `○ ${rc.state || 'not live'} — ${rc.reason}`
+        // Between FRESH_FOR (5 s) and the bridge's stall check (8 s) it can still say "live".
+        : rc.state === 'live' ? '○ live, waiting for a fresh frame…'
+        : rc.state  ? `○ ${rc.state}…`
+        : '○ no frames yet — is reachy-mjpeg-bridge.service running?';
+      st.style.color = (rc.state === 'error' || rc.state === 'unreachable') ? 'var(--r)'
+                     : rc.state === 'dormant' ? 'var(--y)' : 'var(--mut)';
       img.style.display = 'none'; img.removeAttribute('src');
       hint.style.display = 'block';
     }
