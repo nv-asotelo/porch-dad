@@ -13,9 +13,13 @@ WorkingDirectory=/home/orin/nvr/reachy
 # container's 127.0.0.1 is not the host's. Never 0.0.0.0: the robot camera stays off the LAN.
 # The push URL feeds the Live VLM WebUI's `reachy` session. When the WebUI is stopped the bridge
 # notes it and keeps serving everything else.
+# --recover-*: when the robot's daemon runs out of file descriptors, restart it over SSH with a key
+# the robot only lets run `systemctl restart reachy-mini-daemon` (nvr/reachy/setup_robot_recovery.sh
+# installs it). Without the key the bridge says so and waits for a power-cycle instead.
 ExecStart=/home/orin/reachy_env/bin/python /home/orin/nvr/reachy/reachy_mjpeg_bridge.py \
   --robot-host 192.168.6.162 --listen 127.0.0.1 --listen 172.17.0.1 --listen-port 8099 --fps 5 \
-  --push-url "https://127.0.0.1:8090/api/push/frame?session_id=reachy&source_name=reachy-mini"
+  --push-url "https://127.0.0.1:8090/api/push/frame?session_id=reachy&source_name=reachy-mini" \
+  --recover-ssh pollen@192.168.6.162 --recover-key /home/orin/.ssh/reachy_recover_ed25519
 # SIGTERM unwinds the robot session (endSession) before exit. The robot gives every consumer its
 # own hardware H.264 encoder, and a consumer killed mid-stream can leave one allocated.
 KillSignal=SIGTERM

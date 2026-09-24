@@ -383,12 +383,38 @@ entity (row below), which opens sessions of its own.
 | An on-robot app that takes the camera | Daemon app lock, `state: local_app` | — | The bridge's session ends or stalls (8 s) and it goes `dormant`, `blocked_by` naming the app. Everything on the Orin loses video and audio: `/still.jpg` 503, command centre "no frames", WebUI push `waiting for video`, Frigate's `reachy_mini` input idle | Automatic. The bridge polls REST every 10 s and opens a session once the lock clears |
 | Daemon media release: an SDK client with `media_backend="no_media"`, such as [`../reachy/release_camera_for_webui.py`](../reachy/release_camera_for_webui.py) | The client holds the camera and microphone devices | — | As above, with `reason: daemon has released the camera and microphone` | Automatic, once the client exits and the daemon takes the media back |
 
+### Forced recovery from porch-dad
+
+The daemon runs its camera, WebRTC and REST in one process, and when that process runs out of file
+descriptors nothing it offers can fix it: `/api/daemon/restart` and a media release both stay in
+the same process. Measured 2026-09-24: 1014 of the default 1024 descriptors in use, 778 of them
+sockets. So porch-dad restarts the process itself, over SSH, with a key that can do nothing else.
+
+[`../nvr/reachy/setup_robot_recovery.sh`](../nvr/reachy/setup_robot_recovery.sh), run once on the
+Orin (it asks for `pollen`'s password, `root` on the stock image, and stores nothing):
+
+| Where | What |
+|---|---|
+| Orin | `/home/orin/.ssh/reachy_recover_ed25519`, and the robot's host key in `known_hosts` |
+| Robot `~pollen/.ssh/authorized_keys` | That key, with `command="sudo -n /usr/bin/systemctl restart reachy-mini-daemon.service",no-pty,no-port-forwarding,no-X11-forwarding,no-agent-forwarding`: whatever a client asks for, the key runs that and only that |
+| Robot `/etc/systemd/system/reachy-mini-daemon.service.d/porch-dad-nofile.conf` | `LimitNOFILE=16384`: the leak takes 16x as long to wedge the daemon. Applies from the next daemon restart |
+
+The bridge unit passes `--recover-ssh pollen@192.168.6.162 --recover-key <that key>`; `/healthz`
+reports `recovery: {configured, attempts, last_result}`. Both robot-side files survive daemon
+updates (they are outside its venv) but not a reinstall of the robot's OS: run the script again.
+
+Verified 2026-09-24/25 on the device: the bridge's own recovery call restarted the daemon (exit 0,
+7.6 s); its REST API answered 10 s later; the running bridge was live again ~9 s after that, pushing
+to the WebUI, without being touched; the new process runs with `Max open files 16384` and held 157
+descriptors. The first recovery that day was not this: the wedged daemon restarted by itself
+(most likely a crash and systemd's restart), and the bridge picked the camera up on its own.
+
 When the robot itself is the problem:
 
 | Situation | Bridge | Recovery |
 |---|---|---|
 | Robot off or rebooting, daemon not `running` | `dormant`: `robot daemon unreachable (…)` or `robot daemon is 'x', not running` | Automatic, within one 10 s poll of the daemon answering `running` |
-| Daemon out of file descriptors | `reconnecting`, `failed_streak` climbing, retries backing off to 300 s; from 4 on, `reason` says to restart the robot | **Power-cycle the robot.** The bridge's next attempt, at most 300 s later, then succeeds; `systemctl restart reachy-mjpeg-bridge` tries at once, at the cost of one session |
+| Daemon out of file descriptors | After the first session without video it reads the daemon's journal, finds `Too many open files`, and stops dialling | **Automatic.** It restarts the daemon over SSH (below) at most once per 15 min, then resumes as soon as the daemon is a new process. Without the key, or if the restart fails, it rebuilds the robot's camera pipeline for its local apps and waits for a power-cycle, saying so in `reason` |
 
 The bridge rows follow from its code (§1). The app-lock, media-release and descriptor rows were not
 staged against the running bridge for this document; the descriptor row is the failure seen under

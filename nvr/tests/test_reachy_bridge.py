@@ -699,6 +699,13 @@ class JournalParsingTest(unittest.TestCase):
         self.assertEqual(rb.daemon_pid(["2026 reachy-mini python[76389]: x"]), "76389")
         self.assertIsNone(rb.daemon_pid(["nothing", ""]))
 
+    def test_only_the_current_process_counts(self):
+        # Right after a restart the journal still holds the old process's failure.
+        lines = journal(76389, EMFILE_LINE) + journal(90001, "Daemon started")
+        self.assertTrue(rb.fd_exhausted(lines))
+        self.assertFalse(rb.fd_exhausted(lines, "90001"))
+        self.assertTrue(rb.fd_exhausted(lines, "76389"))
+
     def test_fd_exhaustion_is_the_exact_libc_message(self):
         self.assertTrue(rb.fd_exhausted(journal(1, "consumer added", EMFILE_LINE)))
         self.assertFalse(rb.fd_exhausted(journal(1, "consumer added", "too many consumers")))
@@ -753,6 +760,60 @@ class FdExhaustionTest(unittest.IsolatedAsyncioTestCase):
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+    def _configure_recovery(self, results):
+        self.bridge.recover_ssh, self.bridge.recover_key = "pollen@robot", "/nonexistent/key"
+        self.bridge.recovery["configured"] = True
+        self.recover_calls = 0
+
+        async def fake_run():
+            self.recover_calls += 1
+            return results.pop(0) if results else (0, "")
+        self.bridge._run_recover_command = fake_run
+
+    async def test_restarts_the_daemon_over_ssh_and_resumes(self):
+        self._configure_recovery([(0, "")])
+
+        async def refused_or_live(client):
+            # Like the robot: only the running process's own exhaustion refuses a viewer.
+            lines = self.daemon.log_lines or []
+            if rb.fd_exhausted(lines, rb.daemon_pid(lines)):
+                return
+            await frames_for(client, 3600)
+        ScriptedClient.script = staticmethod(refused_or_live)
+        self.daemon.log_lines = journal(76389, EMFILE_LINE)
+        task = asyncio.create_task(self.bridge._supervise())
+        try:
+            await wait_until(lambda: self.recover_calls == 1, what="one restart over SSH")
+            self.assertIn("restarted it over SSH", self.bridge.reason)
+            # A restart supersedes the media rebuild.
+            self.assertNotIn("/api/media/release", self.daemon.requests)
+            # The robot comes back as a new process; its journal still holds the old lines.
+            self.daemon.log_lines = journal(76389, EMFILE_LINE) + journal(90001, "Daemon started")
+            await wait_until(lambda: self.bridge.state == "live", timeout=3, what="live again")
+            self.assertEqual(self.recover_calls, 1)
+            self.assertEqual(self.bridge.recovery["attempts"], 1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    async def test_no_second_restart_inside_the_interval(self):
+        self._configure_recovery([(0, ""), (0, "")])
+        self.bridge._recovered_at = time.monotonic()          # one just happened
+        self.daemon.log_lines = journal(90001, EMFILE_LINE)
+        self.assertTrue(await self.bridge._note_fd_exhaustion())
+        self.assertEqual(self.recover_calls, 0)
+        self.assertIn("not repeating it yet", self.bridge.reason)
+        self.assertIn("/api/media/release", self.daemon.requests)   # falls back to the repair
+
+    async def test_failed_restart_falls_back_to_the_repair(self):
+        self._configure_recovery([(255, "Permission denied (publickey).")])
+        self.daemon.log_lines = journal(76389, EMFILE_LINE)
+        self.assertTrue(await self.bridge._note_fd_exhaustion())
+        self.assertEqual(self.recover_calls, 1)
+        self.assertIn("Permission denied", self.bridge.reason)
+        self.assertIn("failed", self.bridge.recovery["last_result"])
+        self.assertIn("/api/media/release", self.daemon.requests)
 
     async def test_no_media_rebuild_while_an_app_runs(self):
         self.daemon.lock = {"state": "local_app", "holder_name": "reachy_mini_testbench"}

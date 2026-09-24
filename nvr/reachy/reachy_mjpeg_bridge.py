@@ -84,6 +84,12 @@ FD_EXHAUSTED_MARK = "Too many open files"
 FD_EXHAUSTED_RECHECK_S = 60.0
 # Between releasing and re-acquiring the robot's media when rebuilding its camera pipeline.
 MEDIA_REBUILD_PAUSE_S = 3.0
+# Forced recovery: with --recover-ssh/--recover-key, an exhausted daemon is restarted over SSH by a
+# key the robot only lets run `systemctl restart reachy-mini-daemon` (nvr/reachy/
+# setup_robot_recovery.sh). At most once per interval, so a daemon that wedges again at once (or a
+# restart that does not take) cannot turn into a restart loop.
+RECOVER_MIN_INTERVAL_S = 900.0
+RECOVER_TIMEOUT_S = 30.0
 _DAEMON_PID = re.compile(r"(?:launcher\.sh|python\d*)\[(\d+)\]")
 
 # Live VLM WebUI push: the pause after a refusal (an HTTP error, a 409 from Stop), and the slower
@@ -326,7 +332,8 @@ class AudioHub:
 
 class Bridge:
     def __init__(self, host: str, port: int, fps: float, daemon_port: int = 8000,
-                 push_url: str | None = None, push_fps: float = 0.0) -> None:
+                 push_url: str | None = None, push_fps: float = 0.0,
+                 recover_ssh: str | None = None, recover_key: str | None = None) -> None:
         self.host = host
         self.port = port
         self.daemon = f"http://{host}:{daemon_port}"
@@ -348,6 +355,10 @@ class Bridge:
         # (a new pid) lifts it. See FD_EXHAUSTED_MARK.
         self.fd_exhausted_pid: str | None = None
         self._fd_checked_at = 0.0
+        self.recover_ssh, self.recover_key = recover_ssh, recover_key
+        self._recovered_at: float | None = None
+        self.recovery = {"configured": bool(recover_ssh and recover_key), "attempts": 0,
+                         "last_result": None}
         # When a robot app was last seen holding the robot, and which (LOCK_FREE_GRACE_S).
         self._lock_seen_at = 0.0
         self._last_holder: str | None = None
@@ -465,13 +476,65 @@ class Bridge:
     async def _note_fd_exhaustion(self) -> bool:
         """After a session without video: is the daemon out of file descriptors? Sets the state."""
         lines = await self._daemon_log_tail()
-        if not lines or not fd_exhausted(lines):
+        pid = daemon_pid(lines or [])
+        # Only the current process's lines count: straight after a restart the journal still holds
+        # the previous process's "Too many open files", which says nothing about the new one.
+        if not lines or not fd_exhausted(lines, pid):
             return False
-        self.fd_exhausted_pid = daemon_pid(lines) or "unknown"
+        self.fd_exhausted_pid = pid or "unknown"
         self._fd_checked_at = time.monotonic()
         self.state, self.reason = "dormant", fd_exhausted_reason(self.fd_exhausted_pid)
         _LOG.error("%s", self.reason)
-        await self._repair_robot_camera()
+        if not await self._recover_robot_daemon():
+            await self._repair_robot_camera()
+        return True
+
+    async def _run_recover_command(self) -> tuple[int, str]:
+        """Run the recovery key once. What runs on the robot is fixed by the key's forced command."""
+        proc = await asyncio.create_subprocess_exec(
+            # -T: the key is no-pty on the robot, and asking for none keeps ssh from saying so.
+            "ssh", "-T", "-i", self.recover_key, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+            "-o", "StrictHostKeyChecking=yes", self.recover_ssh,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            _, err = await asyncio.wait_for(proc.communicate(), RECOVER_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return -1, f"no answer within {RECOVER_TIMEOUT_S:.0f}s"
+        return proc.returncode, err.decode(errors="replace").strip()[-300:]
+
+    async def _recover_robot_daemon(self) -> bool:
+        """Restart the robot's daemon over SSH, if configured and not tried too recently.
+
+        True when a restart was issued: the new process will not be exhausted, and
+        _still_fd_exhausted() lifts the hold as soon as it sees a new pid.
+        """
+        if not self.recovery["configured"]:
+            return False
+        now = time.monotonic()
+        if self._recovered_at is not None and now - self._recovered_at < RECOVER_MIN_INTERVAL_S:
+            _LOG.warning("robot daemon exhausted again %.0fs after a restart; not restarting it "
+                         "again within %.0fs", now - self._recovered_at, RECOVER_MIN_INTERVAL_S)
+            self.reason += (" A restart was already tried "
+                            f"{(now - self._recovered_at) / 60:.0f} min ago; not repeating it yet.")
+            return False
+        self._recovered_at = now
+        self.recovery["attempts"] += 1
+        try:
+            rc, err = await self._run_recover_command()
+        except (OSError, ValueError) as e:
+            rc, err = -1, f"{type(e).__name__}: {e}"
+        if rc != 0:
+            self.recovery["last_result"] = f"failed (exit {rc}): {err}"
+            _LOG.error("could not restart the robot daemon over SSH: %s", err)
+            self.reason += f" Automatic restart over SSH failed: {err}"
+            return False
+        self.recovery["last_result"] = f"restarted daemon pid {self.fd_exhausted_pid}"
+        self.reason = (f"robot daemon (pid {self.fd_exhausted_pid}) ran out of file descriptors; "
+                       f"restarted it over SSH, waiting for the new process")
+        _LOG.warning("%s", self.reason)
+        self._fd_checked_at = 0.0     # look for the new pid on the next poll, not in a minute
         return True
 
     async def _repair_robot_camera(self) -> None:
@@ -724,6 +787,7 @@ class Bridge:
             "sessions": self.sessions,
             "restarts": self.restarts,
             "failed_streak": self.failed_streak,
+            "recovery": self.recovery,
             "blocked_by": self.blocked_by,
             "mjpeg_clients": self.mjpeg_clients,
             "audio": {
@@ -745,8 +809,10 @@ def daemon_pid(lines: list[str]) -> str | None:
     return None
 
 
-def fd_exhausted(lines: list[str]) -> bool:
-    return any(FD_EXHAUSTED_MARK in line for line in lines)
+def fd_exhausted(lines: list[str], pid: str | None = None) -> bool:
+    """The tell-tale line, from process `pid` when given (its lines carry it: python[pid])."""
+    return any(FD_EXHAUSTED_MARK in line and (pid is None or (
+        (m := _DAEMON_PID.search(line)) is not None and m.group(1) == pid)) for line in lines)
 
 
 def fd_exhausted_reason(pid: str | None) -> str:
@@ -818,10 +884,13 @@ async def main() -> None:
     p.add_argument("--push-url", help="Live VLM WebUI push endpoint, e.g. "
                    "https://127.0.0.1:8090/api/push/frame?session_id=reachy&source_name=reachy-mini")
     p.add_argument("--push-fps", type=float, default=0.0, help="push rate (default: --fps)")
+    p.add_argument("--recover-ssh", help="user@robot whose forced-command key restarts the daemon "
+                   "when it runs out of file descriptors (nvr/reachy/setup_robot_recovery.sh)")
+    p.add_argument("--recover-key", help="private key for --recover-ssh")
     args = p.parse_args()
 
     bridge = Bridge(args.robot_host, args.robot_port, args.fps, args.daemon_port,
-                    args.push_url, args.push_fps)
+                    args.push_url, args.push_fps, args.recover_ssh, args.recover_key)
     await bridge.start()
 
     app = web.Application()
