@@ -101,6 +101,7 @@ more encoder spun up and one more leak.
 | `/api/daemon/status` unreachable, or `state` not `running` | `robot daemon unreachable (…)` / `robot daemon is 'x', not running` |
 | `/api/media/status` has `no_media`, `released`, or `available: false` | `daemon runs without media` / `daemon has released the camera and microphone` / `daemon reports the camera unavailable` |
 | `/api/daemon/robot-app-lock-status` has `state: local_app` | `camera held by the robot app 'x'`, with `blocked_by` set |
+| The lock was held and is now free, for under 30 s | `robot app 'x' just released the camera; waiting Ns in case it is restarting`: an app restart frees the lock for seconds, and dialling into that gap once reached an exhausted daemon and stopped the app's camera as it came back |
 
 Any of these: `state: dormant`, a REST poll every 10 s, no session until the answer changes, and
 then it resumes by itself. None of it is an error. A camera taken *mid*-session shows up first as

@@ -68,6 +68,9 @@ REJECTED_STREAK_WARN = 4
 # While the camera is deliberately unavailable (an app holds it, the daemon released it), poll the
 # robot's REST API at this pace instead of opening WebRTC sessions into a camera we cannot have.
 DORMANT_POLL_S = 10.0
+# A robot app's lock only counts as released once it has stayed free this long (see
+# camera_unavailable): long enough to cover an app restarting.
+LOCK_FREE_GRACE_S = 30.0
 
 # The daemon out of file descriptors is worse than a refusal. Adding a WebRTC viewer makes its
 # encoder allocate buffers, libcamera's next request fails ("Internal data stream error"), and the
@@ -345,6 +348,9 @@ class Bridge:
         # (a new pid) lifts it. See FD_EXHAUSTED_MARK.
         self.fd_exhausted_pid: str | None = None
         self._fd_checked_at = 0.0
+        # When a robot app was last seen holding the robot, and which (LOCK_FREE_GRACE_S).
+        self._lock_seen_at = 0.0
+        self._last_holder: str | None = None
         self.mjpeg_clients = 0
         self.push_url = push_url
         self.push_interval = (1.0 / push_fps) if push_fps > 0 else self.interval
@@ -412,9 +418,17 @@ class Bridge:
             lock = await self._get_json("/api/daemon/robot-app-lock-status")
             if lock.get("state") == "local_app":
                 holder = lock.get("holder_name") or "an app"
+                self._lock_seen_at, self._last_holder = time.monotonic(), holder
                 return f"camera held by the robot app {holder!r}", holder
         except Exception:
             pass
+        # An app restarting frees the lock for a few seconds. Dialling into that gap is how, on
+        # 2026-09-24, one session reached a robot out of descriptors and stopped the testbench's
+        # camera the moment it came back. So a lock only counts as released once it stays free.
+        since = time.monotonic() - self._lock_seen_at
+        if self._lock_seen_at and since < LOCK_FREE_GRACE_S:
+            return (f"robot app {self._last_holder!r} just released the camera; waiting "
+                    f"{LOCK_FREE_GRACE_S - since:.0f}s in case it is restarting"), None
         return None, None
 
     async def _daemon_log_tail(self, seconds: float = 2.0) -> list[str] | None:

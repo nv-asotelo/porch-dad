@@ -427,6 +427,17 @@ class CameraUnavailableTest(unittest.IsolatedAsyncioTestCase):
         self.daemon.lock = {"state": "local_app", "holder_name": "marionette"}
         self.assertEqual((await self.bridge.camera_unavailable())[1], "marionette")
 
+    async def test_a_released_lock_must_stay_free(self):
+        self.daemon.lock = {"state": "local_app", "holder_name": "reachy_mini_testbench"}
+        await self.bridge.camera_unavailable()
+        self.daemon.lock = {"state": "free", "holder_name": None}
+        with mock.patch.object(rb, "LOCK_FREE_GRACE_S", 0.3):
+            reason, holder = await self.bridge.camera_unavailable()
+            self.assertIn("'reachy_mini_testbench' just released the camera", reason)
+            self.assertIsNone(holder)
+            await asyncio.sleep(0.35)
+            self.assertEqual(await self.bridge.camera_unavailable(), (None, None))
+
     async def test_local_app_holds_the_camera(self):
         self.daemon.lock = {"state": "local_app", "holder_name": "marionette"}
         reason, holder = await self.bridge.camera_unavailable()
@@ -629,7 +640,8 @@ class SupervisorTest(unittest.IsolatedAsyncioTestCase):
         ScriptedClient.script = staticmethod(forever)
         self.daemon.lock = {"state": "local_app", "holder_name": "marionette"}
         with mock.patch.object(rb, "AVStreamClient", ScriptedClient), \
-                mock.patch.object(rb, "DORMANT_POLL_S", 0.05):
+                mock.patch.object(rb, "DORMANT_POLL_S", 0.05), \
+                mock.patch.object(rb, "LOCK_FREE_GRACE_S", 0.5):
             task = asyncio.create_task(self.bridge._supervise())
             try:
                 await wait_until(lambda: self.daemon.requests.count("/api/daemon/status") >= 3,
@@ -637,6 +649,10 @@ class SupervisorTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((self.bridge.state, self.bridge.blocked_by), ("dormant", "marionette"))
                 self.assertEqual((self.bridge.sessions, ScriptedClient.instances), (0, []))
                 self.daemon.lock = {"state": "none"}
+                # A freed lock is not dialled into at once: an app restarting frees it briefly.
+                await wait_until(lambda: "just released" in (self.bridge.reason or ""),
+                                 what="the grace period")
+                self.assertEqual(self.bridge.sessions, 0)
                 await wait_until(lambda: self.bridge.state == "live", what="live after the app left")
                 self.assertEqual(self.bridge.sessions, 1)
                 self.assertIsNone(self.bridge.blocked_by)
