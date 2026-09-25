@@ -2100,9 +2100,16 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </details>
   </div>
 
-  <h2>Feed <span id="filter" class="hint"></span></h2>
-  <div class="row" id="filters"></div>
-  <div id="feed" style="margin-top:10px"></div>
+  <!-- Collapsed by default: at 60 image cards per refresh this was the single longest thing on
+       the page. Native <details> rather than a scripted toggle, so open/closed survives the 10 s
+       refresh (load() only replaces #feed's innerHTML, never the <details> wrapping it) with no
+       state to keep - same reasoning as Reachy's Pose/motors/volume section above. -->
+  <details id="feedSection" style="margin-top:12px">
+    <summary style="cursor:pointer;color:var(--mut);font-size:12px;text-transform:uppercase;
+                    letter-spacing:.08em">Feed <span id="filter" class="hint"></span></summary>
+    <div class="row" id="filters" style="margin-top:10px"></div>
+    <div id="feed" style="margin-top:10px"></div>
+  </details>
 
   <h2>Cosmos3-Edge engine</h2>
   <div class="callout">
