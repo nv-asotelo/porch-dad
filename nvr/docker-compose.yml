@@ -25,6 +25,19 @@ services:
       - "55123:55123"   # setup web UI - Ring account auth happens HERE
     volumes:
       - ./ring-mqtt/data:/data
+    # /tmp as tmpfs so it cannot survive a restart. scripts/start-stream.sh guards each camera
+    # with /tmp/ring-mqtt-<deviceid>_<type>.lock and, if that file already exists, exits 1
+    # SILENTLY - no log line, nothing in go2rtc beyond error="streams: exec/rtsp". Kill the
+    # container mid-stream (reboot, shutdown, SIGKILL) and the lock is left behind in the
+    # writable layer, where `docker restart` preserves it. Every later attempt then dies on a
+    # lock nothing owns, and the affected cameras are down permanently while ring-mqtt itself
+    # looks perfectly healthy: authenticated, publishing snapshots, streams present in
+    # go2rtc.yaml. Diagnosed exactly that way on 2026-09-25 - two locks dated Sep 18 16:5x,
+    # left by the shutdown during the SD clone, had front_entryway and front_driveway dark for
+    # a week. Only a container *recreate* cleared them before this.
+    # 64m is ~150x the 424 KB actually used, and bounded matters on an 8 GB board.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     environment:
       - MQTTURL=mqtt://mosquitto:1883
       - DEBUG=ring-*
