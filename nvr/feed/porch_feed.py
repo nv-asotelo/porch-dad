@@ -1694,7 +1694,10 @@ async def api_scout_restart_ros(sid: str, request: Request):
     _bg_tasks.add(t)
     t.add_done_callback(_bg_tasks.discard)
     return {"message": f"Handing {e.name} back to the Moorebot app — restarting its ROS and "
-                       f"reconnecting the bridge. This feed drops out and returns in ~30–40 s."}
+                       f"reconnecting the bridge. This feed drops out and returns in ~60–100 s: "
+                       f"the ssh channel to the robot can itself take up to 45 s to close during "
+                       f"the ~20 s the robot is CPU-starved relaunching ROS nodes, then there's a "
+                       f"fixed 22 s wait before the bridge bounces, plus Frigate's own reconnect."}
 
 
 @app.get("/api/reachy/apps")
