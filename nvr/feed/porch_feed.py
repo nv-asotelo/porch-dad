@@ -2671,34 +2671,56 @@ async function scoutListenToggle(sid, checked){
   const cb = scEl(sid,'listenbtn'), lbl = document.getElementById('sc-listenlbl-'+sid);
   if(!checked){ scoutListenStop(sid); return; }
   if(s.ws) return;                                      // already listening
-  // Create (and resume) the AudioContext BEFORE any await, not after: iOS Safari only unlocks
-  // WebAudio during the synchronous portion of a user-gesture handler. The old code awaited
-  // tokenReady() first, so by the time the context existed Safari no longer counted it as
-  // gesture-triggered and left it permanently 'suspended' - no error, no sound, nothing.
-  s.ac = new (window.AudioContext || window.webkitAudioContext)();
-  if(s.ac.state === 'suspended'){ try{ await s.ac.resume(); }catch(e){} }
-  s.playAt = 0;
-  const tok = await tokenReady();
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  s.ws = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/listen?token=${encodeURIComponent(tok)}`);
-  s.ws.binaryType = 'arraybuffer';
-  s.ws.onopen = () => { if(cb) cb.checked = true; if(lbl) lbl.textContent = '🔊 Listening'; };
-  s.ws.onmessage = ev => {
-    const pcm = new Int16Array(ev.data);
-    if(!pcm.length || !s.ac) return;
-    const buf = s.ac.createBuffer(1, pcm.length, 16000);
-    const ch = buf.getChannelData(0);
-    for(let i=0;i<pcm.length;i++) ch[i] = pcm[i] / 32768;
-    const src = s.ac.createBufferSource();
-    src.buffer = buf; src.connect(s.ac.destination);
-    const now = s.ac.currentTime;
-    // Keep a small lead; if we fall behind (tab throttled), resync rather than pile up latency.
-    if(s.playAt < now + 0.02 || s.playAt > now + 0.5) s.playAt = now + 0.08;
-    src.start(s.playAt);
-    s.playAt += buf.duration;
-  };
-  s.ws.onclose = () => scoutListenStop(sid);
-  s.ws.onerror = () => say('listen: connection failed', false);
+  // Everything below used to run with no top-level try/catch. An async function's thrown
+  // exception becomes an unhandled promise rejection, not a caught error - invisible to the
+  // user (no banner, console-only), which reads exactly like "toggle flips, no sound, no error".
+  // Wrapping it turns any real failure into something say() can actually show.
+  try{
+    // Create (and resume) the AudioContext BEFORE any await, not after: iOS Safari only unlocks
+    // WebAudio during the synchronous portion of a user-gesture handler. The old code awaited
+    // tokenReady() first, so by the time the context existed Safari no longer counted it as
+    // gesture-triggered and left it permanently 'suspended' - no error, no sound, nothing.
+    s.ac = new (window.AudioContext || window.webkitAudioContext)();
+    if(s.ac.state === 'suspended'){ await s.ac.resume(); }
+    if(s.ac.state !== 'running'){
+      say(`listen: AudioContext stayed "${s.ac.state}" after resume() - iOS is refusing playback`, false);
+    }
+    s.playAt = 0;
+    const tok = await tokenReady();
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    s.ws = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/listen?token=${encodeURIComponent(tok)}`);
+    s.ws.binaryType = 'arraybuffer';
+    // Prove a frame actually arrived, not just that the socket opened - a robot-side stall (see
+    // _audio_ws_capture) would otherwise look identical to "connected but no error" from here.
+    let gotFrame = false;
+    s.ws.onopen = () => {
+      if(cb) cb.checked = true;
+      if(lbl) lbl.textContent = '🔊 Listening (waiting for audio…)';
+      setTimeout(() => { if(s.ws && !gotFrame) say('listen: connected but no audio arrived in 4s - check the robot mic/arecord', false); }, 4000);
+    };
+    s.ws.onmessage = ev => {
+      if(!gotFrame){ gotFrame = true; if(lbl) lbl.textContent = '🔊 Listening'; }
+      const pcm = new Int16Array(ev.data);
+      if(!pcm.length || !s.ac) return;
+      const buf = s.ac.createBuffer(1, pcm.length, 16000);
+      const ch = buf.getChannelData(0);
+      for(let i=0;i<pcm.length;i++) ch[i] = pcm[i] / 32768;
+      const src = s.ac.createBufferSource();
+      src.buffer = buf; src.connect(s.ac.destination);
+      const now = s.ac.currentTime;
+      // Keep a small lead; if we fall behind (tab throttled), resync rather than pile up latency.
+      if(s.playAt < now + 0.02 || s.playAt > now + 0.5) s.playAt = now + 0.08;
+      src.start(s.playAt);
+      s.playAt += buf.duration;
+    };
+    s.ws.onclose = ev => { const wasOpen = gotFrame || ev.code === 1000;
+      if(!wasOpen) say(`listen: socket closed (code ${ev.code}) before any audio arrived`, false);
+      scoutListenStop(sid); };
+    s.ws.onerror = () => say('listen: connection failed', false);
+  }catch(e){
+    say('listen: ' + (e && e.message || e), false);
+    scoutListenStop(sid);
+  }
 }
 function scoutListenStop(sid){
   const s = SC[sid]; if(!s) return;
@@ -2726,38 +2748,48 @@ async function scoutTalkToggle(sid, checked){
        + 'Open via an ssh -L localhost forward.', false);
     return;
   }
-  // Same iOS Safari rule as scoutListenToggle: create (and resume) the AudioContext before any
-  // await. getUserMedia's own permission prompt has to stay async, but nothing stops the context
-  // existing first - only createMediaStreamSource needs the stream, not the context itself.
-  s.talkCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if(s.talkCtx.state === 'suspended'){ try{ await s.talkCtx.resume(); }catch(e){} }
-  const tok = await tokenReady();
-  s.talkResume = !!s.ws;
-  if(s.talkResume) scoutListenStop(sid);                // avoid feedback on THIS robot
+  // Same "no top-level try/catch means a thrown error is an invisible unhandled rejection" gap
+  // as scoutListenToggle had - wrapped for the same reason: any real failure should reach say(),
+  // not vanish silently while the switch sits there looking "on" with nothing actually happening.
   try{
-    s.talkStream = await navigator.mediaDevices.getUserMedia(
-      {audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
-  }catch(e){ if(cb) cb.checked = false; try{s.talkCtx.close();}catch(_){} s.talkCtx = null;
-             say('microphone permission denied', false); return; }
-  const src = s.talkCtx.createMediaStreamSource(s.talkStream);
-  s.talkNode = s.talkCtx.createScriptProcessor(4096, 1, 1);
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  s.talkWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/talk?token=${encodeURIComponent(tok)}`);
-  s.talkWS.binaryType = 'arraybuffer';
-  const ratio = s.talkCtx.sampleRate / 16000;
-  s.talkNode.onaudioprocess = e => {
-    if(!s.talkWS || s.talkWS.readyState !== 1) return;
-    const inp = e.inputBuffer.getChannelData(0);
-    const n = Math.floor(inp.length / ratio);
-    const out = new Int16Array(n);
-    for(let i=0;i<n;i++){ const v = inp[Math.floor(i*ratio)]; out[i] = Math.max(-32768, Math.min(32767, v*32768)); }
-    s.talkWS.send(out.buffer);
-  };
-  // Route through a muted gain so the ScriptProcessor runs without playing the user's own mic back.
-  const mute = s.talkCtx.createGain(); mute.gain.value = 0;
-  src.connect(s.talkNode); s.talkNode.connect(mute); mute.connect(s.talkCtx.destination);
-  if(cb) cb.checked = true;
-  const lbl = document.getElementById('sc-talklbl-'+sid); if(lbl) lbl.textContent = '🎙 Talking…';
+    // Same iOS Safari rule as scoutListenToggle: create (and resume) the AudioContext before any
+    // await. getUserMedia's own permission prompt has to stay async, but nothing stops the context
+    // existing first - only createMediaStreamSource needs the stream, not the context itself.
+    s.talkCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(s.talkCtx.state === 'suspended'){ await s.talkCtx.resume(); }
+    const tok = await tokenReady();
+    s.talkResume = !!s.ws;
+    if(s.talkResume) scoutListenStop(sid);                // avoid feedback on THIS robot
+    try{
+      s.talkStream = await navigator.mediaDevices.getUserMedia(
+        {audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
+    }catch(e){ if(cb) cb.checked = false; try{s.talkCtx.close();}catch(_){} s.talkCtx = null;
+               say('microphone permission denied', false); return; }
+    const src = s.talkCtx.createMediaStreamSource(s.talkStream);
+    s.talkNode = s.talkCtx.createScriptProcessor(4096, 1, 1);
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    s.talkWS = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/talk?token=${encodeURIComponent(tok)}`);
+    s.talkWS.binaryType = 'arraybuffer';
+    s.talkWS.onerror = () => say('talk: connection failed', false);
+    s.talkWS.onclose = ev => { if(ev.code !== 1000 && s.talkNode) say(`talk: socket closed (code ${ev.code})`, false); };
+    const ratio = s.talkCtx.sampleRate / 16000;
+    s.talkNode.onaudioprocess = e => {
+      if(!s.talkWS || s.talkWS.readyState !== 1) return;
+      const inp = e.inputBuffer.getChannelData(0);
+      const n = Math.floor(inp.length / ratio);
+      const out = new Int16Array(n);
+      for(let i=0;i<n;i++){ const v = inp[Math.floor(i*ratio)]; out[i] = Math.max(-32768, Math.min(32767, v*32768)); }
+      s.talkWS.send(out.buffer);
+    };
+    // Route through a muted gain so the ScriptProcessor runs without playing the user's own mic back.
+    const mute = s.talkCtx.createGain(); mute.gain.value = 0;
+    src.connect(s.talkNode); s.talkNode.connect(mute); mute.connect(s.talkCtx.destination);
+    if(cb) cb.checked = true;
+    const lbl = document.getElementById('sc-talklbl-'+sid); if(lbl) lbl.textContent = '🎙 Talking…';
+  }catch(e){
+    say('talk: ' + (e && e.message || e), false);
+    scoutTalkStop(sid);
+  }
 }
 function scoutTalkStop(sid){
   const s = SC[sid]; if(!s) return;
