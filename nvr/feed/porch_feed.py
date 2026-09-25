@@ -1312,6 +1312,28 @@ def reachy_latest():
                     headers={"Cache-Control": "no-store"})
 
 
+@app.get("/reachy/audio.mp3")
+def reachy_audio():
+    """Proxy the Reachy Mini's live microphone MP3 stream - same reasoning as reachy_latest above:
+    REACHY_CAM is a docker-internal address (172.17.0.1:8099) no browser can reach directly.
+
+    Streamed, not buffered: the bridge only runs its MP3 encoder while at least one listener is
+    connected and tears it down when the last one leaves, so this proxy's own upstream connection
+    IS the listener as far as the bridge is concerned - closing it (the browser navigating away or
+    the <audio> element being torn down) is what lets the bridge stop encoding an unheard mic.
+    """
+    if not REACHY_CAM:
+        raise HTTPException(404, "reachy_camera_url is not configured")
+    try:
+        upstream = requests.get(f"{REACHY_CAM}/audio.mp3", stream=True, timeout=10)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"camera bridge unreachable: {e}")
+    if upstream.status_code != 200:
+        raise HTTPException(502, f"bridge returned {upstream.status_code}")
+    return StreamingResponse(upstream.iter_content(chunk_size=4096), media_type="audio/mpeg",
+                              headers={"Cache-Control": "no-store"})
+
+
 # lan_link and reachy_health_summary are pure for the same reason as boot_command: the tests
 # compile them out of this file rather than import it. Hence the local urllib import.
 def lan_link(url: str, host: str) -> str | None:
@@ -2072,10 +2094,15 @@ button.mini{padding:3px 9px;font-size:11.5px}
     <!-- The Cosmos caption belongs with the picture it describes, not buried in the controls. -->
     <div id="reachyAlert" class="ralert"></div>
     <div class="row" style="margin-top:8px">
+      <label class="tswitch" title="Hear this robot's microphone in your browser">
+        <input type="checkbox" id="reachyListenBtn" onchange="reachyListenToggle(this.checked)">
+        <span class="track"></span><span class="tlabel" id="reachyListenLbl">🔊 Listen</span>
+      </label>
       <button onclick="rq('/api/reachy/check')"
               title="Grabs one frame from the camera above and sends it to Cosmos3-Edge. This is the button that writes a new caption.">
         Look &amp; describe</button>
     </div>
+    <audio id="reachyAudioEl" style="display:none"></audio>
     <p class="hint" id="reachyWatchHint"></p>
   </div>
 
@@ -2578,6 +2605,26 @@ function scoutGpLoop(sid){
   s.gpRAF = requestAnimationFrame(() => scoutGpLoop(sid));
 }
 
+// Reachy Listen: the bridge already serves its mic as a continuous browser-native MP3 stream
+// (proxied same-origin at /reachy/audio.mp3, see reachy_audio()), so this is just pointing an
+// <audio> element at it - no WebAudio/PCM plumbing needed, unlike the Scouts' raw-socket path.
+// .play() is called synchronously in this handler (no await first) so iOS Safari counts it as
+// gesture-triggered; setting .src alone does not start playback on its own on iOS.
+function reachyListenToggle(checked){
+  const el = document.getElementById('reachyAudioEl');
+  const lbl = document.getElementById('reachyListenLbl');
+  if(!el) return;
+  if(!checked){
+    el.pause(); el.removeAttribute('src'); el.load();
+    if(lbl) lbl.textContent = '🔊 Listen';
+    return;
+  }
+  el.src = `/reachy/audio.mp3?t=${Date.now()}`;
+  el.play().then(() => { if(lbl) lbl.textContent = '🔊 Listening'; })
+           .catch(e => { const cb = document.getElementById('reachyListenBtn'); if(cb) cb.checked = false;
+                          say('reachy listen: ' + e.message, false); });
+}
+
 // Listen: stream the robot mic (16 kHz mono PCM16 over a WebSocket) and play it back through Web
 // Audio, scheduling each chunk after the last so it plays gaplessly. No secure context needed -
 // only mic CAPTURE (talk) requires https/localhost; playback works on plain http.
@@ -2591,9 +2638,14 @@ async function scoutListenToggle(sid, checked){
   const cb = scEl(sid,'listenbtn'), lbl = document.getElementById('sc-listenlbl-'+sid);
   if(!checked){ scoutListenStop(sid); return; }
   if(s.ws) return;                                      // already listening
-  const tok = await tokenReady();
+  // Create (and resume) the AudioContext BEFORE any await, not after: iOS Safari only unlocks
+  // WebAudio during the synchronous portion of a user-gesture handler. The old code awaited
+  // tokenReady() first, so by the time the context existed Safari no longer counted it as
+  // gesture-triggered and left it permanently 'suspended' - no error, no sound, nothing.
   s.ac = new (window.AudioContext || window.webkitAudioContext)();
+  if(s.ac.state === 'suspended'){ try{ await s.ac.resume(); }catch(e){} }
   s.playAt = 0;
+  const tok = await tokenReady();
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   s.ws = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/listen?token=${encodeURIComponent(tok)}`);
   s.ws.binaryType = 'arraybuffer';
@@ -2641,14 +2693,19 @@ async function scoutTalkToggle(sid, checked){
        + 'Open via an ssh -L localhost forward.', false);
     return;
   }
+  // Same iOS Safari rule as scoutListenToggle: create (and resume) the AudioContext before any
+  // await. getUserMedia's own permission prompt has to stay async, but nothing stops the context
+  // existing first - only createMediaStreamSource needs the stream, not the context itself.
+  s.talkCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(s.talkCtx.state === 'suspended'){ try{ await s.talkCtx.resume(); }catch(e){} }
   const tok = await tokenReady();
   s.talkResume = !!s.ws;
   if(s.talkResume) scoutListenStop(sid);                // avoid feedback on THIS robot
   try{
     s.talkStream = await navigator.mediaDevices.getUserMedia(
       {audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
-  }catch(e){ if(cb) cb.checked = false; say('microphone permission denied', false); return; }
-  s.talkCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }catch(e){ if(cb) cb.checked = false; try{s.talkCtx.close();}catch(_){} s.talkCtx = null;
+             say('microphone permission denied', false); return; }
   const src = s.talkCtx.createMediaStreamSource(s.talkStream);
   s.talkNode = s.talkCtx.createScriptProcessor(4096, 1, 1);
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
