@@ -172,6 +172,24 @@ class Reachy:
         ok, msg = self._post(path, {"volume": value})
         return ok, (f"{which} volume {value}%" if ok else msg)
 
+    def upload_sound(self, data: bytes, filename: str) -> tuple[bool, str]:
+        """POST a sound file to the daemon's temp sound directory. Returns (ok, remote path on
+        success or error message on failure). Bypasses _post: this is multipart, not JSON."""
+        try:
+            r = requests.post(f"{self.base}/api/media/sounds/upload",
+                               files={"file": (filename, data, "audio/wav")}, timeout=self.timeout)
+            if r.status_code >= 400:
+                return False, f"HTTP {r.status_code}: {r.text[:120]}"
+            path = (r.json() or {}).get("path") or filename
+            return True, path
+        except (requests.RequestException, ValueError) as e:
+            return False, f"robot unreachable: {e}"
+
+    def play_sound(self, file: str) -> tuple[bool, str]:
+        """Play a sound file already on the daemon (an absolute path, or one just uploaded via
+        upload_sound) on the robot's speaker."""
+        return self._post("/api/media/play_sound", {"file": file})
+
 
     def look(self, pitch=None, yaw=None, roll=None, body_yaw=None, duration=1.0):
         """Move the head. Degrees in, radians out. Omitted axes hold their current value.

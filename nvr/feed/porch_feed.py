@@ -28,12 +28,14 @@ import asyncio
 import json
 import math
 import os
+import re
 import secrets
 import sqlite3
 import subprocess
 import sys
 import threading
 import time
+import uuid
 import xmlrpc.client
 from contextlib import closing
 from email.utils import formatdate
@@ -99,6 +101,14 @@ REACHY_LIVE_VISION = str(CFG.get("reachy_live_vision_url") or "").strip()
 REACHY_CAM = str(CFG.get("reachy_camera_url") or "").rstrip("/")
 REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
 _reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
+# Local TTS (Piper, native aarch64 binary - see nvr/tts/ on the Orin) narrating what Reachy's
+# camera sees. Kept as a single persistent process reading JSON lines on stdin (see _piper_speak)
+# rather than one process per utterance: this box runs at ~150 MB free most of the time (Frigate +
+# the resident Cosmos3-Edge VLM), and re-loading the ONNX voice model from cold costs ~1-3 s on its
+# own, which alone blows the sub-1s speak-after-caption target this exists to hit.
+PIPER_BIN = Path(CFG.get("piper_bin") or "/home/orin/nvr/tts/piper/piper")
+PIPER_MODEL = Path(CFG.get("piper_model") or "/home/orin/nvr/tts/en_US-lessac-low.onnx")
+PIPER_OUT_DIR = Path(CFG.get("piper_out_dir") or "/tmp/reachy_tts")
 # Scout audio goes over SSH (the robot has no ROS/RTSP audio). Key auth, unprivileged linaro.
 SCOUT_SSH_KEY = str(CFG.get("scout_ssh_key") or "/home/orin/.ssh/scout_ed25519")
 SCOUT_SPK_DEV = str(CFG.get("scout_speaker_device") or "hw:0,0")
@@ -317,11 +327,124 @@ def _probe(link: dict) -> dict:
             "browsable": not link.get("tcp_only", False)}
 
 
-def reachy_look_and_describe(trigger: str) -> dict:
+# --------------------------------------------------------------------------- Reachy speech (TTS)
+_piper_proc: subprocess.Popen | None = None
+_piper_lock = threading.Lock()
+
+
+def _piper_start() -> None:
+    global _piper_proc
+    PIPER_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, LD_LIBRARY_PATH=str(PIPER_BIN.parent))
+    # length_scale trims both audio duration and inference time roughly together (Piper's
+    # real-time factor held near-constant across the range tested on this box) - 0.85 measured a
+    # meaningful cut with no obvious naturalness cost, unlike the more aggressive settings tried.
+    _piper_proc = subprocess.Popen(
+        [str(PIPER_BIN), "-m", str(PIPER_MODEL), "--json-input", "--length_scale", "0.85", "-q"],
+        cwd=str(PIPER_OUT_DIR), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL, env=env, text=True)
+
+
+def _spoken_summary(text: str, max_chars: int = 140) -> str:
+    """First sentence, capped to max_chars. A full multi-clause VLM caption read verbatim is both
+    slower to synthesize (see piper_synth - inference scales with text/phoneme count) and less
+    natural spoken aloud than a short confirmation of what was seen."""
+    m = re.search(r"[.!?](\s|$)", text)
+    s = text[:m.end()].strip() if m else text.strip()
+    if len(s) > max_chars:
+        s = s[:max_chars].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+    return s
+
+
+def piper_synth(text: str, timeout: float = 8.0) -> Path | None:
+    """Synthesize text to a WAV file with a persistent, model-warm Piper process - started lazily
+    on first use and reused after, so only the first call pays the ~1-3 s ONNX voice load. Piper's
+    --json-input mode takes one JSON object per stdin line and keeps running; output_file there is
+    relative to its cwd (PIPER_OUT_DIR), not an argument it takes seriously as a path.
+
+    Not internally thread-safe - callers must hold _piper_lock, since stdin is a single ordered
+    stream and interleaving two callers' lines would garble both.
+    """
+    global _piper_proc
+    if _piper_proc is None or _piper_proc.poll() is not None:
+        _piper_start()
+    name = f"{uuid.uuid4().hex}.wav"
+    out = PIPER_OUT_DIR / name
+    line = json.dumps({"text": text, "output_file": name}) + "\n"
+    try:
+        _piper_proc.stdin.write(line)
+        _piper_proc.stdin.flush()
+    except (BrokenPipeError, OSError):
+        # The one restart attempt: a crashed/reaped process gets one fresh start, not a retry loop.
+        _piper_start()
+        try:
+            _piper_proc.stdin.write(line)
+            _piper_proc.stdin.flush()
+        except (BrokenPipeError, OSError):
+            return None
+
+    # Poll for the file rather than parsing Piper's log output (quieted by -q anyway): two
+    # consecutive equal, non-empty size readings is "done writing" without an fsync/rename dance
+    # for a file that lives on tmpfs for seconds at most.
+    deadline = time.time() + timeout
+    last_size, stable = -1, 0
+    while time.time() < deadline:
+        if out.exists():
+            sz = out.stat().st_size
+            if sz > 44 and sz == last_size:
+                stable += 1
+                if stable >= 2:
+                    return out
+            else:
+                stable = 0
+            last_size = sz
+        time.sleep(0.015)
+    return None
+
+
+def reachy_speak(text: str) -> tuple[bool, str]:
+    """Synthesize text locally and play it on the Reachy Mini's own speaker.
+
+    The daemon has no play-from-bytes call (see its openapi.json: /api/media/play_sound only takes
+    a path already on its filesystem), so this is upload-then-play, not a single request.
+    """
+    if not (_reachy and REACHY_DAEMON):
+        return False, "no reachy daemon configured"
+    t0 = time.time()
+    with _piper_lock:
+        wav = piper_synth(text)
+    if not wav:
+        return False, "tts synthesis failed or timed out"
+    t1 = time.time()
+    try:
+        data = wav.read_bytes()
+        ok, remote = _reachy.upload_sound(data, wav.name)
+        if not ok:
+            return False, f"upload failed: {remote}"
+        ok, msg = _reachy.play_sound(remote)
+        if not ok:
+            return False, f"play failed: {msg}"
+    finally:
+        try:
+            wav.unlink()
+        except OSError:
+            pass
+    t2 = time.time()
+    print(f"[feed] reachy_speak: synth={t1-t0:.2f}s upload+play={t2-t1:.2f}s "
+          f"total={t2-t0:.2f}s :: {text[:70]}", flush=True)
+    return True, f"spoke ({t2-t0:.2f}s)"
+
+
+def reachy_look_and_describe(trigger: str, speak: bool = False) -> dict:
     """One frame, one VLM call, classified by the existing alert policy.
 
     Deliberately reuses alert_policy rather than asking the model to judge: the prompt enumerates
     nothing, because this 4B model reports back whatever the prompt lists.
+
+    speak=True narrates the description out loud on the robot's own speaker (see reachy_speak).
+    Deliberately not wired to every trigger: reachy_watcher calls this on speech detection, and a
+    robot that talks every time it hears speech risks hearing its own voice as the next trigger.
+    Only the manual "Look & describe" button opts in.
     """
     global _reachy_alert
     if not REACHY_CAM:
@@ -356,6 +479,15 @@ def reachy_look_and_describe(trigger: str) -> dict:
     # those categories count. Everything else is still recorded, just not raised as an alert.
     cats = [c for c in cats if c in REACHY_ALERT_CATEGORIES]
 
+    spoken, speak_s = False, None
+    if speak:
+        t0 = time.time()
+        try:
+            spoken, _msg = reachy_speak(_spoken_summary(desc))
+        except Exception as e:
+            print(f"[feed] reachy_speak: {type(e).__name__}: {e}", flush=True)
+        speak_s = round(time.time() - t0, 2)
+
     _reachy_alert = {
         "at": time.time(),
         "description": desc,
@@ -366,6 +498,8 @@ def reachy_look_and_describe(trigger: str) -> dict:
         "trigger": trigger,
         "checked": _reachy_alert.get("checked", 0) + 1,
         "last_check": time.time(),
+        "spoken": spoken,
+        "speak_s": speak_s,
     }
     if cats:
         print(f"[feed] reachy anomaly ({trigger}) {cats}: {desc[:110]}", flush=True)
@@ -2183,9 +2317,10 @@ def api_reachy_alert():
 
 @app.post("/api/reachy/check")
 def api_reachy_check(request: Request):
-    """Look now, on demand. Costs one VLM call."""
+    """Look now, on demand. Costs one VLM call, and narrates the result on the robot's speaker -
+    the only trigger that does (see reachy_look_and_describe's speak= note)."""
     require_control(request)
-    res = reachy_look_and_describe("manual")
+    res = reachy_look_and_describe("manual", speak=True)
     if res.get("error"):
         raise HTTPException(502, res["error"])
     return res

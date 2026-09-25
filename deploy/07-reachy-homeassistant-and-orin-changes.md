@@ -562,3 +562,75 @@ tones pushed through the bridge's own `AudioHub` come back as valid MP3 at the r
 ```bash
 python3 -m unittest discover -s nvr/tests -p 'test_reachy_smoke.py'
 ```
+
+---
+
+## 9. Reachy speech (local TTS)
+
+Reachy narrates what it sees when a human presses "Look & describe" in the command centre: one
+Cosmos3-Edge caption, spoken on the robot's own speaker via a locally-hosted TTS model rather than
+a cloud call, per [the NVIDIA Jetson Orin Nano Super 8GB model guide](
+https://forums.developer.nvidia.com/t/ai-models-that-run-on-jetson-orin-nano-super-8gb-a-practical-guide/365412).
+Code is `piper_synth`/`reachy_speak`/`_spoken_summary` in
+[`../nvr/feed/porch_feed.py`](../nvr/feed/porch_feed.py), and `upload_sound`/`play_sound` in
+[`../nvr/feed/reachy.py`](../nvr/feed/reachy.py).
+
+**Why Piper, not Kokoro (the guide's other TTS option) or a persistent Python TTS server.** The
+Orin was measured at **157 MB free / ~620 MB available** RAM at the time this was built - Frigate,
+ring-mqtt and the resident Cosmos3-Edge VLM (~3.9 GB RSS) already account for nearly all of 7.4 GB.
+Piper ships as a self-contained native binary (its own bundled onnxruntime and espeak-ng, no
+Python/torch stack), and the smallest available English voice (`en_US-lessac-low`, ~60 MB) fits
+that headroom; Kokoro's ~82 M-parameter ONNX model plus a Python runtime would not have, credibly.
+
+**Install (live on the Orin, not in git - a ~85 MB binary+model blob has no business in this repo,
+same reasoning as the `llm.engine` weights):**
+
+```bash
+mkdir -p /home/orin/nvr/tts && cd /home/orin/nvr/tts
+curl -sL -o piper_linux_aarch64.tar.gz \
+  https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz
+tar xzf piper_linux_aarch64.tar.gz          # -> ./piper/piper (self-contained, own onnxruntime)
+curl -sL -o en_US-lessac-low.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx
+curl -sL -o en_US-lessac-low.onnx.json \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/en_US-lessac-low.onnx.json
+```
+
+Expected at `/home/orin/nvr/tts/piper/piper` and `/home/orin/nvr/tts/en_US-lessac-low.onnx`
+(overridable via `piper_bin`/`piper_model`/`piper_out_dir` in `config.yaml` - see `PIPER_BIN` etc.
+in `porch_feed.py`). Nothing to enable at boot: it is a subprocess porch-feed starts lazily on the
+first "Look & describe" after each restart, not its own service.
+
+**How it reaches the speaker.** The robot daemon has no play-from-bytes call - only
+`POST /api/media/sounds/upload` (multipart, lands in `/tmp/reachy_mini_sounds/` on the robot) then
+`POST /api/media/play_sound {"file": <path>}` (both undocumented outside its own `/openapi.json`;
+found by fetching that directly, not from any SDK doc). `reachy_speak()` does both, in sequence.
+
+**Latency, and why it is not always sub-1s.** `piper_synth()` keeps one Piper process warm
+(`--json-input` mode, one JSON line per utterance on stdin) specifically because a cold model load
+alone costs 1-3 s, which on its own would blow the target. Warm, measured end-to-end (Cosmos
+caption in hand -> Piper synthesis -> upload -> play_sound returns) on the live robot:
+
+| Run | synth | upload+play | total |
+|---|---|---|---|
+| cold (first call after a restart) | 4.41 s | 0.46 s | 4.87 s |
+| warm | 1.36 s | 0.24 s | 1.60 s |
+| warm | 0.71 s | 0.26 s | **0.97 s** |
+| warm (4 more) | - | - | 1.25 / 1.39 / 0.98 / 1.43 s |
+
+Load average on the box during testing was 5.7-8.2 (Frigate's detector, ffmpeg re-encodes and
+ring-mqtt already contend for CPU - see the 2026-09-25 Frigate overload writeup in
+`nvr/scout/README.md`); Piper's own real-time factor held near-constant (~0.22-0.33) whether the
+box was quiet or loaded, so the swing above is CPU contention, not the model. Two things were
+tuned within scope - `_spoken_summary()` speaks only the first sentence of the caption (shorter
+text infers faster, and is more natural aloud than a full multi-clause caption read verbatim), and
+the warm process runs with `--length_scale 0.85` (a measured cut with no obvious naturalness cost,
+unlike more aggressive settings tried). Further headroom - e.g. raising Piper's scheduling priority
+over Frigate's - was not attempted: that reaches into NVR resource contention, which is out of
+scope for a speech feature to touch unasked.
+
+**Deliberately not wired to every trigger.** Only the manual "Look & describe" button speaks (see
+`reachy_look_and_describe`'s `speak=` parameter). `reachy_watcher()`'s speech-triggered automatic
+checks do not: a robot that narrates every time it hears speech risks hearing its own voice as the
+next trigger, and that loop was never tested for.
+```
