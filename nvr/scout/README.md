@@ -208,6 +208,92 @@ A/V channel, idle when no phone is viewing — and offers `/sys/get_userid`, so 
 cloud account binding. `/RTMPNode` and `/S3Node` offer `rtmp_start`/`rtmp_stop` and `s3_setting`.
 None of that is needed for this bridge, which talks only to the local ROS master.
 
+## Incident: `cloud_node`/`app_node`/`s3_node` went missing (2026-09-17), and the rule that follows
+
+Confirmed running above, same robot, same day: `/CloudNode`, `/AppNode`, `/S3Node`. By
+2026-09-25 they were gone — not disabled, not crashed, **absent from disk**. `dpkg -V roller-eye`
+on both Scouts flags identical missing files: `app_node`, `cloud_node`, `s3_node`,
+`upgrader_node`, four `test_*` diagnostic binaries, and `/var/roller_eye/config/p2p_user` (the
+per-account P2P credential) — `dpkg` still believes they are installed, so this was never an
+`apt`/`dpkg` transaction; something deleted files dpkg had already placed.
+`/opt/ros/melodic/lib/roller_eye/`'s mtime and `AppNode.log`'s last line (mid-response to a
+normal app `getOtaStatus` poll) both stop at the same second, `2026-09-17 16:36:35`, on
+`robot_room`'s Scout; the
+first-floor Scout shows the same pattern at `18:07` the same day. Root had a shell open on the
+robot around that time running `git pull` / `./build.sh` in `~/ros/src/roller_eye` - a fuller
+source checkout than the one this project vendors (see below), now itself deleted, so the exact
+command that did it cannot be recovered.
+
+**The vendored `nvr/scout/roller_eye/` in this repo did not do this.** Its `CMakeLists.txt` says
+outright "nothing is built for the robot" - it exists only to generate this container's own
+Python message bindings (`frame.msg`, `status.msg`) for the Dockerfile above, and is never
+installed on the Scout itself. Whatever touched `/opt/ros/melodic/lib/roller_eye/` on the robot
+was a **separate, fuller checkout that lived directly on the robot's own filesystem**, almost
+certainly pulled there to get `.srv` definitions this project needed and didn't yet have a safer
+way to reach. `roller_eye_srv.py` (hand-rolled TCPROS, no rebuild required) exists specifically
+so that need never has to touch the robot's install again.
+
+**The consequence turned out worse than "no app control": `app_node` is not just what lets the
+app control an already-paired robot, it appears to be what answers the pairing/binding handshake
+itself**, even in the robot's own local setup AP mode - a phone can join that AP at the WiFi
+layer with `app_node` absent, but the Moorebot app's bind step then has nothing on the robot side
+to answer it. A restart cannot fix a missing binary; re-pairing cannot fix a missing binary either
+if pairing itself depends on that binary. Restoration requires either a genuine vendor `.deb` for
+this exact build (`/var/roller_eye/config/version`: `01_HW32_MO200A_020150`) or Moorebot's own
+recovery path - both out of reach once the vendor is out of business and no backup was taken.
+
+**The rule, going forward, for any Scout with root access:** before running anything that touches
+`/opt/ros/melodic/lib/roller_eye/`, `/var/roller_eye/config/`, or any `dpkg -i`/rebuild-and-install
+step on the robot itself -
+
+1. `dpkg -V roller-eye` first, and keep the output. That is the cheapest possible tripwire and
+   the only reason this incident was even diagnosable after the fact.
+2. `tar czf` a backup of `/opt/ros/melodic/lib/roller_eye/` and `/var/roller_eye/config/` to the
+   Orin (`scp` it off the robot entirely) before touching either directory, every time, no
+   exceptions - this is the one step that would have made this incident a non-event.
+3. Never install or rebuild anything under `/opt/ros/melodic/lib/roller_eye/` on the robot to get
+   a `.srv`/`.msg` definition. Extend `roller_eye_srv.py` by hand instead (see its own docstring
+   for why TCPROS-by-hand is not the workaround it looks like - it is the version of this that
+   cannot delete a vendor binary).
+4. If a factory-fresh or recently-purchased-used unit is ever reachable with root **and its
+   official app still binds successfully**, back up its `/opt/ros/melodic/lib/roller_eye/` and
+   `/var/roller_eye/config/` immediately, before any other work touches it. That backup is the
+   only way a future loss on another unit stays recoverable - copy the binaries across (matching
+   `/var/roller_eye/config/version`) rather than depending on the app a second time.
+
+## Recovering a used (eBay) unit to factory defaults
+
+Moorebot is out of business, so whatever the official app can still do today is the last chance
+to do it - there is no vendor to ask later. A used unit almost certainly still shows a previous
+owner's account binding.
+
+1. **Before anything else touches this robot: get root, run `dpkg -V roller-eye`, and back up
+   `/opt/ros/melodic/lib/roller_eye/` and `/var/roller_eye/config/` to the Orin.** This is rule 4
+   above, and it is the actual point of doing this now while a working unit exists - a clean copy
+   of `app_node`/`cloud_node`/`s3_node`/`upgrader_node`/the `test_*` tools/`p2p_user`'s *shape*
+   (not another unit's credential, but confirmation of what the intact file set and permissions
+   look like) is worth more than the robot working stand-alone, because it is the one thing that
+   could restore the two already-broken Scouts without needing the app at all - **if**
+   `/var/roller_eye/config/version` matches theirs (`01_HW32_MO200A_020150`). Check that version
+   file first; if it differs, the binaries may not be ABI-compatible and copying them across is a
+   separate judgement call, not an automatic win.
+2. Try unbinding from the previous owner's account through the app's normal "remove device" flow
+   first, if the eBay seller is reachable and willing - this is the clean path and leaves
+   `app_node` etc. untouched.
+3. If that is not available, the robot's own physical factory-reset (button or button-combo on
+   the unit itself - **not verified against this hardware from this session**, since the only two
+   units with root access both already had `app_node` missing before this was investigated;
+   check the unit's underside/manual, or Moorebot's last-published documentation if archived
+   anywhere, e.g. the Wayback Machine) should force it back into its own setup AP regardless of
+   prior binding, the same AP mode the app was just tried against on the other robot.
+4. Bind it to your own account through the app while on that AP. Confirm in the app that video,
+   drive and status all work - that confirms `app_node`/`cloud_node` are genuinely functional, not
+   just present.
+5. Only after step 1's backup exists and step 4 confirms the unit is fully app-controllable should
+   any root/porch-dad integration work start on this unit, and every step of it follows the rule
+   above: back up again immediately before the first thing that touches
+   `/opt/ros/melodic/lib/roller_eye/`.
+
 ## Still unknown
 
 Three of the four original unknowns are now answered above: the ROS master **is** reachable on the
