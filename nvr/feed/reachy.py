@@ -384,14 +384,21 @@ class Reachy:
         return ok, ("stopped" if ok else msg)
 
     def look_at_voice(self):
-        """Turn the head toward the last detected speaker.
+        """Turn the BASE toward the last detected sound, not just the head.
 
-        DoA is reported as 0 rad = left, pi/2 = front/back, pi = right, so the useful head yaw is
-        the angle mapped onto the robot's own yaw convention.
+        A head-only yaw is a subtle tilt on the Stewart platform - not a convincing "it turned
+        toward the noise" for a listener (a 3D printer, a person talking). body_yaw physically
+        rotates the robot instead. Head yaw resets to 0 in the same move, so the camera ends up
+        centered on whatever the base just turned toward rather than still offset from wherever
+        the head last pointed.
+
+        DoA is reported as 0 rad = left, pi/2 = front/back, pi = right, so the useful yaw is the
+        angle mapped onto the robot's own yaw convention - the same mapping already proven correct
+        for the head, reused here since both are yaw rotations about the same vertical axis.
         """
         st = self.state()
         if st.get("doa_deg") is None:
             return False, "no direction-of-arrival reading available"
         yaw = round(90.0 - float(st["doa_deg"]), 1)
-        ok, msg = self.look(yaw=yaw, duration=0.8)
-        return ok, (f"turning to {yaw:g}° (voice at {st['doa_deg']:g}°)" if ok else msg)
+        ok, msg = self.look(yaw=0.0, body_yaw=yaw, duration=1.2)
+        return ok, (f"turning base to {yaw:g}° (voice at {st['doa_deg']:g}°)" if ok else msg)

@@ -177,7 +177,15 @@ def _ros_master(e: "_ScoutEntry") -> str:
 # gates the expensive one: poll direction-of-arrival (a tiny JSON GET, no decode, no GPU) and only
 # spend an inference when the robot actually hears something, rate-limited by a cooldown.
 REACHY_WATCH = bool(CFG.get("reachy_watch_enabled", True))
-REACHY_WATCH_COOLDOWN = float(CFG.get("reachy_watch_cooldown", 60))
+REACHY_WATCH_COOLDOWN = float(CFG.get("reachy_watch_cooldown", 60))   # seed default, see below
+# Interval and speak-aloud are runtime-mutable from the command centre (load_reachy_watch/
+# set_reachy_watch), not just this load-time config default - changing either used to mean an SSH
+# edit and a restart. Persisted the same way as presence mode (load_presence_mode/PRESENCE_PATH):
+# a small JSON file beside the db, so it survives a restart but needs no schema migration.
+REACHY_WATCH_PATH = Path(DB_PATH).parent / "reachy_watch.json"
+REACHY_WATCH_COOLDOWN_MIN = 15.0     # floor: below this a busy camera turns this into continuous
+                                      # VLM inference, the exact cost REACHY_WATCH exists to avoid
+REACHY_WATCH_COOLDOWN_MAX = 3600.0
 # Which alert_policy categories count as an anomaly for the robot's indoor view. See the filter in
 # reachy_look_and_describe() for why this is narrower than the exterior policy.
 REACHY_ALERT_CATEGORIES = set(CFG.get("reachy_alert_categories") or ["person", "animal"])
@@ -514,9 +522,10 @@ def reachy_watcher() -> None:
         try:
             doa = _reachy._get("/api/state/doa") or {}
             if doa.get("speech_detected"):
+                w = load_reachy_watch()
                 since = time.time() - (_reachy_alert.get("last_check") or 0)
-                if since >= REACHY_WATCH_COOLDOWN:
-                    reachy_look_and_describe("speech")
+                if since >= w["cooldown_s"]:
+                    reachy_look_and_describe("speech", speak=w["speak"])
         except Exception as e:
             print(f"[feed] reachy watcher: {e}", flush=True)
         time.sleep(3)
@@ -1202,11 +1211,13 @@ def mqtt_loop() -> None:
             if label in REACHY_TRIGGER_LABELS and (
                 not REACHY_TRIGGER_CAMERAS or cam in REACHY_TRIGGER_CAMERAS
             ):
+                w = load_reachy_watch()
                 since = time.time() - (_reachy_alert.get("last_check") or 0)
-                if since >= REACHY_WATCH_COOLDOWN:
+                if since >= w["cooldown_s"]:
                     threading.Thread(
                         target=reachy_look_and_describe,
                         args=(f"{label}@{cam}",),
+                        kwargs={"speak": w["speak"]},
                         daemon=True,
                     ).start()
 
@@ -1371,6 +1382,32 @@ def publish_camera_recordings(name: str, on: bool) -> None:
                        port=int(CFG.get("mqtt_port", 1883)))
     except Exception as e:
         print(f"[feed] mqtt recordings publish failed for {name}: {type(e).__name__}: {e}", flush=True)
+
+
+def load_reachy_watch() -> dict:
+    try:
+        d = json.loads(REACHY_WATCH_PATH.read_text())
+        cooldown = max(REACHY_WATCH_COOLDOWN_MIN,
+                       min(REACHY_WATCH_COOLDOWN_MAX, float(d.get("cooldown_s", REACHY_WATCH_COOLDOWN))))
+        return {"cooldown_s": cooldown, "speak": bool(d.get("speak", False))}
+    except (OSError, ValueError, TypeError):
+        # speak defaults off: an autonomous narration cadence should be something a person opts
+        # into, not something that starts talking on a fresh install or a lost state file.
+        return {"cooldown_s": REACHY_WATCH_COOLDOWN, "speak": False}
+
+
+def set_reachy_watch(cooldown_s: float | None = None, speak: bool | None = None) -> tuple[bool, str]:
+    cur = load_reachy_watch()
+    if cooldown_s is not None:
+        cur["cooldown_s"] = max(REACHY_WATCH_COOLDOWN_MIN, min(REACHY_WATCH_COOLDOWN_MAX, float(cooldown_s)))
+    if speak is not None:
+        cur["speak"] = bool(speak)
+    try:
+        REACHY_WATCH_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REACHY_WATCH_PATH.write_text(json.dumps(cur, indent=2))
+    except OSError as e:
+        return False, f"not saved: {e}"
+    return True, f"every {cur['cooldown_s']:g}s, speak {'on' if cur['speak'] else 'off'}"
 
 
 def load_presence_mode() -> dict:
@@ -2308,11 +2345,29 @@ def api_reachy_limits():
 @app.get("/api/reachy/alert")
 def api_reachy_alert():
     """Most recent anomaly check: what it saw, and whether the policy called it an alert."""
+    w = load_reachy_watch()
     return JSONResponse({**_reachy_alert, "watching": bool(REACHY_WATCH and _reachy and REACHY_CAM),
-                         "cooldown_s": REACHY_WATCH_COOLDOWN,
+                         "cooldown_s": w["cooldown_s"], "speak": w["speak"],
+                         "cooldown_min_s": REACHY_WATCH_COOLDOWN_MIN,
+                         "cooldown_max_s": REACHY_WATCH_COOLDOWN_MAX,
                          "triggers": {"speech": True,
                                       "labels": sorted(REACHY_TRIGGER_LABELS),
                                       "cameras": sorted(REACHY_TRIGGER_CAMERAS) or ["any"]}})
+
+
+@app.post("/api/reachy/watch")
+async def api_reachy_watch_set(request: Request):
+    """Change the automatic-check interval and/or whether it speaks. Runtime, persisted - see
+    load_reachy_watch/set_reachy_watch. Either field may be omitted to leave it unchanged."""
+    require_control(request)
+    try:
+        b = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        b = {}
+    ok, msg = set_reachy_watch(cooldown_s=b.get("cooldown_s"), speak=b.get("speak"))
+    if not ok:
+        raise HTTPException(400, msg)
+    return {"ok": True, "message": msg, **load_reachy_watch()}
 
 
 @app.post("/api/reachy/check")
@@ -2567,6 +2622,19 @@ button.mini{padding:3px 9px;font-size:11.5px}
     </div>
     <audio id="reachyAudioEl" style="display:none"></audio>
     <p class="hint" id="reachyWatchHint"></p>
+    <!-- Automatic checks (speech heard, or a Frigate trigger label) are separate from the manual
+         Look & describe button above: manual always speaks, automatic is silent by default and
+         opt-in here specifically because a robot narrating every time it hears something is
+         exactly the "every 60 seconds" chatter this control exists to stop. -->
+    <div class="row" style="margin-top:6px;gap:6px;align-items:center">
+      <label class="hint">Auto-check every
+        <input type="number" id="reachyWatchSec" min="15" max="3600" step="5" style="width:64px">s</label>
+      <label class="tswitch" title="Speak the caption aloud on automatic checks too, not just manual Look & describe">
+        <input type="checkbox" id="reachyWatchSpeak" onchange="reachyWatchSet()">
+        <span class="track"></span><span class="tlabel">🔊 Speak on auto-check</span>
+      </label>
+      <button onclick="reachyWatchSet()">Set interval</button>
+    </div>
   </div>
 
   <div class="card" id="reachyCtl" style="display:none">
@@ -2598,7 +2666,7 @@ button.mini{padding:3px 9px;font-size:11.5px}
       <!-- Label, not route: the endpoint name stays put so anything already calling it keeps
            working. "Look at voice" read like it produced a caption, which it does not. -->
       <button onclick="rq('/api/reachy/action/look-at-voice')"
-              title="Turns the head toward the last sound the microphone array heard. No camera, no caption.">
+              title="Rotates the base (body_yaw) toward the last sound the microphone array heard - a physical turn, not just a head tilt. No camera, no caption.">
         Face the last sound</button>
     </div>
     <div class="row" style="margin-top:8px">
@@ -3242,6 +3310,29 @@ function reachyListenToggle(checked){
                           say('reachy listen: ' + e.message, false); });
 }
 
+// Reflects /api/reachy/alert's live cooldown_s/speak into the two auto-check controls. Skips the
+// number input while it has focus so a value being typed is never clobbered by the 10 s poll.
+function reachyWatchLoad(al){
+  const sec = document.getElementById('reachyWatchSec');
+  const spk = document.getElementById('reachyWatchSpeak');
+  if(!sec || !spk) return;
+  if(al.cooldown_min_s != null) sec.min = al.cooldown_min_s;
+  if(al.cooldown_max_s != null) sec.max = al.cooldown_max_s;
+  if(document.activeElement !== sec) sec.value = al.cooldown_s ?? sec.value;
+  spk.checked = !!al.speak;
+}
+async function reachyWatchSet(){
+  const sec = document.getElementById('reachyWatchSec');
+  const spk = document.getElementById('reachyWatchSpeak');
+  try{
+    const r = await fetch('/api/reachy/watch', {method:'POST',
+      headers:{'Content-Type':'application/json','X-Porch-Token': await tokenReady()},
+      body: JSON.stringify({cooldown_s: Number(sec.value), speak: spk.checked})});
+    const j = await r.json().catch(()=>({}));
+    say(j.message || j.detail || (r.ok?'done':'failed'), r.ok);
+  }catch(e){ say(String(e), false); }
+}
+
 // Listen: stream the robot mic (16 kHz mono PCM16 over a WebSocket) and play it back through Web
 // Audio, scheduling each chunk after the last so it plays gaplessly. No secure context needed -
 // only mic CAPTURE (talk) requires https/localhost; playback works on plain http.
@@ -3796,8 +3887,9 @@ async function load(){
     document.getElementById('reachyWatchHint').textContent = al.watching
       ? `Watching: a look is spent when the robot hears speech, or Frigate detects `
         + `${(al.triggers&&al.triggers.labels||[]).join('/')} on ${(al.triggers&&al.triggers.cameras||['any']).join(', ')}. `
-        + `At most once per ${al.cooldown_s}s — ${al.checked||0} checks so far.`
+        + `At most once per ${al.cooldown_s}s, ${al.speak?'spoken aloud':'silent'} — ${al.checked||0} checks so far.`
       : 'Anomaly watch is off.';
+    reachyWatchLoad(al);
   }catch(e){}
 
   const cmp = await (await fetch('/api/compare',{cache:'no-store'})).json();
