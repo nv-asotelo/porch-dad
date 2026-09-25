@@ -1903,6 +1903,26 @@ def api_scout_nav_status(sid: str):
     return {"status": status}
 
 
+@app.post("/api/scout/{sid}/dock-approach")
+def api_scout_dock_approach(sid: str, request: Request):
+    """CoreNode's own vision-guided dock approach (see nvr/scout/README.md's testBackup
+    investigation) - detect (value 4) then backup (value 2), same as the two-step sequence tried
+    live there. Confirmed the publish itself works; did NOT confirm it reliably moves the robot -
+    exposed as a button specifically so it can be tried again while watching/guiding it by hand,
+    not as something to trust unattended."""
+    require_control(request)
+    e = _scout_entry(sid)
+    master = _ros_master(e)
+    try:
+        roller_eye_srv.test_backup(4, master=master)
+        time.sleep(1.5)
+        roller_eye_srv.test_backup(2, master=master)
+    except Exception as ex:
+        raise HTTPException(503, f"testBackup: {ex}")
+    return {"message": f"Sent detect+backup to \"{e.name}\"'s CoreNode. Watch it - this is the "
+                       f"vendor's own routine, not confirmed reliable."}
+
+
 _bg_tasks: set = set()
 
 
@@ -2733,6 +2753,9 @@ function scoutCardHTML(m){
       <button class="warn" onclick="scoutReturnToDock('${sid}')"
               title="Retraces the marked path by odometry alone - only use this on stable ground with a clear path back.">
         🏠 Return to dock</button>
+      <button onclick="post('/api/scout/${sid}/dock-approach')"
+              title="CoreNode's own vision-guided dock approach (detect + backup). Not confirmed reliable - press this while watching the robot, ready to guide or stop it by hand.">
+        🎯 Try dock approach (vendor)</button>
     </div>
     <p class="hint">The <b>range</b> in the status line is the forward time-of-flight sensor and is
        what to trust for obstacles — and it only guards <b>forward</b>: strafe, reverse and rotate
