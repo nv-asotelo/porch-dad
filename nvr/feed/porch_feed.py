@@ -76,6 +76,13 @@ CONTROL_TOKEN = str(CFG.get("control_token") or "").strip()
 # be recorded at the moment of the action or it is gone.
 INTENT_PATH = Path(CFG.get("service_intent_path")
                    or str(Path(DB_PATH).parent / "service_intent.json"))
+# Home/away presence mode. Only the fixed security cameras record on a mode switch - the Scouts
+# and Reachy Mini stay record:false in config.yml regardless (see nvr/scout/README.md and the
+# 2026-09-25 CPU incident), and detection stays on in both modes since it is cheap and drives the
+# live-view highlighting; only the record.enabled=false/true call to the Cosmos/genai pipeline
+# stays out of scope here since it is config-file-only, not a runtime MQTT toggle like recordings.
+PRESENCE_CAMERAS = tuple(CFG.get("presence_cameras") or sorted(ALWAYS_POWERED))
+PRESENCE_PATH = Path(DB_PATH).parent / "presence_mode.json"
 LINKS = CFG.get("links") or []
 LINKS_HOST = CFG.get("links_host") or "127.0.0.1"
 REACHY_WEBUI = str(CFG.get("reachy_webui_url") or "").rstrip("/")
@@ -1043,6 +1050,7 @@ def api_status():
                     for k, v in ENGINES.items()},
         "services": {k: service_status(k) for k in SERVICES},
         "cameras": camera_power(),
+        "presence": load_presence_mode(),
         "memory": {"free_mb": free_mb(), "used_pct": round(_mem_pct(), 1),
                    "min_free_to_start_mb": MIN_FREE_MB},
         # Same-origin UI needs it to call the guarded routes. This stops drive-by CSRF (a
@@ -1097,6 +1105,57 @@ def publish_camera_enabled(name: str, on: bool) -> None:
                        port=int(CFG.get("mqtt_port", 1883)))
     except Exception as e:
         print(f"[feed] mqtt enable publish failed for {name}: {type(e).__name__}: {e}", flush=True)
+
+
+def publish_camera_recordings(name: str, on: bool) -> None:
+    """Set Frigate's RUNTIME recordings state over MQTT - same mechanism as enabled/set above,
+    just the sibling `frigate/<camera>/recordings/set` topic, so it needs no restart and can be
+    flipped as often as someone comes and goes."""
+    try:
+        import paho.mqtt.publish as publish
+        publish.single(f"frigate/{name}/recordings/set", "ON" if on else "OFF",
+                       hostname=CFG.get("mqtt_host", "127.0.0.1"),
+                       port=int(CFG.get("mqtt_port", 1883)))
+    except Exception as e:
+        print(f"[feed] mqtt recordings publish failed for {name}: {type(e).__name__}: {e}", flush=True)
+
+
+def load_presence_mode() -> dict:
+    try:
+        return json.loads(PRESENCE_PATH.read_text())
+    except (OSError, ValueError):
+        # Unknown beats wrong: default to "away" (recording on) so a fresh install or a lost
+        # state file fails toward keeping evidence, not toward silently dropping it.
+        return {"mode": "away", "by": None, "at": None}
+
+
+def set_presence_mode(mode: str, actor: str = "user") -> tuple[bool, str]:
+    if mode not in ("home", "away"):
+        return False, "mode must be home|away"
+    for cam in PRESENCE_CAMERAS:
+        publish_camera_recordings(cam, on=(mode == "away"))
+    try:
+        PRESENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PRESENCE_PATH.write_text(json.dumps(
+            {"mode": mode, "by": actor, "at": time.time()}, indent=2))
+    except OSError as e:
+        return False, f"recordings set but state not saved: {e}"
+    return True, f"{mode} - recordings {'on' if mode == 'away' else 'off'} for {', '.join(PRESENCE_CAMERAS) or 'no cameras configured'}"
+
+
+@app.get("/api/mode")
+def api_mode_get():
+    """Read-only, no token: a Shortcuts automation or a dashboard widget needs this to render."""
+    return load_presence_mode()
+
+
+@app.post("/api/mode/{mode}")
+def api_mode_set(mode: str, request: Request):
+    require_control(request)
+    ok, msg = set_presence_mode(mode)
+    if not ok:
+        raise HTTPException(400, msg)
+    return {"ok": True, "message": msg, "mode": mode}
 
 
 @app.post("/api/camera/{name}/{mode}")
@@ -1945,7 +2004,14 @@ button.mini{padding:3px 9px;font-size:11.5px}
 </style></head><body>
 <header><div class="wrap"><div class="row" style="justify-content:space-between">
   <h1>porch dad <span>command center</span></h1>
-  <div class="row"><span id="mem" class="hint"></span><a href="/rss">RSS</a></div>
+  <div class="row">
+    <!-- Away = recordings on for the fixed security cameras, Home = off. Detection and Cosmos
+         captioning stay on in both modes - only recording (the config.yml-restart-free MQTT
+         topic) is cheap enough to flip every arrival/departure. Driven by an iOS Shortcuts
+         Arrive/Leave automation hitting /api/mode/{home,away}, or these buttons by hand. -->
+    <span class="row" id="presence" style="gap:4px"></span>
+    <span id="mem" class="hint"></span><a href="/rss">RSS</a>
+  </div>
 </div></div></header>
 <div class="wrap">
 
@@ -2162,6 +2228,54 @@ button.mini{padding:3px 9px;font-size:11.5px}
 let FILTER='all';
 const fmt = t => new Date(t*1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 const esc = s => (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+function cardHtml(e){
+  return `<div class="card" id="${esc(e.id)}">
+       <div class="row" style="justify-content:space-between">
+         <span class="tag e-${e.engine_id}">${esc(e.engine_name)}</span>
+         <span class="hint">${fmt(e.ts)}</span></div>
+       <img class="still" loading="lazy" src="/img/${encodeURIComponent(e.id)}.jpg" alt=""
+            onerror="this.remove()"/>
+       <p class="desc">${esc(e.description)}</p>
+       <div class="meta"><span>${esc(e.camera)} · ${esc(e.label)}</span>
+         <span title="end-to-end Frigate pipeline, not model inference time">${e.latency_ms} ms e2e</span><span>CPU ${e.peak_cpu??'—'}${e.peak_cpu!=null?'%':''}</span>
+         <span>VRAM ${e.peak_mem??'—'}${e.peak_mem!=null?'%':''}</span><span>GPU ${e.peak_gpu??'—'}${e.peak_gpu!=null?'%':''}</span></div>
+     </div>`;
+}
+// Granularity decays with age so the feed stays scannable without ever truly hiding anything:
+// under 24h is a single open group (nothing to fold, it's what you'd read anyway), 1-7 days ago
+// folds to one closed group per calendar day, 7-30 days folds to one per ISO week (Monday start),
+// and past 30 days folds to one per calendar month. Entries arrive newest-first from the API, so
+// building groups by first-seen key preserves that order with no extra sort.
+function feedGroupKey(ts, now){
+  const ageDays = (now - ts) / 86400;
+  const d = new Date(ts * 1000);
+  if (ageDays < 1) return {key: 'recent', label: 'Last 24 hours', open: true};
+  if (ageDays < 7) return {key: 'd' + d.toDateString(), open: false,
+    label: d.toLocaleDateString([], {weekday: 'long', month: 'short', day: 'numeric'})};
+  if (ageDays < 30) {
+    const monday = new Date(d); monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    return {key: 'w' + monday.toDateString(), open: false,
+      label: 'Week of ' + monday.toLocaleDateString([], {month: 'short', day: 'numeric'})};
+  }
+  return {key: 'm' + d.getFullYear() + '-' + d.getMonth(), open: false,
+    label: d.toLocaleDateString([], {month: 'long', year: 'numeric'})};
+}
+function groupedFeedHtml(ev){
+  const now = Date.now() / 1000, groups = [], byKey = {};
+  for (const e of ev){
+    const g = feedGroupKey(e.ts, now);
+    if (!byKey[g.key]){ byKey[g.key] = {...g, items: []}; groups.push(byKey[g.key]); }
+    byKey[g.key].items.push(e);
+  }
+  return groups.map(g =>
+    `<details ${g.open ? 'open' : ''} class="feedGroup">
+       <summary style="cursor:pointer;color:var(--mut);font-size:12px;text-transform:uppercase;
+                       letter-spacing:.08em">${esc(g.label)} <span class="hint">(${g.items.length})</span></summary>
+       <div style="margin-top:10px">${g.items.map(cardHtml).join('')}</div>
+     </details>`).join('');
+}
 function say(t, ok){ const m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(ok?'ok':'err');
   setTimeout(()=>{m.className='msg'},6000); }
 let TOKEN='';
@@ -2712,6 +2826,11 @@ async function load(){
   document.getElementById('mem').textContent =
     `${st.memory.free_mb} MB free · ${st.memory.used_pct}% used`;
 
+  const pm = st.presence?.mode || 'away';
+  document.getElementById('presence').innerHTML =
+    `<button class="mini ${pm==='home'?'on':''}" onclick="post('/api/mode/home')">🏠 Home</button>
+     <button class="mini ${pm==='away'?'on':''}" onclick="post('/api/mode/away')">🚗 Away</button>`;
+
   document.getElementById('engines').innerHTML = Object.entries(st.engines).map(([id,e])=>
     `<button class="${st.active_engine.id===id?'on':''} ${e.built?'':'locked'}"
       ${e.built?`onclick="post('/api/engine/${id}')"`:''} title="${esc(e.notes)}">
@@ -2887,19 +3006,8 @@ async function load(){
   document.getElementById('filters').innerHTML = ids.map(i=>
     `<button class="${FILTER===i?'on':''}" onclick="FILTER='${i}';load()">${i==='all'?'All engines':esc(st.engines[i].name)}</button>`).join('');
 
-  const ev = await (await fetch(`/api/entries?limit=60&engine=${FILTER}`,{cache:'no-store'})).json();
-  document.getElementById('feed').innerHTML = ev.length ? ev.map(e=>
-    `<div class="card" id="${esc(e.id)}">
-       <div class="row" style="justify-content:space-between">
-         <span class="tag e-${e.engine_id}">${esc(e.engine_name)}</span>
-         <span class="hint">${fmt(e.ts)}</span></div>
-       <img class="still" loading="lazy" src="/img/${encodeURIComponent(e.id)}.jpg" alt=""
-            onerror="this.remove()"/>
-       <p class="desc">${esc(e.description)}</p>
-       <div class="meta"><span>${esc(e.camera)} · ${esc(e.label)}</span>
-         <span title="end-to-end Frigate pipeline, not model inference time">${e.latency_ms} ms e2e</span><span>CPU ${e.peak_cpu??'—'}${e.peak_cpu!=null?'%':''}</span>
-         <span>VRAM ${e.peak_mem??'—'}${e.peak_mem!=null?'%':''}</span><span>GPU ${e.peak_gpu??'—'}${e.peak_gpu!=null?'%':''}</span></div>
-     </div>`).join('')
+  const ev = await (await fetch(`/api/entries?limit=200&engine=${FILTER}`,{cache:'no-store'})).json();
+  document.getElementById('feed').innerHTML = ev.length ? groupedFeedHtml(ev)
     : `<p class="hint">No captions yet for this filter. Trigger motion on a camera.</p>`;
 }
 // The Scouts refresh on their own timer: their cameras are worth seeing at a higher rate than the
