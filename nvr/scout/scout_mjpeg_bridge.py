@@ -143,6 +143,8 @@ class Bridge:
         self._h264_idr: bytes = b""
         self._h264_frames = 0
         self._h264_at = 0.0
+        self._h264_sub = None
+        self._frame_cls = None
 
     # ---------------------------------------------------------------------- ROS
     def start_ros(self, master_uri: str) -> None:
@@ -183,10 +185,13 @@ class Bridge:
             # re-establish these, leaving battery and ToF frozen.
             self._rospy = rospy
             self._range_cls, self._status_cls = Range, RollerStatus
+            self._frame_cls = RollerFrame
             self._tof_sub = rospy.Subscriber(TOF_TOPIC, Range, self._on_tof, queue_size=1)
             self._batt_sub = rospy.Subscriber(BATTERY_TOPIC, RollerStatus, self._on_battery, queue_size=1)
-            # Separate subscription, same message type: h264 for Frigate, jpg for stills.
-            rospy.Subscriber(H264_TOPIC, RollerFrame, self._on_h264, queue_size=4)
+            # Separate subscription, same message type: h264 for Frigate, jpg for stills. Kept as
+            # a handle for the same reason as tof/battery below - it can go stale independently
+            # of the jpg subscription that _stale_watchdog already covers.
+            self._h264_sub = rospy.Subscriber(H264_TOPIC, RollerFrame, self._on_h264, queue_size=4)
             self._ros_ready = True
             self._ros_error = self._check_camera_topic(rospy)
             _LOG.info("subscribed to %s, publishing %s", CAMERA_TOPIC, CMD_VEL_TOPIC)
@@ -240,6 +245,22 @@ class Bridge:
                 _LOG.warning("ToF subscription was stale - resubscribed")
             except Exception as e:
                 _LOG.error("tof resubscribe failed: %s", e)
+        # The h264 subscription has gone quiet with the jpg one still fresh: observed after a
+        # Wi-Fi disruption, where CoreNode's jpg topic recovered on its own but h264 stayed dead
+        # for 26+ minutes with nothing to catch it, since _stale_watchdog only covers CAMERA_TOPIC.
+        # Frigate read that as "Invalid data found when processing input" with no indication the
+        # actual cause was upstream and silent.
+        if self._h264_at and now - self._h264_at > 15 and self._frame_cls is not None:
+            try:
+                if self._h264_sub is not None:
+                    self._h264_sub.unregister()
+                self._h264_sub = self._rospy.Subscriber(
+                    H264_TOPIC, self._frame_cls, self._on_h264, queue_size=4)
+                self._h264_at = now
+                self._sub_resubs += 1
+                _LOG.warning("h264 subscription was stale - resubscribed")
+            except Exception as e:
+                _LOG.error("h264 resubscribe failed: %s", e)
 
     def _pub_watchdog(self, rospy) -> None:
         """Recreate the /cmd_vel publisher if it loses its subscriber.
