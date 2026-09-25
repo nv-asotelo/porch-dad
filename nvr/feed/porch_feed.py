@@ -33,6 +33,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+import xmlrpc.client
 from contextlib import closing
 from email.utils import formatdate
 from pathlib import Path
@@ -1673,14 +1674,57 @@ async def _handoff_to_app(host: str, container: str, name: str) -> None:
     ok, msg = await asyncio.get_event_loop().run_in_executor(
         None, lambda: run(["sudo", "-n", "docker", "restart", container], 60))
     print(f"[feed] handoff: bounced bridge {container} ok={ok} {msg[:120]}", flush=True)
+    app_ready = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: _app_nodes_present(f"http://{host}:11311"))
+    if app_ready is False:
+        print(f"[feed] handoff: {name} - restart brought back the core ROS graph (our own bridge "
+              f"recovered), but /CloudNode and /AppNode never registered, so the official app has "
+              f"NOT regained control. On this robot those binaries are absent from "
+              f"/opt/ros/melodic/lib/roller_eye - the launch file declares them but roslaunch can "
+              f"never exec them, so no amount of restarting will bring them up.", flush=True)
+    elif app_ready is True:
+        print(f"[feed] handoff: {name} - /CloudNode and /AppNode are registered; "
+              f"the app should have control", flush=True)
+    else:
+        print(f"[feed] handoff: {name} - could not query the robot's ROS master to confirm "
+              f"whether the app regained control", flush=True)
+
+
+def _app_nodes_present(master_uri: str) -> bool | None:
+    """Whether /CloudNode and /AppNode are registered - what the official Moorebot app needs.
+
+    A roller_eye restart brings back the nodes our own bridge depends on (Motor/Sensor/Core),
+    which is why our feed and Frigate recover cleanly - but that is not the same thing as the
+    official app regaining control, and nothing was checking the difference. Confirmed on
+    robot_room's robot: CloudNode/AppNode are declared in start.launch with respawn="true", but
+    cloud_node and app_node are missing from the installed package entirely, so roslaunch can
+    never start them and they never appear in getSystemState - restarting ROS as many times as
+    you like will not change that. Checked here rather than assumed, so a restart that "worked"
+    for our own feeds is not reported as having handed control back when it did not.
+    """
+    try:
+        m = xmlrpc.client.ServerProxy(master_uri)
+        code, _msg, state = m.getSystemState("/porch_dad_handoff_check")
+        if code != 1:
+            return None
+        nodes = {n for entries in state for _topic, ns in entries for n in ns}
+        return "/CloudNode" in nodes and "/AppNode" in nodes
+    except Exception:
+        return None
 
 
 @app.post("/api/scout/{sid}/restart-ros")
 async def api_scout_restart_ros(sid: str, request: Request):
-    """Hand a Scout back to the official Moorebot app by restarting its ROS stack.
+    """Restart a Scout's ROS stack and reconnect our own bridge to the fresh roscore.
 
-    The app reaches the robot through its /CloudNode and /AppNode, which come up with the roller_eye
-    ROS graph; bouncing the graph re-establishes them and clears any state left by our drive relay.
+    Named for its intent, not a guarantee: the app reaches the robot through /CloudNode and
+    /AppNode, which are *supposed* to come up with the rest of the roller_eye graph, so this was
+    meant to hand control back to it. Whether that actually happens depends on cloud_node and
+    app_node existing in this robot's roller_eye install - on at least one unit they are declared
+    in start.launch but missing from the package entirely, so they never start no matter how many
+    times the graph restarts. _handoff_to_app checks getSystemState after the restart and logs
+    the real outcome; nothing here can report it synchronously since the whole point of this
+    endpoint is to return immediately (see point 1 on _handoff_to_app).
     Needs root (sudo is deliberately crippled on this robot), so it uses the durable root key, not
     the linaro audio login. The actual work - restart robot ROS, then bounce our bridge so our own
     card recovers - runs in the background (see _handoff_to_app) so this returns at once.
@@ -1693,11 +1737,14 @@ async def api_scout_restart_ros(sid: str, request: Request):
     t = asyncio.create_task(_handoff_to_app(host, e.container, e.name))
     _bg_tasks.add(t)
     t.add_done_callback(_bg_tasks.discard)
-    return {"message": f"Handing {e.name} back to the Moorebot app — restarting its ROS and "
-                       f"reconnecting the bridge. This feed drops out and returns in ~60–100 s: "
-                       f"the ssh channel to the robot can itself take up to 45 s to close during "
-                       f"the ~20 s the robot is CPU-starved relaunching ROS nodes, then there's a "
-                       f"fixed 22 s wait before the bridge bounces, plus Frigate's own reconnect."}
+    return {"message": f"Restarting {e.name}'s ROS stack and reconnecting our bridge — whether "
+                       f"this actually hands control back to the Moorebot app depends on whether "
+                       f"the robot's install still has /CloudNode and /AppNode (check the "
+                       f"porch-feed log for the confirmed outcome). This feed drops out and "
+                       f"returns in ~60–100 s: the ssh channel to the robot can itself take up to "
+                       f"45 s to close during the ~20 s the robot is CPU-starved relaunching ROS "
+                       f"nodes, then there's a fixed 22 s wait before the bridge bounces, plus "
+                       f"Frigate's own reconnect."}
 
 
 @app.get("/api/reachy/apps")
