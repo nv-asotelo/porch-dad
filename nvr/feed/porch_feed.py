@@ -488,6 +488,14 @@ def init_db() -> None:
                 peak_gpu     REAL
             )""")
         c.execute("CREATE INDEX IF NOT EXISTS idx_ts ON entries(ts DESC)")
+        # Added after the table already existed on deployed boxes - ALTER guarded rather than in
+        # the CREATE above. Sticky "this image was deliberately deleted" flag: without it, /img
+        # would just re-backfill from Frigate's own copy of the event on the next view (see
+        # api_image/cache_snapshot), silently undoing the delete.
+        try:
+            c.execute("ALTER TABLE entries ADD COLUMN image_deleted INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
         c.commit()
 
 
@@ -1389,11 +1397,68 @@ def api_image(eid: str):
     """
     path = snap_path(eid)
     if not (path.exists() and path.stat().st_size > 1024):
+        with closing(db()) as c:
+            row = c.execute("SELECT image_deleted FROM entries WHERE id=?", (eid,)).fetchone()
+        if row and row["image_deleted"]:
+            # A deliberate delete (see api_delete_image), not just an evicted cache entry - do not
+            # let a plain cache miss resurrect it from Frigate's own copy of the event.
+            raise HTTPException(404, "image deleted")
         if not cache_snapshot(eid):
             raise HTTPException(404, "no snapshot for this event")
         path = snap_path(eid)
     return Response(path.read_bytes(), media_type="image/jpeg",
                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.delete("/api/entries/{eid}/image")
+def api_delete_image(eid: str, request: Request):
+    """Remove just the photo. The caption/row stays, so the card still shows the description with
+    no picture - and image_deleted stops /img from quietly re-fetching it from Frigate on the next
+    view."""
+    require_control(request)
+    path = snap_path(eid)
+    if path.exists():
+        path.unlink()
+    with _lock, closing(db()) as c:
+        n = c.execute("UPDATE entries SET image_deleted=1 WHERE id=?", (eid,)).rowcount
+        c.commit()
+    if not n:
+        raise HTTPException(404, "no such entry")
+    return {"message": "image deleted"}
+
+
+@app.delete("/api/entries/{eid}/caption")
+def api_delete_caption(eid: str, request: Request):
+    """Clear just the description. /api/entries requires description IS NOT NULL, so the card
+    disappears from the feed - but the row itself is kept (tombstoned, not dropped) rather than
+    DELETEd: entries has nowhere else to remember image_deleted, so an outright DELETE here would
+    let a later /img request quietly resurrect a since-deleted photo from Frigate's own copy of
+    the event. The cached photo file is left on disk either way, reclaimed later by
+    prune_snapshots."""
+    require_control(request)
+    with _lock, closing(db()) as c:
+        n = c.execute("UPDATE entries SET description=NULL WHERE id=?", (eid,)).rowcount
+        c.commit()
+    if not n:
+        raise HTTPException(404, "no such entry")
+    return {"message": "caption deleted"}
+
+
+@app.delete("/api/entries/{eid}")
+def api_delete_entry(eid: str, request: Request):
+    """Remove both the photo and the caption. Same tombstone reasoning as api_delete_caption: the
+    row survives with description=NULL and image_deleted=1, rather than being DELETEd outright, so
+    the delete actually sticks instead of the image reappearing on the next /img request."""
+    require_control(request)
+    path = snap_path(eid)
+    if path.exists():
+        path.unlink()
+    with _lock, closing(db()) as c:
+        n = c.execute("UPDATE entries SET description=NULL, image_deleted=1 WHERE id=?", (eid,)).rowcount
+        c.commit()
+    if not n:
+        raise HTTPException(404, "no such entry")
+    return {"message": "entry deleted"}
 
 
 @app.get("/api/links")
@@ -2194,9 +2259,15 @@ button.locked{opacity:.55;cursor:not-allowed;border-style:dashed}
 .e-v2{background:rgba(255,176,32,.15);color:var(--y)}
 .e-v3{background:rgba(118,185,0,.15);color:var(--g)}
 .meta{color:var(--mut);font-size:12px;display:flex;gap:12px;flex-wrap:wrap;margin-top:7px}
-.desc{margin:6px 0 0}
+.desc{margin:6px 0 0;cursor:pointer;border-radius:6px;padding:2px 4px;margin-left:-4px}
 .still{width:100%;max-height:320px;object-fit:cover;border-radius:9px;margin-top:8px;
-       background:#0b0d0c;display:block}
+       background:#0b0d0c;display:block;cursor:pointer}
+/* Tap-to-select for deletion, not an always-on button under every photo - a stray tap while
+   scrolling only highlights (reversible with a second tap), it does not delete anything by
+   itself. Mirrors the Controls-lock reasoning on the Scout drive pad: destructive controls should
+   not be one accidental tap away. */
+.still.selected{outline:3px solid var(--r);outline-offset:-3px}
+.desc.selected{outline:2px solid var(--r);background:rgba(255,92,92,.1)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left}
 th{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
@@ -2489,6 +2560,8 @@ button.mini{padding:3px 9px;font-size:11.5px}
       <button onclick="feedClearFilters()" title="Reset every feed filter, including search text and dates">
         Clear filters</button>
     </div>
+    <p class="hint">Tap a photo or caption below to select it, then confirm to delete it - photo and
+       caption can be deleted independently or together.</p>
     <div id="feed" style="margin-top:10px"></div>
   </details>
 
@@ -2555,11 +2628,16 @@ function cardHtml(e){
          <span class="tag e-${e.engine_id}">${esc(e.engine_name)}</span>
          <span class="hint">${fmt(e.ts)}</span></div>
        <img class="still" loading="lazy" src="/img/${encodeURIComponent(e.id)}.jpg" alt=""
-            onerror="this.remove()"/>
-       <p class="desc">${esc(e.description)}</p>
+            onerror="this.remove()" onclick="feedSelect('${e.id}','image',this)"
+            title="Tap to select this photo for deletion"/>
+       <p class="desc" onclick="feedSelect('${e.id}','caption',this)"
+          title="Tap to select this caption for deletion">${esc(e.description)}</p>
        <div class="meta"><span>${esc(camLabel(e.camera))} · ${esc(e.label)}</span>
          <span title="end-to-end Frigate pipeline, not model inference time">${e.latency_ms} ms e2e</span><span>CPU ${e.peak_cpu??'—'}${e.peak_cpu!=null?'%':''}</span>
          <span>VRAM ${e.peak_mem??'—'}${e.peak_mem!=null?'%':''}</span><span>GPU ${e.peak_gpu??'—'}${e.peak_gpu!=null?'%':''}</span></div>
+       <div class="row" style="margin-top:6px">
+         <button id="del-${e.id}" class="warn" style="display:none" onclick="feedDeleteSelected('${e.id}')"></button>
+       </div>
      </div>`;
 }
 // Granularity decays with age so the feed stays scannable without ever truly hiding anything:
@@ -3362,6 +3440,41 @@ function initCtl(){
 }
 
 async function rq(url){ return post(url); }
+// Tap the photo and/or the caption to select what to delete (feedSelect), then a single per-card
+// "Delete selected" button confirms and fires it. This is deliberately not an always-live button
+// under every card: the same accidental-tap-while-scrolling risk that motivated the Scout Controls
+// lock applies here, and selecting is harmless (it only toggles a highlight) where a bare delete
+// button would not be. SEL tracks selection state per entry id, independent of the DOM.
+const SEL = {};
+function feedSelect(eid, what, el){
+  const s = SEL[eid] || (SEL[eid] = {image:false, caption:false});
+  s[what] = !s[what];
+  el.classList.toggle('selected', s[what]);
+  const btn = document.getElementById('del-'+eid);
+  if(!btn) return;
+  if(s.image || s.caption){
+    btn.style.display = '';
+    btn.textContent = s.image && s.caption ? '🗑 Delete photo + caption'
+                     : s.image ? '🗑 Delete photo' : '🗑 Delete caption';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+async function feedDeleteSelected(eid){
+  const s = SEL[eid];
+  if(!s || (!s.image && !s.caption)) return;
+  const what = (s.image && s.caption) ? '' : (s.image ? 'image' : 'caption');
+  const label = what === 'image' ? 'the photo' : what === 'caption' ? 'the caption' : 'the photo and caption';
+  if(!confirm(`Delete ${label} for this entry? This cannot be undone.`)) return;
+  const url = `/api/entries/${encodeURIComponent(eid)}` + (what ? `/${what}` : '');
+  try{
+    const r = await fetch(url, {method:'DELETE', headers:{'X-Porch-Token': await tokenReady()}});
+    const j = await r.json().catch(()=>({}));
+    say(j.message || j.detail || (r.ok?'done':'failed'), r.ok);
+  }catch(e){ say(String(e), false); }
+  delete SEL[eid];
+  await loadFeed();
+}
 async function post(url){
   // tokenReady(), not TOKEN: the token only arrives with the first status poll, so a click during
   // the first second used to send an empty header and fail with a bare 401.
