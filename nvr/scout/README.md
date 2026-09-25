@@ -322,3 +322,86 @@ What is still open:
 The bridge is written to fail visibly rather than silently on all of these: `/healthz` reports
 `ros_connected`, the reason it is not connected, and `stale_s` for the case where frames stop
 without the connection dropping.
+
+## Navigation: dock-seek, retrace, and a low-battery beacon (investigated 2026-09-25, not live)
+
+The goal: stop a Scout from autonomously hunting for its dock on low battery, and instead have it
+park in place and report where it is (ideally a full look-around); separately, give it a way to
+retrace a marked path back to a fixed point, for the case where the dock itself has a known
+location the robot can be taught.
+
+**What actually triggers dock-seeking.** `roller_eye/src/nodes/media_core/alg_backing_up.cpp` (in
+`Pilot-Labs-Dev/Scout-open-source`) is the vendor's own dock-return algorithm - vision-guided for
+the final approach (`getCameraPose`, `getHomeDistanceAndAngle`, `moveByObj`/`moveByCorner`), not
+plain odometry. It does **not** contain a battery-percentage check itself; `onBatteryStatus` there
+only *cancels* an in-progress backup once `status[2]` (charging) goes true, i.e. "we docked,
+stop." The actual start trigger is `BackingUp::setData`, wired to an `Int32` on a `backing_up`
+topic (`media_core_node.cpp`: `DataPulisher<std_msgs::Int32,BackingUp> backup(r,"backing_up",...)`)
+- nothing in the open-source nodes publishes to that topic. The likely publisher is `app_node` or
+`cloud_node`, both **missing** on both Scouts (see the incident section above), which means the
+native auto-dock-seek may already be partially or fully orphaned on these two units specifically.
+Whatever you saw searching for its dock may not have been this algorithm at all.
+
+**What's genuinely exposed, and confirmed live (2026-09-25) on `robot_room`'s Scout:**
+
+* `/CoreNode/nav_cancel` - stops `BackingUp` if one is running. Harmless no-op otherwise.
+* `/NavPathNode/nav_cancel`, `/NavPathNode/nav_exit` - same idea, NavPathNode's own copy.
+* `/NavPathNode/nav_get_status` - confirmed returns `0` (idle) at rest, `1` while `nav_patrol` is
+  replaying a path.
+* `/CoreNode/saveTmpPicForStartPath(name)` - saves a reference photo at the current position.
+  **`name` needs a real image extension** (`"dock.jpg"`, not `"dock"`) - OpenCV's `imwrite`
+  otherwise fails with "could not find a writer for the specified extension," confirmed live.
+* `/NavPathNode/nav_path_start(isFromOutStart, name)` → drive it → `nav_path_save(name)` - records
+  odometry as a named path. Confirmed working end-to-end on `robot_room`'s Scout.
+* `/NavPathNode/nav_patrol(isFromOutStart, name)` - replays a saved path. **This is the retrace
+  capability the goal asked about, and it is real** - confirmed it drove the robot back toward the
+  recorded start on `robot_room`'s Scout.
+
+All of this is now wrapped in `roller_eye_srv.py` (`nav_cancel_backup`, `nav_cancel_path`,
+`nav_exit`, `nav_get_status`, `save_tmp_pic_for_start_path`, `nav_path_start`, `nav_path_save`,
+`nav_patrol`, `nav_patrol_stop`, `nav_delete_path`), same hand-rolled-TCPROS pattern as the rest of
+that module, no missing binary required for any of it.
+
+**The incident.** Testing `nav_patrol`'s retrace on `robot_room`'s Scout drove it off the edge of
+the surface it was on - the robot survived (still ROS-connected, camera view normal afterward,
+telemetry healthy), but the fall was a real safety failure, not a near-miss. Two compounding
+causes: `nav_patrol` retraces by **odometry alone with no vision-based final alignment** - unlike
+`BackingUp`'s careful camera-guided approach, it does not slow down or correct for a mislocated
+stopping point, so a robot on an elevated surface with the dock at the edge has no protection
+against overshooting; and the ToF sensor this whole codebase already documents as forward-only
+(see the command centre's own UI hint text: "it only guards forward - strafe, reverse and rotate
+are unprotected, and there is no rear sensor") applies exactly as much to autonomous nav-replay
+motion as it does to manual driving, which this session did not account for.
+
+On the tracked Scout (`first_floor`), `nav_path_save` failed outright with an empty error after an
+otherwise-identical `nav_path_start` + short drive + save sequence - not yet diagnosed; testing
+stopped immediately after the fall on the other robot, before root-causing it.
+
+**Proposed design, not yet built:**
+
+1. **Low-battery beacon, porch-dad-side, not dependent on the vendor's own trigger.** The bridge
+   already tracks `battery_pct`/`battery_state` continuously. Watch for a threshold crossing (e.g.
+   15%, discharging), and on trigger: call `nav_cancel_backup` + `nav_cancel_path` first (cheap,
+   harmless even if nothing is running - covers the case where the native trigger turns out not to
+   be fully dead after all), **do not drive**, and instead use the camera in place: a snapshot (or
+   a small number of snapshots if a future session adds an in-place rotate step - deliberately not
+   proposing an autonomous rotate-in-place here given what just happened; that needs its own
+   supervised safety pass) sent through the existing Cosmos describe pipeline
+   (`/api/scout/{sid}/check` already does exactly this call shape) and surfaced as a porch-dad
+   alert, so "where did it die" is answerable without the robot moving at all.
+2. **Dock retrace, opt-in and manual, not automatic.** A "Mark dock here" porch-dad action
+   (`save_tmp_pic_for_start_path` + `nav_path_start`, driven by hand via the existing drive
+   controls, then `nav_path_save`) and a separate "Return to dock" action (`nav_patrol`) - kept as
+   two deliberate button presses, not something low battery triggers automatically, until the
+   overshoot/alignment problem above has an actual fix (e.g. stopping the patrol early and handing
+   off to `BackingUp`'s vision-guided approach for the last stretch, rather than trusting raw
+   odometry all the way to the stopping point).
+3. **Given the dock moves often:** re-teaching needs to be a single button press, not a procedure -
+   "Mark dock here" should overwrite the previous saved path for that robot, not accumulate stale
+   ones that could get replayed by name.
+
+None of this is wired into porch-dad's API/UI yet. Next session, before any of it goes live: get
+explicit confirmation the fallen Scout is undamaged, and do any further `nav_patrol` testing only
+on stable ground with a hand near the robot - the same standard already written above for the
+first drive command ever sent to this robot, which this session should have re-applied to the
+first *autonomous* one too.
