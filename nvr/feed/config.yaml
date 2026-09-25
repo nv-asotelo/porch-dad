@@ -91,10 +91,19 @@ engines:
       checkpoint fix; the older shim hardcoded one checkpoint for every engine and aborted
       with "missing tensor embed_tokens.weight" - misleading, since this checkpoint has all
       810 tensors including that one and was simply never consulted.
-      Measured 2026-09-22 on this box: loads in 69 s, answers, and sits at 4.19 GB resident -
-      about 1 GB MORE than v3, because mlp-only leaves attention at higher precision. That is
-      the whole trade, and it is why there is still no profile line: latency and tokens/frame
-      have not been run against the 23-frame set the other three are scored on.
+      Measured 2026-09-22 on this box: loads in 69 s, answers, and sits at 4.19-4.58 GB
+      resident - about 1 GB MORE than v3, because mlp-only leaves attention at higher
+      precision. That is the whole trade, and it is why there is still no profile line:
+      latency and tokens/frame have not been run against the 23-frame set the other three
+      are scored on.
+      DO NOT leave this selected while the full NVR stack runs. On 2026-09-25 it did, and
+      that extra ~1 GB put a 7.4 GB board into swap: 1057 MB paged out, and because the
+      shim carries MemorySwapMax=0 the model was protected and Frigate absorbed all of it -
+      detector, capture and embeddings all swapped. Detection lag reached 30 s and the Scout
+      was undriveable. Swap here lives on the SD card, whose 4K random reads measured
+      22.3 MB/s against the NVMe's 103, so every fault-in cost ~4.6x what it would have.
+      Switching back to v3 freed ~1 GB and swapoff/swapon reclaimed the rest; lag went away.
+      Fine to select for evaluation - just not as the resident engine under load.
 
 # Moorebot Scouts. One entry per robot; the command centre renders a card each. Each has its own
 # bridge container on this box (nvr/scout/), behind the `scout` compose profile, so a card shows
