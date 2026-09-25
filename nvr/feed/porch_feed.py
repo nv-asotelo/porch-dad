@@ -2717,6 +2717,9 @@ function scoutCardHTML(m){
           ${held(0,0,rot,'','rotate left (CCW)','⟲')}
           ${held(0,0,-rot,'','rotate right (CW)','⟳')}
         </div>
+        <button onclick="scoutTurn180('${sid}')"
+                title="One calibrated 180° turn in place, chunked to clear the bridge's 3s-per-call cap. More precise than eyeballing the held rotate buttons - useful for lining up on the dock.">
+          ↻ 180°</button>
       </div>
     </div>
     <!-- Gamepad: any HID controller the browser sees (Luna, Xbox, PS). One stick drives one robot -
@@ -2804,6 +2807,36 @@ function scoutRelease(sid){
   if(s.timer){ clearInterval(s.timer); s.timer = null; }
   // One explicit stop so it halts now rather than at the end of the firmware's watchdog window.
   postJSON(`/api/scout/${sid}/stop`, null, true);
+}
+
+// One-shot, precise about-face - for lining the robot up on the dock by hand, where the held
+// rotate buttons are too imprecise (release timing drifts by eye). A single /drive call cannot
+// cover it on a mecanum robot: 180 deg at rot=0.7 rad/s needs ~4.5 s, over the bridge's 3 s cap
+// (see MAX_DURATION in scout.py). So this chunks the turn into sequential calls, each one
+// overwriting the bridge's _drive_until before the previous chunk's window lapses (see
+// scout_mjpeg_bridge.py's drive loop) so the motion never gaps, and re-times every chunk off the
+// actual elapsed wall clock rather than the requested durations, so network jitter cannot
+// accumulate into an over- or under-turn.
+async function scoutTurn180(sid){
+  const s = SC[sid]; if(!s || s.locked) return;
+  const mec = s.meta.kinematics !== 'tracked';
+  const rot = mec ? 0.7 : 1.5;             // same calibrated rate as the held rotate buttons
+  const total = Math.PI / rot;             // seconds of continuous rotation for exactly 180 deg
+  const CHUNK = 2.5, LEAD = 0.3;           // chunk stays under the 3 s cap; the next one is fired
+                                            // LEAD seconds before this chunk's window would lapse
+  if(s.timer){ clearInterval(s.timer); s.timer = null; }
+  const t0 = Date.now();
+  say(`${sid}: turning 180° (~${total.toFixed(1)}s)…`, true);
+  while(true){
+    const left = total - (Date.now() - t0) / 1000;
+    if(left <= 0.05) break;
+    const dur = Math.min(CHUNK, left);
+    await postJSON(`/api/scout/${sid}/drive`, {yaw: rot, duration: dur}, true);
+    if(dur >= left) break;
+    await new Promise(r => setTimeout(r, Math.max(0, dur - LEAD) * 1000));
+  }
+  await postJSON(`/api/scout/${sid}/stop`, null, true);
+  say(`${sid}: 180° turn complete`, true);
 }
 
 // Controls lock: off by default (see scoutCardHTML) so a scroll-swipe that lands on the drive pad
