@@ -94,7 +94,6 @@ REACHY_DAEMON = str(CFG.get("reachy_daemon_url") or "").rstrip("/")
 _reachy = ReachyClient(REACHY_DAEMON) if REACHY_DAEMON else None
 # Scout audio goes over SSH (the robot has no ROS/RTSP audio). Key auth, unprivileged linaro.
 SCOUT_SSH_KEY = str(CFG.get("scout_ssh_key") or "/home/orin/.ssh/scout_ed25519")
-SCOUT_MIC_DEV = str(CFG.get("scout_mic_device") or "hw:0,1")
 SCOUT_SPK_DEV = str(CFG.get("scout_speaker_device") or "hw:0,0")
 AUDIO_RATE = 16000
 
@@ -1571,16 +1570,30 @@ def _scout_ssh(ssh_target: str, remote_cmd: str) -> list[str]:
 
 
 async def _audio_ws_capture(ws: WebSocket, ssh_target: str):
-    """Mic -> browser: arecord over SSH, one channel of the stereo PDM mic forwarded as PCM16."""
+    """Mic -> browser: PulseAudio's processed voice source over SSH, forwarded as mono PCM16.
+
+    Was `arecord -D {SCOUT_MIC_DEV}` (raw ALSA hw:0,1, the PDM voice mic), which is technically
+    correct but produces near-silence: measured RMS ~7 out of a possible 32767 on both channels -
+    not corrupted, just far too quiet to be intelligible, which on playback sounds exactly like
+    static. `pactl list sources` on the robot shows a SEPARATE, purpose-built PulseAudio source,
+    `alsa_input.1mic_loopback`, that raw ALSA capture bypasses entirely along with whatever gain/
+    array processing feeds it - `amixer` on this card exposes no capture gain control at all, so
+    that processing is not something a mixer setting could have fixed. Measured RMS through this
+    source instead: ~226, a 32x improvement, using real ambient room sound rather than near-noise-
+    floor silence. Needs the `linaro` user in the `pulse-access` group (added 2026-09-25) - system-
+    mode PulseAudio denies unauthenticated clients, which is the "Connection failure: Access
+    denied" that a plain parecord as linaro used to fail with before that grant.
+    """
     await ws.accept()
-    import numpy as np
-    cmd = _scout_ssh(ssh_target, f"exec arecord -q -D {SCOUT_MIC_DEV} -f S16_LE -c 2 -r {AUDIO_RATE} -t raw")
+    cmd = _scout_ssh(ssh_target,
+                      f"exec parecord --device=alsa_input.1mic_loopback --raw "
+                      f"--rate={AUDIO_RATE} --channels=1 --format=s16le")
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
     try:
         while True:
-            raw = await proc.stdout.readexactly(1280)   # 20 ms stereo S16
-            await ws.send_bytes(np.frombuffer(raw, dtype="<i2").reshape(-1, 2)[:, 0].tobytes())
+            raw = await proc.stdout.readexactly(640)   # 20 ms mono S16 @ 16 kHz
+            await ws.send_bytes(raw)
     except (asyncio.IncompleteReadError, WebSocketDisconnect, RuntimeError, ConnectionError):
         pass
     finally:

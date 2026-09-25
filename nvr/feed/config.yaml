@@ -129,7 +129,9 @@ scouts:
     kinematics: tracked
 # Shared audio defaults (same rk809 codec on every Scout).
 scout_ssh_key: "/home/orin/.ssh/scout_ed25519"
-scout_mic_device: "hw:0,1"
+# No scout_mic_device: mic capture goes through PulseAudio's alsa_input.1mic_loopback source
+# (hardcoded in _audio_ws_capture, not config - it is a fixed source name, not a per-robot value
+# the way scout_speaker_device is), not a raw ALSA device. See _audio_ws_capture's docstring.
 scout_speaker_device: "hw:0,0"
 
 # Live camera preview for the Reachy Mini.
