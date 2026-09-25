@@ -1896,7 +1896,12 @@ def healthz():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return INDEX_HTML
+    # No cache headers were ever set here, so the browser was free to reuse its own heuristic
+    # caching - especially bad added to an iOS home screen (which this page's own hint text
+    # invites), where a stale copy can persist across many real code changes with no visible sign
+    # anything is wrong. This is the whole page including its embedded <script>, so a stale cache
+    # here silently undoes every JS fix shipped after it was cached.
+    return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-store"})
 
 
 INDEX_HTML = r"""<!DOCTYPE html>
@@ -1996,7 +2001,11 @@ input[type=range].vert{writing-mode:vertical-lr;direction:rtl;width:22px;height:
 .ctl.wide{flex-basis:100%}
 
 /* Scout drive: a D-pad grid plus a rotate pair, laid out like the robot's own app. */
-.sxy{display:flex;gap:18px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.sxy{display:flex;gap:18px;align-items:center;margin-top:10px;flex-wrap:wrap;transition:opacity .15s}
+/* Belt and suspenders with the JS lock in scoutHold: pointer-events:none means a scroll-swipe
+   that lands on a drive button never even reaches its touchstart handler, not just gets ignored
+   after the fact. */
+.sxy.locked{opacity:.35;pointer-events:none}
 .dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:5px}
 .dpad button{width:46px;height:46px;padding:0;font-size:17px;border-radius:9px}
 .d-u{grid-area:1/2}.d-l{grid-area:2/1}.d-c{grid-area:2/2}.d-r{grid-area:2/3}.d-d{grid-area:3/2}
@@ -2466,7 +2475,17 @@ function scoutCardHTML(m){
     <p class="hint" id="sc-hint-${sid}" style="display:none"></p>
     <!-- Latest Cosmos caption, right under the video it describes. Persists between refreshes. -->
     <div id="sc-alert-${sid}" class="ralert"></div>
-    <div class="sxy">
+    <!-- Locked by default: scrolling past this card on a phone can land a touch on the drive pad
+         and knock the robot off its dock. Off means the pad is both visually dimmed and inert
+         (pointer-events:none in .sxy.locked, and scoutHold itself refuses while s.locked) - a
+         stray tap does nothing until this is deliberately switched on. -->
+    <div class="row" style="margin-top:8px">
+      <label class="tswitch" title="Drive pad and gamepad are ignored while this is off">
+        <input type="checkbox" id="sc-lockbtn-${sid}" onchange="scoutLockToggle('${sid}',this.checked)">
+        <span class="track"></span><span class="tlabel">🔒 Controls</span>
+      </label>
+    </div>
+    <div class="sxy locked" id="sc-pad-${sid}">
       <div class="dpad">
         ${held(0,0.15,0,'d-u','forward','▲')}
         ${mec ? held(-0.15,0,0,'d-l','strafe left','◀') : ''}
@@ -2522,7 +2541,7 @@ async function buildScoutCards(){
   try{ list = (await (await fetch('/api/scouts',{cache:'no-store'})).json()).scouts || []; }
   catch(e){ return; }
   box.innerHTML = list.map(scoutCardHTML).join('');
-  list.forEach(m => { SC[m.id] = {meta:m, vec:{x:0,y:0,yaw:0}, timer:null,
+  list.forEach(m => { SC[m.id] = {meta:m, vec:{x:0,y:0,yaw:0}, timer:null, locked:true,
                                   gpOn:false, gpRAF:null, gpConn:null,
                                   ws:null, ac:null, playAt:0,
                                   talkWS:null, talkStream:null, talkNode:null, talkCtx:null, talkResume:false}; });
@@ -2531,8 +2550,11 @@ async function buildScoutCards(){
 // Held motion: repeat the command while a button (or a gamepad stick) is engaged, so the robot
 // keeps moving smoothly instead of lurching once per click. The firmware zeroes velocity when
 // commands stop, so releasing = stopping with nothing latched.
+// The single choke point for the Controls lock: gamepad input reaches the robot through this same
+// function (see scoutGpLoop), so gating here covers the drive pad AND a gamepad with one check,
+// not two places that could drift out of sync.
 function scoutHold(sid, x, y, yaw){
-  const s = SC[sid]; if(!s) return;
+  const s = SC[sid]; if(!s || s.locked) return;
   s.vec = {x, y, yaw};
   if(s.timer) return;
   const tick = () => {
@@ -2550,6 +2572,17 @@ function scoutRelease(sid){
   if(s.timer){ clearInterval(s.timer); s.timer = null; }
   // One explicit stop so it halts now rather than at the end of the firmware's watchdog window.
   postJSON(`/api/scout/${sid}/stop`, null, true);
+}
+
+// Controls lock: off by default (see scoutCardHTML) so a scroll-swipe that lands on the drive pad
+// does nothing. Switching it off while mid-drive also stops the robot immediately, not just after
+// the next scoutHold call is refused.
+function scoutLockToggle(sid, checked){
+  const s = SC[sid]; if(!s) return;
+  s.locked = !checked;
+  const pad = document.getElementById('sc-pad-'+sid);
+  if(pad) pad.classList.toggle('locked', s.locked);
+  if(s.locked) scoutRelease(sid);
 }
 
 // Gamepad: deadzoned axes fed through the same held-motion loop. Only one robot owns the single
