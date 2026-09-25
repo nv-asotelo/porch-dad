@@ -1104,17 +1104,47 @@ def require_control(request: Request) -> None:
 
 
 @app.get("/api/entries")
-def api_entries(limit: int = 100, engine: str | None = None):
+def api_entries(limit: int = 100, engine: str | None = None, camera: str | None = None,
+                 label: str | None = None, q: str | None = None,
+                 since: float | None = None, until: float | None = None):
     # Reservation rows (engine_id='pending', no description) are bookkeeping, not captions.
-    q = "SELECT * FROM entries WHERE engine_id <> 'pending' AND description IS NOT NULL"
+    sql = "SELECT * FROM entries WHERE engine_id <> 'pending' AND description IS NOT NULL"
     args: list = []
     if engine and engine != "all":
-        q += " AND engine_id=?"
+        sql += " AND engine_id=?"
         args.append(engine)
-    q += " ORDER BY ts DESC LIMIT ?"
+    if camera and camera != "all":
+        sql += " AND camera=?"
+        args.append(camera)
+    if label and label != "all":
+        sql += " AND label=?"
+        args.append(label)
+    if q:
+        # Free-text search over the Cosmos caption only - camera and label already have their own
+        # exact-match filters above, so folding them in here would just duplicate those matches.
+        sql += " AND description LIKE ? ESCAPE '\\'"
+        args.append("%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+    if since is not None:
+        sql += " AND ts >= ?"
+        args.append(since)
+    if until is not None:
+        sql += " AND ts <= ?"
+        args.append(until)
+    sql += " ORDER BY ts DESC LIMIT ?"
     args.append(limit)
     with closing(db()) as c:
-        return JSONResponse([dict(r) for r in c.execute(q, args).fetchall()])
+        return JSONResponse([dict(r) for r in c.execute(sql, args).fetchall()])
+
+
+@app.get("/api/entries/facets")
+def api_entries_facets():
+    """Distinct camera and label values actually present, so the feed's filter chips only ever
+    offer choices that can return something - no hardcoded camera/label lists to keep in sync."""
+    with closing(db()) as c:
+        base = "SELECT DISTINCT {col} FROM entries WHERE engine_id <> 'pending' AND description IS NOT NULL AND {col} IS NOT NULL ORDER BY {col}"
+        cameras = [r[0] for r in c.execute(base.format(col="camera")).fetchall()]
+        labels = [r[0] for r in c.execute(base.format(col="label")).fetchall()]
+    return {"cameras": cameras, "labels": labels}
 
 
 @app.get("/api/status")
@@ -2443,6 +2473,22 @@ button.mini{padding:3px 9px;font-size:11.5px}
     <summary style="cursor:pointer;color:var(--mut);font-size:12px;text-transform:uppercase;
                     letter-spacing:.08em">Feed <span id="filter" class="hint"></span></summary>
     <div class="row" id="filters" style="margin-top:10px"></div>
+    <div class="row" id="camFilters" style="margin-top:6px"></div>
+    <div class="row" id="labelFilters" style="margin-top:6px"></div>
+    <!-- Free text hits only the Cosmos caption (camera/type already have their own chips above).
+         Debounced client-side (feedSearchInput) so typing doesn't fire a query per keystroke. The
+         date range is plain browser datetime-local - no timezone math here, it just round-trips
+         through Date() same as fmt() does for every other timestamp on this page. -->
+    <div class="row" style="margin-top:8px;gap:6px;align-items:center;flex-wrap:wrap">
+      <input type="search" id="feedSearch" placeholder="Search captions…" style="flex:1;min-width:160px"
+             oninput="feedSearchInput(this.value)">
+      <label class="hint">from <input type="datetime-local" id="feedSince"
+             onchange="SEARCH_SINCE=this.value;loadFeed()"></label>
+      <label class="hint">to <input type="datetime-local" id="feedUntil"
+             onchange="SEARCH_UNTIL=this.value;loadFeed()"></label>
+      <button onclick="feedClearFilters()" title="Reset every feed filter, including search text and dates">
+        Clear filters</button>
+    </div>
     <div id="feed" style="margin-top:10px"></div>
   </details>
 
@@ -2494,9 +2540,14 @@ button.mini{padding:3px 9px;font-size:11.5px}
 
 </div>
 <script>
-let FILTER='all';
+let FILTER='all', CAM_FILTER='all', LABEL_FILTER='all', SEARCH_Q='', SEARCH_SINCE='', SEARCH_UNTIL='';
+let ENGINES_META = {};
 const fmt = t => new Date(t*1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 const esc = s => (s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+// "scout" is the Frigate camera name for the 2nd-floor mecanum robot (see SCOUTS/robot_room in
+// porch_feed.py) - every other camera already reads clearly on its own. Display only: the
+// identifier itself stays "scout" everywhere it is addressed (filters, /api/camera, Frigate/MQTT).
+const camLabel = n => n === 'scout' ? 'scout 2nd floor' : n;
 
 function cardHtml(e){
   return `<div class="card" id="${esc(e.id)}">
@@ -2506,7 +2557,7 @@ function cardHtml(e){
        <img class="still" loading="lazy" src="/img/${encodeURIComponent(e.id)}.jpg" alt=""
             onerror="this.remove()"/>
        <p class="desc">${esc(e.description)}</p>
-       <div class="meta"><span>${esc(e.camera)} · ${esc(e.label)}</span>
+       <div class="meta"><span>${esc(camLabel(e.camera))} · ${esc(e.label)}</span>
          <span title="end-to-end Frigate pipeline, not model inference time">${e.latency_ms} ms e2e</span><span>CPU ${e.peak_cpu??'—'}${e.peak_cpu!=null?'%':''}</span>
          <span>VRAM ${e.peak_mem??'—'}${e.peak_mem!=null?'%':''}</span><span>GPU ${e.peak_gpu??'—'}${e.peak_gpu!=null?'%':''}</span></div>
      </div>`;
@@ -2544,6 +2595,61 @@ function groupedFeedHtml(ev){
                        letter-spacing:.08em">${esc(g.label)} <span class="hint">(${g.items.length})</span></summary>
        <div style="margin-top:10px">${g.items.map(cardHtml).join('')}</div>
      </details>`).join('');
+}
+
+// Feed filtering/search: camera and object-detection-type are exact-match chips built from
+// whatever /api/entries/facets actually has rows for (so a filter never offers a dead end), free
+// text hits only the Cosmos caption, and the date range is a plain browser datetime-local round
+// trip - see /api/entries in porch_feed.py for how these combine server-side. This is structured
+// multi-field search, not embedding-based fuzzy matching; the sqlite entries table and this box's
+// modest CPU/RAM budget (see the 2026-09-25 Frigate overload writeup in nvr/scout/README.md) do
+// not make a vector index a good trade for what "search my captions" actually needs day to day.
+function feedQuery(){
+  const p = new URLSearchParams({limit: 200});
+  if (FILTER !== 'all') p.set('engine', FILTER);
+  if (CAM_FILTER !== 'all') p.set('camera', CAM_FILTER);
+  if (LABEL_FILTER !== 'all') p.set('label', LABEL_FILTER);
+  if (SEARCH_Q.trim()) p.set('q', SEARCH_Q.trim());
+  if (SEARCH_SINCE) p.set('since', Math.floor(new Date(SEARCH_SINCE).getTime() / 1000));
+  if (SEARCH_UNTIL) p.set('until', Math.floor(new Date(SEARCH_UNTIL).getTime() / 1000));
+  return p;
+}
+async function loadFeed(){
+  const eids = ['all', ...Object.keys(ENGINES_META)];
+  document.getElementById('filters').innerHTML = eids.map(i =>
+    `<button class="${FILTER===i?'on':''}" onclick="FILTER='${i}';loadFeed()">${i==='all'?'All engines':esc(ENGINES_META[i].name)}</button>`).join('');
+
+  let facets = {cameras: [], labels: []};
+  try{ facets = await (await fetch('/api/entries/facets',{cache:'no-store'})).json(); }catch(e){}
+  document.getElementById('camFilters').innerHTML = ['all', ...facets.cameras].map(c =>
+    `<button class="${CAM_FILTER===c?'on':''}" onclick="CAM_FILTER='${c}';loadFeed()">${c==='all'?'All cameras':esc(camLabel(c))}</button>`).join('');
+  document.getElementById('labelFilters').innerHTML = ['all', ...facets.labels].map(l =>
+    `<button class="${LABEL_FILTER===l?'on':''}" onclick="LABEL_FILTER='${l}';loadFeed()">${l==='all'?'All types':esc(l)}</button>`).join('');
+
+  const active = [];
+  if (CAM_FILTER !== 'all') active.push(camLabel(CAM_FILTER));
+  if (LABEL_FILTER !== 'all') active.push(LABEL_FILTER);
+  if (FILTER !== 'all' && ENGINES_META[FILTER]) active.push(ENGINES_META[FILTER].name);
+  if (SEARCH_Q.trim()) active.push(`"${SEARCH_Q.trim()}"`);
+  document.getElementById('filter').textContent = active.length ? `· ${active.join(', ')}` : '';
+
+  const ev = await (await fetch(`/api/entries?${feedQuery()}`,{cache:'no-store'})).json();
+  document.getElementById('feed').innerHTML = ev.length ? groupedFeedHtml(ev)
+    : `<p class="hint">No captions match these filters.</p>`;
+}
+let _feedSearchTimer = null;
+function feedSearchInput(v){
+  SEARCH_Q = v;
+  clearTimeout(_feedSearchTimer);
+  _feedSearchTimer = setTimeout(loadFeed, 350);
+}
+function feedClearFilters(){
+  FILTER = 'all'; CAM_FILTER = 'all'; LABEL_FILTER = 'all';
+  SEARCH_Q = ''; SEARCH_SINCE = ''; SEARCH_UNTIL = '';
+  document.getElementById('feedSearch').value = '';
+  document.getElementById('feedSince').value = '';
+  document.getElementById('feedUntil').value = '';
+  loadFeed();
 }
 function say(t, ok){ const m=document.getElementById('msg'); m.textContent=t; m.className='msg '+(ok?'ok':'err');
   setTimeout(()=>{m.className='msg'},6000); }
@@ -3340,9 +3446,9 @@ async function load(){
   document.getElementById('cameras').innerHTML = Object.entries(st.cameras).map(([n,c])=>{
     const on = c.mode==='powered';
     if(c.always_powered) return `<button class="on locked" title="configured always-powered">
-      ${esc(n)}: POWERED 🔒</button>`;
+      ${esc(camLabel(n))}: POWERED 🔒</button>`;
     return `<button class="${on?'on':'warn'}" onclick="post('/api/camera/${n}/${on?'saver':'powered'}')">
-      ${esc(n)}: ${on?'POWERED':'SAVER'}</button>`;}).join('');
+      ${esc(camLabel(n))}: ${on?'POWERED':'SAVER'}</button>`;}).join('');
 
   try{
     const lk = await (await fetch('/api/links',{cache:'no-store'})).json();
@@ -3453,13 +3559,8 @@ async function load(){
      <td>${r.desc_len!=null?Math.round(r.desc_len)+' ch':'—'}</td></tr>`).join('')
     : `<tr><td colspan="8" class="hint">No captions recorded yet.</td></tr>`;
 
-  const ids = ['all', ...Object.keys(st.engines)];
-  document.getElementById('filters').innerHTML = ids.map(i=>
-    `<button class="${FILTER===i?'on':''}" onclick="FILTER='${i}';load()">${i==='all'?'All engines':esc(st.engines[i].name)}</button>`).join('');
-
-  const ev = await (await fetch(`/api/entries?limit=200&engine=${FILTER}`,{cache:'no-store'})).json();
-  document.getElementById('feed').innerHTML = ev.length ? groupedFeedHtml(ev)
-    : `<p class="hint">No captions yet for this filter. Trigger motion on a camera.</p>`;
+  ENGINES_META = st.engines;
+  await loadFeed();
 }
 // The Scouts refresh on their own timer: their cameras are worth seeing at a higher rate than the
 // 10 s whole-page poll, and they must keep updating even when the robot sections are hidden. Cards
