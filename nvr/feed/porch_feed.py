@@ -1907,6 +1907,21 @@ button.on{background:rgba(118,185,0,.16);border-color:var(--g);color:var(--g)}
 button.warn{border-color:var(--y);color:var(--y)}
 button.busy{opacity:.5;pointer-events:none}
 button.locked{opacity:.55;cursor:not-allowed;border-style:dashed}
+/* A real slider toggle (track + thumb), not a highlighted button - for controls that are binary
+   ON/OFF state, not an action to click. The <input> stays in the DOM and keyboard/screen-reader
+   accessible; only its default box is hidden, so the label stays associated with it. */
+.tswitch{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none;
+         font-size:13.5px}
+.tswitch input{position:absolute;opacity:0;width:0;height:0}
+.tswitch .track{position:relative;width:38px;height:22px;border-radius:999px;
+                 background:var(--card);border:1px solid var(--line);transition:background .15s,border-color .15s;
+                 flex:none}
+.tswitch .track::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;
+                 border-radius:50%;background:var(--mut);transition:transform .15s,background .15s}
+.tswitch input:checked + .track{background:rgba(118,185,0,.25);border-color:var(--g)}
+.tswitch input:checked + .track::after{transform:translateX(16px);background:var(--g)}
+.tswitch input:disabled + .track{opacity:.5}
+.tswitch .tlabel{color:var(--fg)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
 .tag{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;letter-spacing:.04em}
 .e-v1{background:rgba(74,163,255,.15);color:var(--b)}
@@ -2448,11 +2463,14 @@ function scoutCardHTML(m){
       <span id="sc-gpstate-${sid}" class="hint"></span>
     </div>
     <div class="row" style="margin-top:8px">
-      <button id="sc-listenbtn-${sid}" onclick="scoutListenToggle('${sid}')"
-              title="Hear this robot's microphone in your browser">🔊 Listen</button>
-      <button id="sc-talkbtn-${sid}" title="Hold to speak through this robot's speaker (needs https or localhost)"
-              onmousedown="scoutTalkStart('${sid}')" onmouseup="scoutTalkStop('${sid}')" onmouseleave="scoutTalkStop('${sid}')"
-              ontouchstart="event.preventDefault();scoutTalkStart('${sid}')" ontouchend="scoutTalkStop('${sid}')">🎙 Hold to talk</button>
+      <label class="tswitch" title="Hear this robot's microphone in your browser">
+        <input type="checkbox" id="sc-listenbtn-${sid}" onchange="scoutListenToggle('${sid}',this.checked)">
+        <span class="track"></span><span class="tlabel" id="sc-listenlbl-${sid}">🔊 Listen</span>
+      </label>
+      <label class="tswitch" title="Speak through this robot's speaker (needs https or localhost)">
+        <input type="checkbox" id="sc-talkbtn-${sid}" onchange="scoutTalkToggle('${sid}',this.checked)">
+        <span class="track"></span><span class="tlabel" id="sc-talklbl-${sid}">🎙 Talk</span>
+      </label>
       <button onclick="scoutSnapshot('${sid}')" title="Save the current frame to your device">📷 Snapshot</button>
       <button onclick="scoutCheck('${sid}',this)"
               title="Sends one frame to Cosmos3-Edge for a description. It is not asked what to do — the rangefinder decides that.">
@@ -2563,17 +2581,23 @@ function scoutGpLoop(sid){
 // Listen: stream the robot mic (16 kHz mono PCM16 over a WebSocket) and play it back through Web
 // Audio, scheduling each chunk after the last so it plays gaplessly. No secure context needed -
 // only mic CAPTURE (talk) requires https/localhost; playback works on plain http.
-async function scoutListenToggle(sid){
+// A real toggle now (slider switch), not a click-to-start button: `checked` is the switch's own
+// new state (already flipped by the browser before onchange fires), so it is the source of truth
+// rather than something inferred from s.ws - the internal no-arg call from scoutTalkStop's
+// resume-after-talk case wants "turn on", hence the undefined-defaults-true fallback.
+async function scoutListenToggle(sid, checked){
   const s = SC[sid]; if(!s) return;
-  const btn = scEl(sid,'listenbtn');
-  if(s.ws){ scoutListenStop(sid); return; }
+  if(checked === undefined) checked = true;
+  const cb = scEl(sid,'listenbtn'), lbl = document.getElementById('sc-listenlbl-'+sid);
+  if(!checked){ scoutListenStop(sid); return; }
+  if(s.ws) return;                                      // already listening
   const tok = await tokenReady();
   s.ac = new (window.AudioContext || window.webkitAudioContext)();
   s.playAt = 0;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   s.ws = new WebSocket(`${proto}://${location.host}/api/audio/scout/${sid}/listen?token=${encodeURIComponent(tok)}`);
   s.ws.binaryType = 'arraybuffer';
-  s.ws.onopen = () => { btn.classList.add('on'); btn.textContent = '🔊 Listening'; };
+  s.ws.onopen = () => { if(cb) cb.checked = true; if(lbl) lbl.textContent = '🔊 Listening'; };
   s.ws.onmessage = ev => {
     const pcm = new Int16Array(ev.data);
     if(!pcm.length || !s.ac) return;
@@ -2593,31 +2617,37 @@ async function scoutListenToggle(sid){
 }
 function scoutListenStop(sid){
   const s = SC[sid]; if(!s) return;
-  const btn = scEl(sid,'listenbtn');
-  if(btn){ btn.classList.remove('on'); btn.textContent = '🔊 Listen'; }
+  const cb = scEl(sid,'listenbtn'), lbl = document.getElementById('sc-listenlbl-'+sid);
+  if(cb) cb.checked = false;
+  if(lbl) lbl.textContent = '🔊 Listen';
   if(s.ws){ try{s.ws.close();}catch(e){} s.ws = null; }
   if(s.ac){ try{s.ac.close();}catch(e){} s.ac = null; }
 }
 
 // Talk: capture the browser mic, downsample to 16 kHz mono PCM16, stream it to the robot speaker
-// while the button is held. getUserMedia needs a secure context (https/localhost), so on plain http
+// while the switch is on. getUserMedia needs a secure context (https/localhost), so on plain http
 // this reports that instead of silently failing. This robot's Listen is paused while talking so its
-// mic does not loop the speaker back - half-duplex push-to-talk, no on-robot echo cancellation.
-async function scoutTalkStart(sid){
+// mic does not loop the speaker back - half-duplex, no on-robot echo cancellation. Was hold-to-talk
+// (mousedown/touchstart); a slider switch fits the actual use better - flip it on, walk away, flip
+// it off - and a physical hold does not survive a phone screen lock or an accidental swipe anyway.
+async function scoutTalkToggle(sid, checked){
   const s = SC[sid]; if(!s) return;
-  if(s.talkWS || s.talkNode) return;                   // already talking (button repeat)
+  if(!checked){ scoutTalkStop(sid); return; }
+  if(s.talkWS || s.talkNode) return;                    // already talking (switch repeat)
+  const cb = scEl(sid,'talkbtn');
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    if(cb) cb.checked = false;
     say('Talk needs https or localhost — the browser blocks mic capture on plain http. '
        + 'Open via an ssh -L localhost forward.', false);
     return;
   }
   const tok = await tokenReady();
   s.talkResume = !!s.ws;
-  if(s.talkResume) scoutListenStop(sid);               // avoid feedback on THIS robot
+  if(s.talkResume) scoutListenStop(sid);                // avoid feedback on THIS robot
   try{
     s.talkStream = await navigator.mediaDevices.getUserMedia(
       {audio: {channelCount: 1, echoCancellation: true, noiseSuppression: true}});
-  }catch(e){ say('microphone permission denied', false); return; }
+  }catch(e){ if(cb) cb.checked = false; say('microphone permission denied', false); return; }
   s.talkCtx = new (window.AudioContext || window.webkitAudioContext)();
   const src = s.talkCtx.createMediaStreamSource(s.talkStream);
   s.talkNode = s.talkCtx.createScriptProcessor(4096, 1, 1);
@@ -2636,11 +2666,14 @@ async function scoutTalkStart(sid){
   // Route through a muted gain so the ScriptProcessor runs without playing the user's own mic back.
   const mute = s.talkCtx.createGain(); mute.gain.value = 0;
   src.connect(s.talkNode); s.talkNode.connect(mute); mute.connect(s.talkCtx.destination);
-  const b = scEl(sid,'talkbtn'); if(b){ b.classList.add('on'); b.textContent = '🎙 Talking…'; }
+  if(cb) cb.checked = true;
+  const lbl = document.getElementById('sc-talklbl-'+sid); if(lbl) lbl.textContent = '🎙 Talking…';
 }
 function scoutTalkStop(sid){
   const s = SC[sid]; if(!s) return;
-  const b = scEl(sid,'talkbtn'); if(b){ b.classList.remove('on'); b.textContent = '🎙 Hold to talk'; }
+  const cb = scEl(sid,'talkbtn'), lbl = document.getElementById('sc-talklbl-'+sid);
+  if(cb) cb.checked = false;
+  if(lbl) lbl.textContent = '🎙 Talk';
   if(s.talkNode){ try{s.talkNode.disconnect();}catch(e){} s.talkNode = null; }
   if(s.talkStream){ s.talkStream.getTracks().forEach(t=>t.stop()); s.talkStream = null; }
   if(s.talkCtx){ try{s.talkCtx.close();}catch(e){} s.talkCtx = null; }
