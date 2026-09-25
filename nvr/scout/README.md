@@ -261,7 +261,16 @@ step on the robot itself -
    only way a future loss on another unit stays recoverable - copy the binaries across (matching
    `/var/roller_eye/config/version`) rather than depending on the app a second time.
 
-## Recovering a used (eBay) unit to factory defaults
+## Recovering a used (eBay) unit to factory defaults, and its role: test bench, not a third feed
+
+This third Scout is **not** going into the fleet as a third live camera - that would mean a third
+bridge container, a third Frigate camera, a third `scouts:` entry, its own go2rtc stream, real
+ongoing plumbing. Given how the other two ended up with `app_node`/`cloud_node`/etc. missing with
+no clean way to trace exactly what happened, the decision instead is to keep this one as a
+dedicated **test bench**: the one Scout root/porch-dad changes get tried against first, so a
+mistake costs a bench unit, not a robot that's live in Frigate and the command centre. It only
+joins the fleet later, deliberately, if that's decided separately - nothing here should assume it
+will.
 
 Moorebot is out of business, so whatever the official app can still do today is the last chance
 to do it - there is no vendor to ask later. A used unit almost certainly still shows a previous
