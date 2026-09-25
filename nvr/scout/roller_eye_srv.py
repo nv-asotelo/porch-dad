@@ -105,6 +105,77 @@ def call(service: str, payload: bytes = b"", master: str = DEFAULT_MASTER,
     return body
 
 
+def _lookup_node(node: str, master: str) -> str:
+    code, msg, uri = xmlrpc.client.ServerProxy(master).lookupNode(CALLER_ID, node)
+    if code != 1:
+        raise LookupError(f"{node}: {msg}")
+    # Same hostname gotcha as _lookup(): the robot advertises itself as linaro-alip, which does
+    # not resolve off the robot, so rewrite to the master's own host if that's where we got it.
+    parsed = urllib.parse.urlparse(uri)
+    try:
+        socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        real_host = urllib.parse.urlparse(master).hostname or parsed.hostname
+        uri = uri.replace(parsed.hostname, real_host, 1)
+    return uri
+
+
+def publish_once(topic: str, node: str, msg_type: str, md5sum: str, payload: bytes,
+                  master: str = DEFAULT_MASTER, timeout: float = 10.0) -> None:
+    """Publish one message on `topic` directly to `node`'s existing subscription, bypassing the
+    master's own registerPublisher/publisherUpdate dance entirely.
+
+    Every other function here is a service CALL, where we are the client and the robot is the
+    server that already knows how to answer - `call()`'s two-socket probe-then-invoke shape only
+    makes sense for that direction. Publishing is the other way around: we are the one deciding
+    what to send, and topic delivery in ROS1 normally goes through the master registering us as a
+    publisher, subscribers being told we exist via a publisherUpdate callback to THEIR node, and
+    only then connecting to us - which needs us to run an XML-RPC server nothing else here does.
+    Skipped entirely: `node` is already a known, already-subscribed listener (e.g. CoreNode is
+    always subscribed to `testBackup` - see alg_backing_up.cpp's constructor), so this calls that
+    node's own `requestTopic` XML-RPC method directly, exactly as if we were a legitimate
+    publisher it already knew about, then does the raw TCPROS publisher handshake by hand.
+    """
+    node_uri = _lookup_node(node, master)
+    code, msg, proto = xmlrpc.client.ServerProxy(node_uri).requestTopic(
+        CALLER_ID, topic, [["TCPROS"]])
+    if code != 1:
+        raise LookupError(f"{node} requestTopic({topic}): {msg}")
+    _proto_name, host, port = proto
+    # Same hostname gotcha, third time over: requestTopic's own response also advertises
+    # linaro-alip, not an address reachable off the robot.
+    try:
+        socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        host = urllib.parse.urlparse(master).hostname or host
+    with socket.create_connection((host, int(port)), timeout) as sock:
+        sock.settimeout(timeout)
+        sock.sendall(_enc_header({
+            "callerid": CALLER_ID, "topic": topic, "type": msg_type,
+            "md5sum": md5sum, "latching": "0",
+        }))
+        _read_header(sock)   # the subscriber's own header - not inspected, just drained
+        sock.sendall(struct.pack("<I", len(payload)) + payload)
+
+
+# roller_eye/testBackup uses the well-known std_msgs/Int8 wire type (one signed byte), not a
+# roller_eye message - its md5sum is the fixed, standard one for that core ROS type.
+STD_MSGS_INT8_MD5 = "27ffa0c9c4b8fb8492252bcad9e5c57b"
+
+
+def test_backup(value: int, master: str = DEFAULT_MASTER) -> None:
+    """CoreNode/testBackup: std_msgs/Int8. Not a real .srv - a vendor debug hook, but the only
+    known way to trigger the camera-guided dock approach directly (see alg_backing_up.cpp's
+    onTestBackup): 0 does nothing, 2 calls doBackup() (the actual approach-and-dock routine) as
+    long as canBackup() thinks the last-seen dock pose is close enough, 4 runs detection only.
+    There is no ROS-level way to ask it to search from scratch if the dock is not already in
+    view - point the robot at the dock (or near where it last was) before calling this with 2."""
+    if value not in (0, 2, 4):
+        raise ValueError("value must be 0 (noop), 2 (do backup) or 4 (detect only)")
+    publish_once("/CoreNode/testBackup", "/CoreNode", "std_msgs/Int8", STD_MSGS_INT8_MD5,
+                 struct.pack("<b", value), master)
+
+
 def _str(buf: bytes, i: int) -> tuple[str, int]:
     (n,) = struct.unpack("<I", buf[i : i + 4])
     i += 4

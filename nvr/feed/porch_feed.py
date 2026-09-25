@@ -31,6 +31,7 @@ import os
 import secrets
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import xmlrpc.client
@@ -50,6 +51,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from reachy import (ANTENNA_LIMIT_RAD, ANTENNA_PARK_DEG, LIMITS_M, LIMITS_RAD, MOTOR_MODES,
                     Reachy as ReachyClient)
 from scout import Scout as ScoutClient
+# roller_eye_srv.py lives in nvr/scout/, not here - it is the direct-TCPROS-to-the-robot service
+# caller (nav_cancel, nav_path_start/save, nav_patrol, ...), a different thing from scout.py's
+# ScoutClient (which talks to the bridge, not the robot's ROS master directly). Path-inserted
+# rather than duplicated so there is one copy, not two that can drift.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scout"))
+import roller_eye_srv
 
 CFG = yaml.safe_load(Path(os.environ.get("PORCH_FEED_CONFIG",
                                          "/home/orin/nvr/feed/config.yaml")).read_text())
@@ -144,6 +151,15 @@ def _scout_entry(sid: str) -> "_ScoutEntry":
     if e is None:
         raise HTTPException(404, f"unknown scout '{sid}'")
     return e
+
+
+def _ros_master(e: "_ScoutEntry") -> str:
+    """roller_eye_srv's functions want http://<robot-ip>:11311, not an ssh target - same host,
+    different scheme, so this just re-derives it from e.ssh rather than adding a config key that
+    would have to be kept in sync with it."""
+    if not e.ssh:
+        raise HTTPException(503, "no ssh target for this scout")
+    return f"http://{e.ssh.split('@')[-1]}:11311"
 # Anomaly watch: the microphone triggers the eye.
 #
 # Continuous captioning of the robot's view would mean a ~650 ms VLM call every few seconds,
@@ -370,6 +386,68 @@ def reachy_watcher() -> None:
         except Exception as e:
             print(f"[feed] reachy watcher: {e}", flush=True)
         time.sleep(3)
+
+
+# Low-battery beacon: cancel any native dock-seek, describe where it is in place, save that as a
+# Feed entry - deliberately does NOT drive the robot (see nvr/scout/README.md's incident writeup:
+# nav_patrol's odometry-only retrace drove a robot off an elevated surface during testing, and the
+# same lack of a rear/side sensor applies to any autonomous motion, not just that one call).
+SCOUT_LOW_BATT_PCT = int(CFG.get("scout_low_battery_pct", 15))
+_scout_beacon_fired: dict[str, bool] = {}
+
+
+def _fire_scout_beacon(e: "_ScoutEntry") -> None:
+    print(f"[feed] {e.name}: battery low, firing low-battery beacon", flush=True)
+    master = _ros_master(e)
+    try:
+        roller_eye_srv.nav_cancel_backup(master=master)
+        roller_eye_srv.nav_cancel_path(master=master)
+    except Exception as ex:
+        print(f"[feed] beacon: nav_cancel failed for {e.name}: {ex}", flush=True)
+    try:
+        d = _scout_describe(e)
+    except HTTPException as ex:
+        print(f"[feed] beacon: describe failed for {e.name}: {ex.detail}", flush=True)
+        return
+    eid = f"beacon-{e.id}-{int(time.time())}"
+    try:
+        img = requests.get(f"{e.bridge}/still.jpg", timeout=8)
+        if img.status_code == 200 and img.content:
+            snap_path(eid).write_bytes(img.content)
+    except requests.RequestException:
+        pass
+    eng = active_engine()
+    save({
+        "id": eid, "ts": time.time(), "camera": e.id, "label": "low_battery",
+        "description": f"[LOW BATTERY BEACON] {d['description']}",
+        "engine_id": eng["id"], "engine_name": eng["name"],
+        "latency_ms": 0, "peak_cpu": None, "peak_mem": None, "peak_gpu": None,
+    })
+    print(f"[feed] {e.name}: beacon saved as {eid}", flush=True)
+
+
+def scout_battery_watcher() -> None:
+    """Fires _fire_scout_beacon once per discharge cycle when a Scout's battery crosses
+    SCOUT_LOW_BATT_PCT - not once per poll, which would spam a Feed entry every 15s while the
+    robot sits there dying. Resets the moment it is next seen charging or above the threshold, so
+    the next low-battery episode fires again rather than staying silenced forever."""
+    while True:
+        for sid, e in SCOUTS.items():
+            try:
+                if not e.client:
+                    continue
+                st = e.client.state()
+                pct, state, fresh = (st.get("battery_pct"), st.get("battery_state"),
+                                      st.get("battery_fresh"))
+                if fresh and pct is not None and state == "discharging" and pct <= SCOUT_LOW_BATT_PCT:
+                    if not _scout_beacon_fired.get(sid):
+                        _scout_beacon_fired[sid] = True
+                        _fire_scout_beacon(e)
+                else:
+                    _scout_beacon_fired[sid] = False
+            except Exception as ex:
+                print(f"[feed] battery watcher {sid}: {ex}", flush=True)
+        time.sleep(15)
 
 
 def link_poller() -> None:
@@ -1694,11 +1772,9 @@ def api_scout_stop(sid: str, request: Request):
     return _reachy_result(*e.client.stop())
 
 
-@app.post("/api/scout/{sid}/check")
-def api_scout_check(sid: str, request: Request):
-    """Describe what a Scout sees. Description only - the rangefinder judges obstacles, not the VLM."""
-    require_control(request)
-    e = _scout_entry(sid)
+def _scout_describe(e: "_ScoutEntry") -> dict:
+    """Snapshot + Cosmos description, factored out of api_scout_check so the low-battery beacon
+    (see scout_battery_watcher) can call the exact same path without going through HTTP."""
     if not e.bridge:
         raise HTTPException(503, "bridge not configured")
     try:
@@ -1729,6 +1805,102 @@ def api_scout_check(sid: str, request: Request):
     state = e.client.state() if e.client else {}
     return {"description": desc, "categories": cats,
             "alert": bool(cats), "tof_m": state.get("tof_m"), "at": time.time()}
+
+
+@app.post("/api/scout/{sid}/check")
+def api_scout_check(sid: str, request: Request):
+    """Describe what a Scout sees. Description only - the rangefinder judges obstacles, not the VLM."""
+    require_control(request)
+    return _scout_describe(_scout_entry(sid))
+
+
+# ------------------------------------------------------------------- dock mark / retrace
+# One fixed path name per robot ("dock") rather than a user-chosen one: "Mark dock here" is meant
+# to be a single re-teach button (the dock moves often - see nvr/scout/README.md), so marking
+# again should overwrite the old path, not accumulate stale ones nothing ever replays by name.
+DOCK_PATH_NAME = "dock"
+
+
+@app.post("/api/scout/{sid}/mark-dock/start")
+def api_scout_mark_dock_start(sid: str, request: Request):
+    """Begin recording a path from here. Call this with the robot AT the dock, then drive it
+    (the normal /api/scout/{sid}/drive controls) to wherever it should be able to find its way
+    back from, then POST mark-dock/save. isFromOutStart=False: recording genuinely starts here,
+    it is not resuming an existing path."""
+    require_control(request)
+    e = _scout_entry(sid)
+    master = _ros_master(e)
+    try:
+        roller_eye_srv.save_tmp_pic_for_start_path(f"{DOCK_PATH_NAME}.jpg", master=master)
+        roller_eye_srv.nav_path_start(DOCK_PATH_NAME, is_from_out_start=False, master=master)
+    except Exception as ex:
+        raise HTTPException(503, f"nav_path_start: {ex}")
+    return {"message": f"Recording a path from here as \"{e.name}\"'s dock. "
+                       f"Drive the robot, then mark-dock/save to finish."}
+
+
+@app.post("/api/scout/{sid}/mark-dock/save")
+def api_scout_mark_dock_save(sid: str, request: Request):
+    """Finish recording, overwriting any previously marked dock path for this robot."""
+    require_control(request)
+    e = _scout_entry(sid)
+    try:
+        roller_eye_srv.nav_path_save(DOCK_PATH_NAME, master=_ros_master(e))
+    except Exception as ex:
+        raise HTTPException(503, f"nav_path_save: {ex}")
+    return {"message": f"Dock path saved for \"{e.name}\"."}
+
+
+@app.post("/api/scout/{sid}/mark-dock/cancel")
+def api_scout_mark_dock_cancel(sid: str, request: Request):
+    """Abort a recording in progress without saving it - the previous saved path, if any, is
+    untouched (nav_path_save is what would overwrite it, and this never calls it)."""
+    require_control(request)
+    e = _scout_entry(sid)
+    try:
+        roller_eye_srv.nav_cancel_path(master=_ros_master(e))
+    except Exception as ex:
+        raise HTTPException(503, f"nav_cancel: {ex}")
+    return {"message": "Recording cancelled."}
+
+
+@app.post("/api/scout/{sid}/return-to-dock")
+def api_scout_return_to_dock(sid: str, request: Request):
+    """Retrace the marked dock path. Odometry-only, no vision-guided final alignment the way the
+    robot's own dock-seek algorithm has (see nvr/scout/README.md's incident writeup - this drove
+    a robot off the edge of an elevated surface during testing) - only use this with the robot on
+    stable ground with a clear path back, not as an unattended rescue action."""
+    require_control(request)
+    e = _scout_entry(sid)
+    master = _ros_master(e)
+    try:
+        roller_eye_srv.nav_cancel_backup(master=master)   # do not fight the vendor's own algorithm
+        ret = roller_eye_srv.nav_patrol(DOCK_PATH_NAME, is_from_out_start=True, master=master)
+    except Exception as ex:
+        raise HTTPException(503, f"nav_patrol: {ex}")
+    return {"message": f"Retracing to \"{e.name}\"'s marked dock.", "ret": ret}
+
+
+@app.post("/api/scout/{sid}/return-to-dock/stop")
+def api_scout_return_to_dock_stop(sid: str, request: Request):
+    require_control(request)
+    e = _scout_entry(sid)
+    try:
+        roller_eye_srv.nav_patrol_stop(master=_ros_master(e))
+    except Exception as ex:
+        raise HTTPException(503, f"nav_patrol_stop: {ex}")
+    return {"message": "Retrace stopped."}
+
+
+@app.get("/api/scout/{sid}/nav-status")
+def api_scout_nav_status(sid: str):
+    """Read-only, no token: a status poll needs to work even before control is set up."""
+    e = _scout_entry(sid)
+    try:
+        status = roller_eye_srv.nav_get_status(master=_ros_master(e))
+    except Exception as ex:
+        return {"status": None, "error": str(ex)}
+    return {"status": status}
 
 
 _bg_tasks: set = set()
@@ -2551,6 +2723,17 @@ function scoutCardHTML(m){
               title="Restart the robot's ROS stack (roller_eye.service) so the official Moorebot app can take control. Drive and video on this card pause ~20 s while it comes back, then recover on their own.">
         ♻ Restart ROS → app</button>
     </div>
+    <!-- Dock mark/retrace: nav_patrol is odometry-only, no vision-guided final approach the way
+         the robot's own dock-seek has - a real risk on anything but flat, stable ground (see
+         nvr/scout/README.md). Manual, two deliberate presses, never automatic. -->
+    <div class="row" style="margin-top:8px" id="sc-dockrow-${sid}">
+      <button id="sc-markbtn-${sid}" onclick="scoutMarkDock('${sid}')"
+              title="Records a path from wherever the robot is right now. Put it at the dock first.">
+        📍 Mark dock here</button>
+      <button class="warn" onclick="scoutReturnToDock('${sid}')"
+              title="Retraces the marked path by odometry alone - only use this on stable ground with a clear path back.">
+        🏠 Return to dock</button>
+    </div>
     <p class="hint">The <b>range</b> in the status line is the forward time-of-flight sensor and is
        what to trust for obstacles — and it only guards <b>forward</b>: strafe, reverse and rotate
        are unprotected, and there is no rear sensor. Watch the video. Held motion drives 0.6&nbsp;s
@@ -2860,6 +3043,31 @@ async function scoutRestartRos(sid){
   scoutRelease(sid);                 // stop anything we are driving before the bounce
   scoutListenStop(sid);              // its mic/audio pipes die with the stack anyway
   await post(`/api/scout/${sid}/restart-ros`);
+}
+
+// Dock mark/retrace: two deliberate presses each, not automatic. "Mark" starts recording and
+// flips the button to "Save path" so the same button both begins and ends a recording rather
+// than needing a separate always-visible save button that does nothing outside a recording.
+async function scoutMarkDock(sid){
+  const s = SC[sid]; if(!s) return;
+  const btn = document.getElementById('sc-markbtn-'+sid);
+  if(!s.markingDock){
+    await post(`/api/scout/${sid}/mark-dock/start`);
+    s.markingDock = true;
+    if(btn){ btn.textContent = '💾 Save path'; btn.classList.add('on'); }
+  } else {
+    await post(`/api/scout/${sid}/mark-dock/save`);
+    s.markingDock = false;
+    if(btn){ btn.textContent = '📍 Mark dock here'; btn.classList.remove('on'); }
+  }
+}
+async function scoutReturnToDock(sid){
+  const s = SC[sid]; if(!s) return;
+  const name = (s.meta && s.meta.name) || sid;
+  if(!confirm(`Retrace "${name}" back to its marked dock?\n\n`
+    + `This is odometry-only - no camera-guided final approach the way the robot's own dock-seek `
+    + `has. Only do this on stable ground with a clear path back, and watch it.`)) return;
+  await post(`/api/scout/${sid}/return-to-dock`);
 }
 
 async function scoutSnapshot(sid){
@@ -3227,6 +3435,7 @@ def main() -> None:
     threading.Thread(target=mqtt_loop, daemon=True).start()
     threading.Thread(target=link_poller, daemon=True).start()
     threading.Thread(target=reachy_watcher, daemon=True).start()
+    threading.Thread(target=scout_battery_watcher, daemon=True).start()
     threading.Thread(target=_run_https, daemon=True).start()
     print(f"[feed] engine={active_engine()['id']} port={CFG.get('web_port', 8096)}", flush=True)
     uvicorn.run(app, host=CFG.get("web_host", "0.0.0.0"),

@@ -141,6 +141,9 @@ scout_ssh_key: "/home/orin/.ssh/scout_ed25519"
 # (hardcoded in _audio_ws_capture, not config - it is a fixed source name, not a per-robot value
 # the way scout_speaker_device is), not a raw ALSA device. See _audio_ws_capture's docstring.
 scout_speaker_device: "hw:0,0"
+# Below this and discharging, scout_battery_watcher fires the low-battery beacon (nav_cancel +
+# describe-in-place, saved as a Feed entry) once per discharge cycle. Does not drive the robot.
+scout_low_battery_pct: 15
 
 # Live camera preview for the Reachy Mini.
 #

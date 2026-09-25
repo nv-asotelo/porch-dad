@@ -377,31 +377,70 @@ On the tracked Scout (`first_floor`), `nav_path_save` failed outright with an em
 otherwise-identical `nav_path_start` + short drive + save sequence - not yet diagnosed; testing
 stopped immediately after the fall on the other robot, before root-causing it.
 
-**Proposed design, not yet built:**
+**Update, same session, after the fall:** `nav_path_save` is unreliable on `robot_room`'s Scout too,
+not just the tracked one - it worked exactly once (the run documented above), then failed on every
+subsequent attempt with the same empty `''` error, including: a fresh path name never used before
+(rules out a name collision with the earlier attempt), a real ~40 cm drive between start and save
+(rules out "too short a path"), and with `NavPathNode/enable_vio(1)` called first (rules out VIO
+being the missing precondition - the one other undocumented service in this area worth trying).
+Also found calling `nav_exit` crashes `NavPathNode` outright (`ConnectionError: connection closed
+mid-message` on the socket) - it does respawn (launch config has `respawn="true"` for every node),
+but calling it is not the safe "reset and retry" step it sounded like; avoid it. Root cause not
+found - `nav_path_node.cpp`'s own source was never fetched (only its `.srv` shapes), and there is
+no vendor to ask. **`nav_patrol` (replaying an already-saved path) worked cleanly** in the one run
+that got that far, so the retrace half of this is real; getting a path saved reliably enough to
+retrace is the open problem, not the retrace itself.
 
-1. **Low-battery beacon, porch-dad-side, not dependent on the vendor's own trigger.** The bridge
-   already tracks `battery_pct`/`battery_state` continuously. Watch for a threshold crossing (e.g.
-   15%, discharging), and on trigger: call `nav_cancel_backup` + `nav_cancel_path` first (cheap,
-   harmless even if nothing is running - covers the case where the native trigger turns out not to
-   be fully dead after all), **do not drive**, and instead use the camera in place: a snapshot (or
-   a small number of snapshots if a future session adds an in-place rotate step - deliberately not
-   proposing an autonomous rotate-in-place here given what just happened; that needs its own
-   supervised safety pass) sent through the existing Cosmos describe pipeline
-   (`/api/scout/{sid}/check` already does exactly this call shape) and surfaced as a porch-dad
-   alert, so "where did it die" is answerable without the robot moving at all.
-2. **Dock retrace, opt-in and manual, not automatic.** A "Mark dock here" porch-dad action
-   (`save_tmp_pic_for_start_path` + `nav_path_start`, driven by hand via the existing drive
-   controls, then `nav_path_save`) and a separate "Return to dock" action (`nav_patrol`) - kept as
-   two deliberate button presses, not something low battery triggers automatically, until the
-   overshoot/alignment problem above has an actual fix (e.g. stopping the patrol early and handing
-   off to `BackingUp`'s vision-guided approach for the last stretch, rather than trusting raw
-   odometry all the way to the stopping point).
-3. **Given the dock moves often:** re-teaching needs to be a single button press, not a procedure -
-   "Mark dock here" should overwrite the previous saved path for that robot, not accumulate stale
-   ones that could get replayed by name.
+**The vendor's own vision-guided approach (`/CoreNode/testBackup`) does not reliably trigger
+either**, tried live once the fallen robot was confirmed undamaged and safely repositioned on
+stable ground. This needed a new mechanism, `roller_eye_srv.publish_once` - every other function
+in that module is a service *call*; `testBackup` is a topic CoreNode already subscribes to
+(`alg_backing_up.cpp`'s constructor), so publishing to it means acting as a ROS *publisher*
+instead, which normally goes through the master's `registerPublisher`/`publisherUpdate` dance and
+needs an XML-RPC server we don't run. Skipped that entirely: since CoreNode is a known,
+already-subscribed listener, `publish_once` calls its `requestTopic` XML-RPC method directly (as
+a legitimate publisher would after the normal dance) and does the raw TCPROS publish by hand -
+worth the detour, it may be reusable for other test topics this robot exposes
+(`/CoreNode/testMoveByObj`, `/CoreNode/testMoveRoll`, `/CoreNode/alg_test`). The publish itself
+works (confirmed: no exception, correct handshake, message delivered), and `onTestBackup`'s source
+is unambiguous (`msg.data == 2` calls `doBackup()` directly, `== 4` calls `doDetect()` first) - but
+sending `4` then `2` (detect, then backup) with the dock genuinely in camera view produced zero
+motion over 40 s, twice. Most likely `canBackup()` (a gate inside `doBackup()`, source unread - see
+above) is silently rejecting the pose, or the detached thread `onTestBackup` spawns is dying before
+it moves anything; nothing here has visibility into either without the node's own logs, which this
+session had no channel to read live. Do not spend further session time on this trigger without a
+way to read CoreNode's own stdout/PLOG output during the attempt.
 
-None of this is wired into porch-dad's API/UI yet. Next session, before any of it goes live: get
-explicit confirmation the fallen Scout is undamaged, and do any further `nav_patrol` testing only
-on stable ground with a hand near the robot - the same standard already written above for the
-first drive command ever sent to this robot, which this session should have re-applied to the
-first *autonomous* one too.
+**What's actually built now, not just proposed:**
+
+1. **Low-battery beacon, porch-dad-side, not dependent on the vendor's own trigger.**
+   `scout_battery_watcher` polls `battery_pct`/`battery_state` every 15 s; on a threshold crossing
+   (`scout_low_battery_pct`, default 15, discharging), it calls `nav_cancel_backup` +
+   `nav_cancel_path` first (cheap, harmless even if nothing is running - covers the case where the
+   native trigger turns out not to be fully dead after all), **does not drive**, and instead
+   describes where the robot is in place via the same Cosmos pipeline `/api/scout/{sid}/check`
+   uses, saved as a Feed entry (camera = the scout's id, label `low_battery`) so "where did it die"
+   shows up in the normal Feed, grouped by day/week/month like everything else. Fires once per
+   discharge cycle, not once per poll.
+2. **Dock retrace, opt-in and manual, not automatic.** `POST /api/scout/{sid}/mark-dock/start`
+   (`saveTmpPicForStartPath` + `nav_path_start`, fixed path name `"dock"` per robot so re-marking
+   overwrites rather than accumulating stale ones - the dock moves often) → drive it by hand → `POST
+   .../mark-dock/save` (`nav_path_save`). `POST .../return-to-dock` cancels any native backup first
+   then calls `nav_patrol`. Two deliberate button presses in the Scout card ("📍 Mark dock here" /
+   "🏠 Return to dock", the second behind a `confirm()` warning it is odometry-only), never
+   automatic - the overshoot/alignment problem above has no real fix yet (e.g. stopping the patrol
+   early and handing off to `BackingUp`'s vision-guided approach for the last stretch, rather than
+   trusting raw odometry all the way to the stopping point).
+3. **`nav_get_status`** exposed read-only at `GET /api/scout/{sid}/nav-status`, no token - a status
+   poll should work before control is otherwise set up.
+
+**Physical docking, from the user, confirmed against real hardware:** the charging contacts are
+rear-mounted - if the camera can see the dock, the robot is facing the wrong way to charge. The
+correct approach is turn ~180°, then back up *blind* (camera cannot see the dock during the actual
+approach) until contact. This matches `BackingUp`'s own vision-then-blind-backup shape exactly, and
+explains why straight-forward nudges toward a visible dock plateau a few cm short without ever
+reading `charging` - forward approach can get close, but the contacts are on the wrong end.
+ToF is also unreliable at this range in practice (read 0.045 m and 0.45 m from the same physical
+position seconds apart during a live attempt) - do not trust it alone to judge "made contact" at
+close range; a manual nudge remains the most reliable close-in step until the vision-guided
+approach above actually works.
