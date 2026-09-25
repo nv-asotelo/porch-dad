@@ -1050,6 +1050,10 @@ def api_status():
         "services": {k: service_status(k) for k in SERVICES},
         "cameras": camera_power(),
         "presence": load_presence_mode(),
+        # null when tls_cert/tls_key aren't configured, so the page knows not to offer a link
+        # that would just 404/refuse - see _run_https.
+        "https_port": (int(CFG.get("web_https_port", 8097))
+                       if CFG.get("tls_cert") and CFG.get("tls_key") else None),
         "memory": {"free_mb": free_mb(), "used_pct": round(_mem_pct(), 1),
                    "min_free_to_start_mb": MIN_FREE_MB},
         # Same-origin UI needs it to call the guarded routes. This stops drive-by CSRF (a
@@ -2081,6 +2085,15 @@ button.mini{padding:3px 9px;font-size:11.5px}
     <button class="mini" onclick="copySelf()">copy</button>
     <span class="hint">Add to Home Screen on iOS to run it as an app.</span>
   </div>
+  <!-- Only rendered when on plain http: mic capture (Scout Talk) needs a secure context, which
+       getUserMedia refuses outright otherwise - Safari has no dev-flag workaround for that the
+       way Chrome does, so switching origin is the only fix, not a code change. Self-signed, so
+       the browser warns once per device on first visit; accept it same as Live Vision's. -->
+  <div class="selfurl" id="httpsHint" style="display:none">
+    <span>🎙 Talk needs HTTPS</span>
+    <a id="httpsUrl" href="#" target="_blank">…</a>
+    <span class="hint">Self-signed - your browser will warn once, then remember it.</span>
+  </div>
   <div class="row" id="links"></div>
   <p class="hint">Every service with its port, polled every 20&nbsp;s — links stay clickable even
      when a service is down (🟢 responding, ⚪ not responding). Dashed entries are not browsable
@@ -2994,6 +3007,12 @@ async function load(){
   document.getElementById('mem').textContent =
     `${st.memory.free_mb} MB free · ${st.memory.used_pct}% used`;
 
+  if(location.protocol !== 'https:' && st.https_port){
+    const u = `https://${location.hostname}:${st.https_port}/`;
+    const hint = document.getElementById('httpsHint'), a = document.getElementById('httpsUrl');
+    hint.style.display = 'flex'; a.textContent = u; a.href = u;
+  }
+
   const pm = st.presence?.mode || 'away';
   document.getElementById('presence').innerHTML =
     `<button class="mini ${pm==='home'?'on':''}" onclick="post('/api/mode/home')">🏠 Home</button>
@@ -3186,11 +3205,29 @@ buildScoutCards().then(() => { refreshScouts(); setInterval(refreshScouts, 3000)
 </script></body></html>"""
 
 
+def _run_https() -> None:
+    """Second listener, same app, over TLS - mic capture (Scout Talk) needs a secure context,
+    which plain http on a LAN IP is not. Optional: does nothing if tls_cert/tls_key are unset or
+    missing, so a box without a cert configured just keeps running http-only as before.
+    """
+    cert, key = CFG.get("tls_cert"), CFG.get("tls_key")
+    if not (cert and key and os.path.isfile(cert) and os.path.isfile(key)):
+        print("[feed] https listener skipped: tls_cert/tls_key not configured or missing "
+              "(Scout Talk will only work via localhost or an ssh -L tunnel)", flush=True)
+        return
+    port = int(CFG.get("web_https_port", 8097))
+    print(f"[feed] https on port {port} (self-signed - your browser will warn once)", flush=True)
+    uvicorn.run(app, host=CFG.get("web_host", "0.0.0.0"), port=port,
+                ssl_certfile=cert, ssl_keyfile=key,
+                log_level=str(CFG.get("web_log_level", "warning")), access_log=True)
+
+
 def main() -> None:
     init_db()
     threading.Thread(target=mqtt_loop, daemon=True).start()
     threading.Thread(target=link_poller, daemon=True).start()
     threading.Thread(target=reachy_watcher, daemon=True).start()
+    threading.Thread(target=_run_https, daemon=True).start()
     print(f"[feed] engine={active_engine()['id']} port={CFG.get('web_port', 8096)}", flush=True)
     uvicorn.run(app, host=CFG.get("web_host", "0.0.0.0"),
                 port=int(CFG.get("web_port", 8096)),

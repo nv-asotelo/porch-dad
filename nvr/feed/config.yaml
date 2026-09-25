@@ -19,6 +19,14 @@ snapshot_keep_mb: 512
 web_host: "0.0.0.0"
 web_port: 8096
 public_url: "http://<jetson-ip>:8096"
+# Mic capture (Scout Talk) needs a secure context - getUserMedia is blocked outright on plain
+# http, and unlike Chrome, Safari has no dev flag to whitelist a LAN origin, so an ssh -L tunnel
+# was the only workaround. Reuses the same self-signed cert nvr/ui's enable_lan_ui.sh already
+# generates for Live Vision (same box, same LAN IP - a cert is valid by hostname, not by which
+# service uses it), rather than generating a second one. Leave tls_cert/tls_key unset to disable.
+web_https_port: 8097
+tls_cert: "/home/orin/nvr/ui/deployment/tls/orin.crt"
+tls_key: "/home/orin/nvr/ui/deployment/tls/orin.key"
 
 # Frigate writes the GenAI description asynchronously after the event ends.
 description_wait_seconds: 40
