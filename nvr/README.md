@@ -28,6 +28,18 @@ Reachy Mini ─┘        │                           │
 | `systemd/cosmos3-edge-shim.service`, `nvr/systemd/cosmos-edge-ui.service` | The two units Live Vision needs. |
 | `nvr/systemd/dropins/` | `vm.swappiness=10` and `MemorySwapMax=0` for the shim - the model is ~3.8 GB resident and must not get paged out (see deploy/04 on main for the swap-thrashing writeup this fixes). |
 
+## Running the camera/mic bridge (optional - only for "switch to Reachy Mini" video)
+
+```
+python3 -m venv reachy_env && reachy_env/bin/pip install -r nvr/reachy/requirements.txt
+reachy_env/bin/python3 nvr/reachy/reachy_mjpeg_bridge.py \
+  --robot-host <reachy-ip> --listen 127.0.0.1 --listen-port 8099 --fps 5
+```
+
+Installs cleanly from prebuilt aarch64 wheels on JetPack/Ubuntu 24.04 + Python 3.12 - no
+compilation needed, confirmed on the clone below. `requirements.txt`'s own header explains the
+pinned `aiortc==1.10.1` (a newer aiortc has the same RTX-decoding bug this version works around).
+
 ## Running serve_ui.py
 
 ```
@@ -66,12 +78,18 @@ Verified against the real robot over the LAN:
 - `GET /api/reachy/apps` - the robot's 12 installed onboard apps.
 - `POST /api/reachy/speak` - real Piper synthesis, uploaded and played through the robot's own
   speaker (`spoke in 1.76s (synth 0.77s, play 0.99s)`).
+- The camera/mic bridge (`reachy_mjpeg_bridge.py`, its own `reachy_env` venv - `pip install -r
+  nvr/reachy/requirements.txt` installed cleanly from prebuilt aarch64 wheels, no compilation
+  needed), run as `reachy-mjpeg-bridge.service`: `/healthz` reports `"state": "live"` with real
+  video (1280x720 JPEGs, confirmed by eye - a Charmander figurine on a desk, not noise) and real
+  audio frames flowing, and a still fetched **through Live Vision's own relay**
+  (`/reachy/still.jpg?token=...`, the same path the browser UI uses) came back correctly - the
+  full "switch to Reachy Mini" video path is confirmed working end to end, not just the bridge in
+  isolation. Unlike main's unit, this one drops `--push-url` (no Live VLM WebUI push target on
+  this box) and `--recover-ssh`/`--recover-key` (no recovery key provisioned here).
 - All 26 of `nvr/ui/tests/test_reachy_proxy.py` still pass unmodified.
 
 **Not yet deployed/verified there:**
-- The Reachy camera/mic bridge (`reachy_mjpeg_bridge.py` + its `reachy_env`, aiortc/av/aiohttp) -
-  needed for "switch to Reachy Mini" as a video source; motor/app/TTS control does not need it and
-  is confirmed working without it.
 - Engine switching against that box's actual engine layout - its existing engines use a different
   selection mechanism (`deployment/selected.env` sourced by `run_selected_backend.sh`) than this
   branch's `EngineSwitcher` (a stable symlink `ln -sfn` swap, matching main's porch-feed
