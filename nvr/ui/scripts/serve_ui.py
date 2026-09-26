@@ -261,6 +261,101 @@ def validate_request(payload):
         raise ValueError("Invalid or oversized JPEG image.")
 
 
+# --------------------------------------------------------------------------- service inventory
+# The "which services are up, how much RAM and disk do they use, SD card or NVMe" panel. Every
+# service here besides this UI process itself and the Piper subprocess (which this process starts
+# and already holds a handle to) is a *separate* process this UI does not manage - found by
+# scanning /proc for a matching command line, the only channel available without adding an agent
+# or a dependency on each service exposing its own metrics endpoint.
+
+def read_proc_rss_mb(pid):
+    """Resident memory for one PID, or None if it has already exited or /proc denies us."""
+    try:
+        with open(f"/proc/{pid}/status", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024, 1)
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def find_pid_by_cmdline(substring):
+    """First PID whose command line contains substring, or None. O(processes), fine at UI poll
+    rates (every few seconds) on a single-board machine with a few dozen processes."""
+    try:
+        proc_root = Path("/proc")
+        for entry in proc_root.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                cmdline = entry.joinpath("cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+            except OSError:
+                continue
+            if substring in cmdline:
+                return int(entry.name)
+    except OSError:
+        pass
+    return None
+
+
+def disk_for_path(path):
+    """'SD card', 'NVMe', or the raw block device name, for whichever filesystem contains path -
+    the longest-prefix-matching entry in /proc/mounts, same algorithm findmnt uses."""
+    try:
+        target = os.path.realpath(str(path))
+    except OSError:
+        return "unknown"
+    best_mount, best_device = "", ""
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                device, mount_point = parts[0], parts[1].replace("\\040", " ")
+                if (target == mount_point or target.startswith(mount_point.rstrip("/") + "/")
+                        or mount_point == "/") and len(mount_point) >= len(best_mount):
+                    best_mount, best_device = mount_point, device
+    except OSError:
+        return "unknown"
+    if "mmcblk" in best_device:
+        return "SD card"
+    if "nvme" in best_device:
+        return "NVMe"
+    return best_device.rsplit("/", 1)[-1] or "unknown"
+
+
+_dir_size_cache = {}
+
+
+def dir_size_mb(path):
+    """Total on-disk size under path, in MB. Cached per path: these are static build artifacts
+    (engine files, a voice model) that do not change size during a UI process's lifetime, and a
+    multi-GB engine directory is too slow to re-walk on every poll."""
+    key = str(path)
+    if key in _dir_size_cache:
+        return _dir_size_cache[key]
+    total = 0
+    try:
+        p = Path(path)
+        if p.is_file():
+            total = p.stat().st_size
+        else:
+            for entry in p.rglob("*"):
+                try:
+                    if entry.is_file():
+                        total += entry.stat().st_size
+                except OSError:
+                    continue
+    except OSError:
+        _dir_size_cache[key] = None
+        return None
+    result = round(total / (1024 * 1024), 1)
+    _dir_size_cache[key] = result
+    return result
+
+
 def parse_host(host_header):
     """(host, IP address or None) named by a Host header, which may carry a port."""
     if not isinstance(host_header, str) or not host_header or any(
@@ -499,11 +594,36 @@ class Server(ThreadingHTTPServer):
         self.https_port = None
         # Names besides IP literals and localhost that /reachy/ and /api/access answer to.
         self.allowed_hosts = frozenset()
+        # Populated in main(): {name: {"cmdline_match": str, "path": str}} for services this
+        # process does not itself manage (the shim, the Reachy bridge) - see --services-config.
+        self.services_config = {}
 
     def server_close(self):
         if getattr(self, "owns_telemetry", False):
             self.telemetry.close()
         super().server_close()
+
+    def service_list(self):
+        """Live Vision itself and the Piper subprocess are known directly (this process started
+        them); everything else in --services-config is a separate process, found by scanning
+        /proc for a matching command line - see find_pid_by_cmdline."""
+        out = [{"name": "Live Vision UI", "running": True,
+               "memory_mb": read_proc_rss_mb(os.getpid()),
+               "storage_mb": dir_size_mb(Path(__file__).resolve().parent),
+               "disk": disk_for_path(Path(__file__).resolve())}]
+        if self.piper:
+            pid = self.piper.proc.pid if self.piper.proc and self.piper.proc.poll() is None else None
+            out.append({"name": "TTS (Piper)", "running": pid is not None,
+                       "memory_mb": read_proc_rss_mb(pid) if pid else None,
+                       "storage_mb": dir_size_mb(self.piper.model.parent),
+                       "disk": disk_for_path(self.piper.model)})
+        for name, spec in self.services_config.items():
+            pid = find_pid_by_cmdline(spec["cmdline_match"])
+            out.append({"name": name, "running": pid is not None,
+                       "memory_mb": read_proc_rss_mb(pid) if pid else None,
+                       "storage_mb": dir_size_mb(spec["path"]) if spec.get("path") else None,
+                       "disk": disk_for_path(spec["path"]) if spec.get("path") else "unknown"})
+        return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -637,6 +757,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 body = json.dumps({"configured": True, "active": switcher.active(),
                                    "engines": [{"id": eid, **e} for eid, e in switcher.engines.items()]}).encode()
+            self.send_headers(200, "application/json", len(body))
+            self.wfile.write(body)
+            return
+        if route == "/api/services":
+            body = json.dumps({"services": self.server.service_list()}).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
@@ -1128,6 +1253,11 @@ def main():
     parser.add_argument("--shim-service", default="cosmos3-edge-shim",
                         help="systemd unit restarted after an engine swap - needs passwordless "
                              "`sudo systemctl restart` on this unit. Default matches main's shim.")
+    parser.add_argument("--services-config", type=Path, default=None,
+                        help='JSON file: {"Display Name": {"cmdline_match": "substring to find '
+                             'in /proc/*/cmdline", "path": "/dir/to/report/size/and/disk/for"}, '
+                             '...} - for /api/services, services this process does not itself '
+                             "manage (Live Vision itself and Piper are always included).")
     args = parser.parse_args()
     try:
         allowed_hosts = frozenset(allowed_host_name(name) for name in args.allowed_host)
@@ -1158,6 +1288,15 @@ def main():
                 raise ValueError("expected {id: {name, path, ...}}")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             parser.error(f"--engines-config: {exc}")
+    services_config = {}
+    if args.services_config:
+        try:
+            services_config = json.loads(args.services_config.read_text())
+            if not isinstance(services_config, dict) or not all(
+                    isinstance(s, dict) and "cmdline_match" in s for s in services_config.values()):
+                raise ValueError("expected {name: {cmdline_match, path?}}")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"--services-config: {exc}")
     if any(not 1 <= port <= 65535 for port in
            (args.port, args.backend_port, *([args.https_port] if args.https_port is not None else []))):
         parser.error("Ports must be from 1 to 65535.")
@@ -1190,6 +1329,7 @@ def main():
         server.reachy_client = reachy_client
         server.piper = piper
         server.engine_switcher = engine_switcher
+        server.services_config = services_config
         server.https_port = args.https_port
         server.allowed_hosts = allowed_hosts
         if primary_tls:
@@ -1202,6 +1342,7 @@ def main():
             secure.reachy_client = reachy_client
             secure.piper = piper
             secure.engine_switcher = engine_switcher
+            secure.services_config = services_config
             secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
             worker = threading.Thread(target=secure.serve_forever, name="https-ui", daemon=True)

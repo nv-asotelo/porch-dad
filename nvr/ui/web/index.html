@@ -26,7 +26,7 @@
         <div class="preview"><video id="video" autoplay playsinline muted hidden></video><img id="uploadedImage" alt="Selected image for analysis" hidden><img id="reachyImage" alt="Reachy Mini camera" hidden><div id="placeholder"><span class="reticle">＋</span><p>Bring the world into view.</p><small>Start your camera, use Reachy Mini, or choose an image.</small></div><span id="liveIndicator" hidden>● LIVE</span></div>
         <div id="captionBelow" class="caption-dock"><div id="answer" class="answer" aria-live="polite" tabindex="0">Start your camera or choose an image to see captions.</div></div>
       </div>
-      <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="reachyButton" aria-describedby="reachyHelp">Use Reachy Mini</button><button id="listenButton" aria-pressed="false" hidden>Listen: Off</button><button id="stopButton" disabled>Stop</button><button id="analyzeButton" disabled>Run inference</button><button id="liveToggleButton" aria-pressed="true" aria-describedby="liveToggleHelp">Live streaming: On</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+      <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="flipCameraButton" hidden title="Switch between the outward-facing and self-facing camera">⟲ Flip camera</button><button id="reachyButton" aria-describedby="reachyHelp">Use Reachy Mini</button><button id="listenButton" aria-pressed="false" hidden>Listen: Off</button><button id="stopButton" disabled>Stop</button><button id="analyzeButton" disabled>Run inference</button><button id="liveToggleButton" aria-pressed="true" aria-describedby="liveToggleHelp">Live streaming: On</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
       <audio id="reachyAudio" preload="none" hidden></audio>
       <p id="liveToggleHelp" class="hint">Turn live streaming off to keep the camera preview and run one inference at a time. Run inference also works with an uploaded image.</p>
       <p id="cameraHelp" class="hint">Camera stays in your browser. Only sampled frames are sent to the local backend.</p>
@@ -79,6 +79,10 @@
           <div class="resource-stat resource-memory"><span class="resource-label">VRAM / shared RAM</span><div id="memoryUsage" class="resource-value memory-value"><strong id="memoryAmount">—</strong> <span id="memoryPercent">Unavailable</span></div><div class="resource-meter" aria-hidden="true"><span id="memoryMeter"></span></div><canvas id="memoryHistory" class="resource-history" role="img" aria-label="System shared RAM usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">System shared RAM history, including the OS and applications. Missing readings appear as gaps.</canvas><small id="memoryHistoryScale" class="resource-history-scale">No samples</small></div>
         </div>
         <p class="resource-note"><span id="resourceHistoryDescription">Last 60 seconds. Each chart auto-scales from 0% to its displayed maximum. Gaps mark unavailable readings.</span> Orin CPU and GPU share RAM. Memory includes the OS and applications, not a dedicated GPU allocation.</p>
+        <div class="services-block">
+          <h3 class="services-heading">Services</h3>
+          <ul id="servicesList" class="services-list"><li class="hint">Checking…</li></ul>
+        </div>
       </section>
     </div>
     <section class="settings panel" aria-label="Inference settings">
@@ -98,9 +102,8 @@
         <p id="advancedError" class="advanced-error" role="alert" hidden></p>
         <dl class="engine-settings"><div><dt>Fixed device clocks</dt><dd id="staticClocksValue">Checking engine…</dd><small><code>COSMOS_STATIC_CLOCKS</code> · load default: disabled (0)</small></div><div><dt>Vision encoder cache</dt><dd id="encoderCacheValue">Checking engine…</dd><small><code>COSMOS_ENCODER_CACHE_BYTES</code> · load default: disabled (0 bytes)</small></div></dl>
         <p id="runtimeStatus" class="hint">Reading active engine settings. These two settings are applied by the server at engine load; changing them requires a backend restart.</p>
-        <div class="setting-row" id="engineSwitchRow" hidden>
-          <label for="engineSelect">TensorRT engine<select id="engineSelect"></select></label>
-          <button id="engineSwitchButton" type="button">Switch engine</button>
+        <div id="engineSwitchRow" hidden>
+          <span class="setting-help">Model<div id="modelButtons" class="model-buttons"></div></span>
           <small id="engineSwitchStatus" class="setting-help">Currently: checking…</small>
         </div>
         <p id="engineSwitchHint" class="hint" hidden>Switching restarts the local backend and takes up to about two minutes; the camera stays connected but inference is unavailable until the new engine loads.</p>

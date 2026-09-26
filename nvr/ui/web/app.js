@@ -578,6 +578,9 @@ if (typeof document !== "undefined") {
     $("listenButton").hidden = !reachyActive();
     $("listenButton").setAttribute("aria-pressed", String(reachy.listening));
     $("listenButton").textContent = `Listen: ${reachy.listening ? "On" : "Off"}`;
+    // Flip camera only makes sense for the device's own webcam - Reachy's picture comes from the
+    // robot regardless of which way a phone in your hand is facing.
+    $("flipCameraButton").hidden = !(state.running && state.source === "camera");
   }
   async function checkBackend() {
     if (state.checking) return;
@@ -1027,16 +1030,22 @@ if (typeof document !== "undefined") {
   }
   $("liveVlmPreset").addEventListener("change", () => { if ($("liveVlmPreset").checked) applyPreset("live-vlm"); });
   $("lightweightPreset").addEventListener("change", () => { if ($("lightweightPreset").checked) applyPreset("lightweight"); });
-  $("startButton").addEventListener("click", async () => {
+  // Outward-facing by default (environment): matches what this UI is normally pointed at (a
+  // scene, not the person holding the phone). "ideal" not "exact": a laptop with one camera (no
+  // facingMode at all) still gets a stream instead of a hard getUserMedia failure.
+  let facingMode = "environment";
+  async function startCamera() {
     error(); reachyRequested = false;
     if (!navigator.mediaDevices?.getUserMedia) { error("Camera access needs HTTPS or http://localhost. You can choose an image instead."); return; }
     if (state.preset === "live-vlm" && !$("video").requestVideoFrameCallback) {
       error("This browser cannot count video frames. Use a current browser or choose Lightweight."); return;
     }
+    releaseCamera();  // drop any existing stream first - flipping cameras while one is open can
+                       // otherwise ask a phone to hold two camera handles at once and fail.
     state.running = true; state.source = "camera"; const generation = ++state.cameraGeneration; controls();
     try {
       const media = await navigator.mediaDevices.getUserMedia({audio: false,
-        video: CAPTURE_PRESETS[state.preset].cameraConstraints});
+        video: {...CAPTURE_PRESETS[state.preset].cameraConstraints, facingMode: {ideal: facingMode}}});
       if (!state.running || generation !== state.cameraGeneration) { media.getTracks().forEach(track => track.stop()); return; }
       state.media = media; $("video").srcObject = media; await $("video").play();
       $("video").hidden = false; $("uploadedImage").hidden = true; $("placeholder").hidden = true;
@@ -1049,6 +1058,11 @@ if (typeof document !== "undefined") {
       controls();
       if (state.preset === "live-vlm") frameCameraLoop(generation); else cameraLoop(generation);
     } catch (err) { if (generation === state.cameraGeneration) { stop(); error(`Camera unavailable: ${err.message}. You can choose an image instead.`); } }
+  }
+  $("startButton").addEventListener("click", startCamera);
+  $("flipCameraButton").addEventListener("click", () => {
+    facingMode = facingMode === "environment" ? "user" : "environment";
+    if (state.running && state.source === "camera") startCamera();
   });
   $("reachyButton").addEventListener("click", () => { if (!state.running && !state.busy) startReachy(); });
   $("listenButton").addEventListener("click", () => {
@@ -1180,7 +1194,9 @@ if (typeof document !== "undefined") {
       const response = await fetch("/api/reachy/state", {cache: "no-store"});
       const st = await response.json();
       const panel = $("reachyControls");
-      if (!st.enabled) { panel.hidden = true; return; }
+      // Only while Reachy is the active feed - these move the same robot the video is coming
+      // from, and showing them while driving the webcam invites pressing them by mistake.
+      if (!st.enabled || !reachyActive()) { panel.hidden = true; return; }
       panel.hidden = false;
       $("reachyControlStatus").textContent = st.reachable === false
         ? "Robot daemon unreachable" : `Motors: ${st.motor_mode || "unknown"}`;
@@ -1209,8 +1225,26 @@ if (typeof document !== "undefined") {
 
   // Engine switching: which TensorRT-Edge-LLM build the local shim serves (see EngineSwitcher in
   // serve_ui.py). Hidden entirely when --engine-link/--engines-config were not passed, so a
-  // deployment without switching configured shows nothing rather than a dead control.
+  // deployment without switching configured shows nothing rather than a dead control. One button
+  // per model rather than a dropdown, so post-training placeholders (brockone/brocktwo - not
+  // wired to any backend yet) can sit alongside the real ones, visibly greyed out rather than
+  // absent, without inventing fake /api/engines entries for models that do not exist yet.
+  const PLACEHOLDER_MODELS = [
+    {id: "brockone", name: "brockone", note: "Post-training - size/RAM footprint not final"},
+    {id: "brocktwo", name: "brocktwo", note: "Post-training - size/RAM footprint not final"},
+  ];
   let engineSwitching = false;
+  async function switchToEngine(id) {
+    engineSwitching = true;
+    $("engineSwitchStatus").textContent = "Switching…";
+    for (const btn of $("modelButtons").querySelectorAll("button")) btn.disabled = true;
+    try {
+      await reachyPost(`/api/engines/${encodeURIComponent(id)}`, undefined);
+    } catch (_) { /* surfaced already via error() */ } finally {
+      engineSwitching = false;
+      refreshEngines();
+    }
+  }
   async function refreshEngines() {
     if (engineSwitching) return;
     try {
@@ -1219,29 +1253,38 @@ if (typeof document !== "undefined") {
       const row = $("engineSwitchRow"), hint = $("engineSwitchHint");
       if (!data.configured) { row.hidden = true; hint.hidden = true; return; }
       row.hidden = false; hint.hidden = false;
-      const select = $("engineSelect");
-      if (document.activeElement !== select) {
-        select.innerHTML = data.engines.map(e =>
-          `<option value="${e.id}"${e.id === data.active.id ? " selected" : ""}>${e.name}${e.profile ? " · " + e.profile : ""}</option>`).join("");
+      const real = data.engines.map(e => {
+        const active = e.id === data.active.id;
+        const title = e.profile ? `${e.name} · ${e.profile}` : e.name;
+        return `<button type="button" data-model-id="${e.id}" class="${active ? "active" : ""}" title="${title}"${active ? " disabled" : ""}>${e.name}</button>`;
+      });
+      const placeholders = PLACEHOLDER_MODELS.map(m =>
+        `<button type="button" disabled title="${m.note}">${m.name}</button>`);
+      $("modelButtons").innerHTML = [...real, ...placeholders].join("");
+      for (const btn of $("modelButtons").querySelectorAll("button[data-model-id]")) {
+        btn.addEventListener("click", () => switchToEngine(btn.dataset.modelId));
       }
       $("engineSwitchStatus").textContent = `Currently: ${data.active.name}${data.active.id === "unknown" ? " (unrecognized build)" : ""}`;
     } catch (_) { /* keep last known state on a transient poll failure */ }
   }
-  $("engineSwitchButton").addEventListener("click", async () => {
-    const id = $("engineSelect").value;
-    if (!id) return;
-    engineSwitching = true;
-    const button = $("engineSwitchButton");
-    button.disabled = true; button.textContent = "Switching (up to ~2 min)…";
-    $("engineSwitchStatus").textContent = "Switching…";
-    try {
-      await reachyPost(`/api/engines/${encodeURIComponent(id)}`, undefined);
-    } catch (_) { /* surfaced already via error() */ } finally {
-      button.disabled = false; button.textContent = "Switch engine";
-      engineSwitching = false;
-      refreshEngines();
-    }
-  });
   refreshEngines();
   setInterval(refreshEngines, 5000);
+
+  // Services panel: what's running, its RAM and on-disk size, and SD card vs NVMe. Polled
+  // independently of engine switching - a service can be up or down regardless of which model is
+  // currently active.
+  async function refreshServices() {
+    try {
+      const response = await fetch("/api/services", {cache: "no-store"});
+      const data = await response.json();
+      const fmtMb = mb => mb === null || mb === undefined ? "—" : mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
+      $("servicesList").innerHTML = (data.services || []).map(s => `
+        <li class="service-row ${s.running ? "running" : "stopped"}">
+          <span class="service-name"><span class="service-dot"></span>${s.name}</span>
+          <span class="service-detail">${s.running ? "running" : "stopped"} · RAM ${fmtMb(s.memory_mb)} · disk ${fmtMb(s.storage_mb)} (${s.disk})</span>
+        </li>`).join("") || `<li class="hint">No services configured.</li>`;
+    } catch (_) { /* keep last known list on a transient poll failure */ }
+  }
+  refreshServices();
+  setInterval(refreshServices, 5000);
 }
