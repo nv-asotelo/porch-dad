@@ -95,8 +95,42 @@ Verified against the real robot over the LAN:
   branch's `EngineSwitcher` (a stable symlink `ln -sfn` swap, matching main's porch-feed
   convention). `--engine-link`/`--engines-config` were left unset for this smoke test; the
   mechanism itself was verified separately against fake local engine directories.
-- The "Slow" (v3) engine itself: **blocked**. The `nvidia/Cosmos3-Edge` checkpoint cached on the
-  build workstation is `Cosmos3OmniPipeline` (video/image diffusion generation), not the
-  reasoning/captioning causal-LM the shim actually serves - same repo name, wrong variant, and the
-  repo has only one branch (`main`) with no tag preserving an older layout. Needs either the
-  already-built engine from main's original SD card, or the correct source checkpoint identified.
+- The "Slow" (v3) engine itself: **progressed significantly, not yet complete.**
+
+  **The earlier "wrong checkpoint" conclusion was wrong - my own path error, now corrected.**
+  `nvidia/Cosmos3-Edge` is a Mixture-of-Transformers Omni model (per its own model card): one
+  `transformer/` checkpoint with two complementary towers, an autoregressive tower for text and a
+  diffusion tower for image/video/action, selected at export time by `--task {policy,reasoning}`.
+  Pointing `--src` at the snapshot root (rather than `transformer/` specifically) made the
+  quantizer find zero flat `.safetensors` files and silently no-op; the config fields that looked
+  diffusion-only (`action_dim`, `latent_channel`) belong to the *other* tower in the same Omni
+  checkpoint, not evidence this was the wrong model. A separate research session's own transcripts
+  (`~/cosmos3-edge-orin-optimization` on the build workstation) independently confirm the same
+  revision and the same `transformer/*` subfolder as correct.
+
+  Re-run against `transformer/`, quantization reproduced deploy/04's documented numbers on main
+  **exactly**: 169 linears, 11.06% mean relative weight error. ONNX export
+  (`tensorrt-edgellm-export --task reasoning --skip-visual`) also succeeded (needed one fix: the
+  quantizer copies the source's index filename through unchanged, and this checkpoint's is
+  `diffusion_pytorch_model.safetensors.index.json`, not `model.safetensors.index.json`, which the
+  exporter's loader requires by name - renamed, then added the `.weight_scale` index entries the
+  quantizer would have added automatically had it found the right name).
+
+  **Blocked at the final step**: `llm_build --onnxDir ... --engineDir ... --maxBatchSize 1
+  --maxKVCacheCapacity 1024` fails identically regardless of KV capacity (1024 or 2048 both hit
+  it): `Error Code 9: Internal Error (n0_3: could not find any supported formats consistent with
+  input/output data types)`. `n0_3` is an ordinary `Int4GroupwiseGemmPluginV2` node (layer 0's
+  `to_k`/`to_v`, shapes match the quantizer's own log exactly) - nothing architecturally unusual,
+  so this reads as a format/dtype expectation mismatch between the ONNX my locally-installed
+  `tensorrt_edgellm` (pip, version 0.10.1) exports and what this box's compiled plugin library
+  (`libNvInfer_edgellm_plugin.so`, built from the pinned `e8b2952` git checkout, same nominal
+  0.10.1) accepts - despite matching version numbers, a pip package and a git checkout at "the
+  same" version can still differ. Tried and ruled out: KV capacity is not the cause (both values
+  fail the same way); the experimental no-ONNX direct builder (`tensorrt-edgellm-build`) has no
+  registered components at all for `cosmos3_edge` yet, a dead end, not a workaround.
+
+  `llm_build` and `visual_build` (missing from the clone entirely - only their CMake targets
+  existed) were compiled there for this attempt and are now available for the next one.
+
+  Artifacts kept on the clone for whoever picks this up: quantized checkpoint at
+  `/home/jetson/porch-dad-demo/ckpt/`, ONNX at `/home/jetson/porch-dad-demo/engines/v3-onnx/`.
