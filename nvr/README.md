@@ -89,48 +89,89 @@ Verified against the real robot over the LAN:
   this box) and `--recover-ssh`/`--recover-key` (no recovery key provisioned here).
 - All 26 of `nvr/ui/tests/test_reachy_proxy.py` still pass unmodified.
 
-**Not yet deployed/verified there:**
-- Engine switching against that box's actual engine layout - its existing engines use a different
-  selection mechanism (`deployment/selected.env` sourced by `run_selected_backend.sh`) than this
-  branch's `EngineSwitcher` (a stable symlink `ln -sfn` swap, matching main's porch-feed
-  convention). `--engine-link`/`--engines-config` were left unset for this smoke test; the
-  mechanism itself was verified separately against fake local engine directories.
-- The "Slow" (v3) engine itself: **progressed significantly, not yet complete.**
+- **The "Slow" (v3) engine: built, deployed, and serving real captions.** See the full build
+  story below - this section only covers what's running now.
+  - `GET /api/engines` (through Live Vision's own proxy) reports `v3`/"Slow" as `active`.
+  - `POST /v1/chat/completions` against the real deployed shim, with a real camera frame, returned
+    `"A Pokemon toy is sitting next to a laptop on a desk."` - accurate (it's a Charmander figurine
+    on a desk next to a laptop) - in the standard OpenAI response shape, `usage` block included.
+  - Engine switching's `EngineSwitcher` mechanism is live and correctly wired to this box's actual
+    layout (`--engine-link /home/jetson/porch-dad-demo/engine-link`, `--engines-config
+    /home/jetson/porch-dad-demo/engines.json`, `--shim-service porch-dad-shim-v3`) - not just
+    verified against fake directories anymore.
+  - All four relevant services active together with 3.3 GB still available: `cosmos-edge-ui`
+    (the box's own, untouched), `porch-dad-demo-ui` (this branch's Live Vision), `porch-dad-
+    shim-v3` (serves the v3 engine), `reachy-mjpeg-bridge`.
 
-  **The earlier "wrong checkpoint" conclusion was wrong - my own path error, now corrected.**
-  `nvidia/Cosmos3-Edge` is a Mixture-of-Transformers Omni model (per its own model card): one
-  `transformer/` checkpoint with two complementary towers, an autoregressive tower for text and a
-  diffusion tower for image/video/action, selected at export time by `--task {policy,reasoning}`.
-  Pointing `--src` at the snapshot root (rather than `transformer/` specifically) made the
-  quantizer find zero flat `.safetensors` files and silently no-op; the config fields that looked
-  diffusion-only (`action_dim`, `latent_channel`) belong to the *other* tower in the same Omni
-  checkpoint, not evidence this was the wrong model. A separate research session's own transcripts
-  (`~/cosmos3-edge-orin-optimization` on the build workstation) independently confirm the same
-  revision and the same `transformer/*` subfolder as correct.
+**One deliberate, documented tradeoff**: `cosmos-edge-backend.service` (the box's own default MLP
+backend) is stopped and disabled, because its ~6.6 GB resident footprint and the v3 engine's
+footprint cannot both fit in 8 GB - confirmed by two OOM kills hitting it directly while building
+and testing v3 alongside it. This is not a bug to fix later; it is the actual point of choosing
+the smallest-footprint engine; a board this size runs one VLM backend at a time. `cosmos-edge-ui`
+(the box's own webUI on :8090) still loads but its inference calls will fail until that service is
+restarted - reversible with `systemctl enable --now cosmos-edge-backend` (and stopping
+`porch-dad-shim-v3` first, for the same memory reason in reverse).
 
-  Re-run against `transformer/`, quantization reproduced deploy/04's documented numbers on main
-  **exactly**: 169 linears, 11.06% mean relative weight error. ONNX export
-  (`tensorrt-edgellm-export --task reasoning --skip-visual`) also succeeded (needed one fix: the
-  quantizer copies the source's index filename through unchanged, and this checkpoint's is
-  `diffusion_pytorch_model.safetensors.index.json`, not `model.safetensors.index.json`, which the
-  exporter's loader requires by name - renamed, then added the `.weight_scale` index entries the
-  quantizer would have added automatically had it found the right name).
+## How the v3 engine was actually built (for reproducing this, or building v1/v2 the same way)
 
-  **Blocked at the final step**: `llm_build --onnxDir ... --engineDir ... --maxBatchSize 1
-  --maxKVCacheCapacity 1024` fails identically regardless of KV capacity (1024 or 2048 both hit
-  it): `Error Code 9: Internal Error (n0_3: could not find any supported formats consistent with
-  input/output data types)`. `n0_3` is an ordinary `Int4GroupwiseGemmPluginV2` node (layer 0's
-  `to_k`/`to_v`, shapes match the quantizer's own log exactly) - nothing architecturally unusual,
-  so this reads as a format/dtype expectation mismatch between the ONNX my locally-installed
-  `tensorrt_edgellm` (pip, version 0.10.1) exports and what this box's compiled plugin library
-  (`libNvInfer_edgellm_plugin.so`, built from the pinned `e8b2952` git checkout, same nominal
-  0.10.1) accepts - despite matching version numbers, a pip package and a git checkout at "the
-  same" version can still differ. Tried and ruled out: KV capacity is not the cause (both values
-  fail the same way); the experimental no-ONNX direct builder (`tensorrt-edgellm-build`) has no
-  registered components at all for `cosmos3_edge` yet, a dead end, not a workaround.
+**The earlier "wrong checkpoint" conclusion during this work was wrong - a path error, corrected
+below.** `nvidia/Cosmos3-Edge` is a Mixture-of-Transformers Omni model (per its own model card):
+one `transformer/` checkpoint with two complementary towers, an autoregressive tower for text and
+a diffusion tower for image/video/action, selected at export time by `--task {policy,reasoning}`.
+Pointing `--src` at the snapshot root (rather than `transformer/` specifically) made the quantizer
+find zero flat `.safetensors` files and silently no-op; the config fields that looked
+diffusion-only (`action_dim`, `latent_channel`) belong to the *other* tower in the same Omni
+checkpoint, not evidence this was the wrong model.
 
-  `llm_build` and `visual_build` (missing from the clone entirely - only their CMake targets
-  existed) were compiled there for this attempt and are now available for the next one.
+1. **Quantize**, pointed at the `transformer/` subfolder specifically:
+   `scripts/rtn_int4_quantize.py --src .../transformer --dst cosmos3_int4_ckpt`. Reproduced
+   deploy/04's documented numbers on main exactly: 169 linears, 11.06% mean relative weight error.
+2. **Fix the checkpoint's `config.json` and index filename** before export - two issues the
+   quantizer doesn't handle because it copies the source through unchanged:
+   - Add `"model_type": "cosmos3_edge"` and the four multimodal token IDs (`image_token_id`,
+     `video_token_id`, `vision_start_token_id`, `vision_end_token_id`) from the *snapshot root's*
+     `config.json` (not `transformer/config.json`, which lacks them).
+   - Rename `diffusion_pytorch_model.safetensors.index.json` to `model.safetensors.index.json`
+     (the name the exporter's loader requires) and add the quantizer's `.weight_scale` index
+     entries by hand (it would have added them automatically had it found the right name).
+   - Copy `tokenizer.json`, `tokenizer_config.json`, `special_tokens_map.json`,
+     `chat_template.jinja` from the snapshot root into the checkpoint dir - also not carried by
+     `transformer/` alone, and required for serving.
+3. **Export with `--int4-gemm-plugin-version 1`, not the default 2.** This was the real blocker
+   this work hit and eventually solved: `tensorrt-edgellm-export --task reasoning --skip-visual`
+   with the *default* V2 (cuteDSL fragment-layout) plugin produced an ONNX that builds up through
+   graph optimization and then fails at `IBuilder::buildSerializedNetwork` with `Error Code 9:
+   could not find any supported formats consistent with input/output data types` on an ordinary
+   `Int4GroupwiseGemmPluginV2` node - reproducible regardless of KV cache capacity, and not
+   resolved by re-exporting with this box's own git-checkout `tensorrt_edgellm` instead of the
+   build workstation's pip-installed one (ruling out a version-skew explanation). V1 (the legacy
+   AWQ-swizzled plugin) exports and builds cleanly with no further changes.
+4. **Build the vision engine too, from the same source checkpoint** (`vision_encoder/` +
+   the snapshot root's `config.json`, exported with `--skip-llm`) - the pre-built vision engine
+   already on this clone (from its own MLP build) turned out to use externalized/refit weights
+   tied to that specific build's checkpoint path and would not load against v3
+   (`missing tensor model.projector.linear_fc1.bias`). Building fresh from the same source instead
+   produced a self-contained engine matching deploy/04's documented size almost exactly (938 MB).
+5. **Manually populate `content_types` in `processed_chat_template.json`** after export. The
+   exporter's automatic chat-template extraction (`tensorrt_edgellm.chat_template.process_chat_template`,
+   which tries `AutoProcessor`/`AutoTokenizer` with `trust_remote_code=True`) silently falls back
+   to a minimal stub with `"content_types": {}` for this checkpoint - never raises, just produces
+   a template the C++ tokenizer can't recognize `image` content in
+   (`EDGELLM_BAD_MEDIA_COUNT: pad count is smaller than this request's media count`). The correct
+   value, confirmed against the checkpoint's own `chat_template.jinja` and matching the
+   `qwen3_omni.json` reference template in the exporter's own template library (Cosmos3-Edge's
+   text tower is Qwen3-VL-based): `{"image": {"format": "<|vision_start|><|image_pad|><|vision_end|>"},
+   "video": {"format": "<|vision_start|><|video_pad|><|vision_end|>"}}`.
+6. **`llm_build`/`visual_build` had to be compiled on the clone first** - only their CMake targets
+   existed (`cmake --build build --target llm_build -j$(nproc)`, same for `visual_build`; both
+   link against the already-built `libNvInfer_edgellm_plugin.so`, so this was fast).
+7. **Serve it**: this clone has no `cosmos3_shim_v1.py` deployment of its own (it uses a different
+   serving script, `rtn_backend.py`, tied to its own cache-bundle layout that doesn't accept an
+   arbitrary engine directory directly) - copied main's shim, patched four hardcoded
+   `/home/orin/...` paths for this box's layout, changed its hardcoded port from 8000 (taken by
+   the box's own backend) to 8001, and ran it as `porch-dad-shim-v3.service`.
 
-  Artifacts kept on the clone for whoever picks this up: quantized checkpoint at
-  `/home/jetson/porch-dad-demo/ckpt/`, ONNX at `/home/jetson/porch-dad-demo/engines/v3-onnx/`.
+Every fix above was applied to `/home/jetson/porch-dad-demo/ckpt/`'s `config.json` and to the
+already-exported ONNX/engine directories directly on the clone - not yet folded back into
+`scripts/rtn_int4_quantize.py` itself on this branch. Doing that (so a fresh quantize run needs
+none of these manual steps) is the natural next cleanup, not yet done.
