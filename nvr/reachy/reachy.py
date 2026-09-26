@@ -1,10 +1,11 @@
-"""Reachy Mini control for the porch-dad command centre.
+"""Reachy Mini control, shared by every UI that needs it (Live Vision on this branch; the full
+porch-dad command centre on main).
 
 Talks to the robot's own daemon REST API rather than proxying Home Assistant. HA's Reachy
 integration exposes the same capabilities, but routing through it would make this page depend on
-Home Assistant being up - and the command centre's job is to work when other things are off. The
-camera preview already learned that lesson the hard way: it was wired to the Live VLM WebUI and
-went dark whenever that was switched off to save load.
+Home Assistant being up - and a demo/command UI's job is to work when other things are off. The
+camera preview already learned that lesson the hard way once: it was wired to a webUI that could
+itself be switched off, and went dark along with it.
 
 Everything here is a thin wrapper over documented daemon endpoints. Angles are degrees at this
 boundary and radians on the wire, matching the robot's published limits.
