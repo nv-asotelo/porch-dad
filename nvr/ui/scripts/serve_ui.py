@@ -19,17 +19,33 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
 import math
+import os
 from pathlib import Path
 import re
 import secrets
 import select
 import socket
 import ssl
+import subprocess
+import sys
 import threading
 import time
+import uuid
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1] / "web"
+# nvr/reachy/reachy.py: the robot daemon client. Path-inserted rather than duplicated so there is
+# one copy, not two that can drift - same reasoning as porch-feed's roller_eye_srv import on main.
+# Import is best-effort: motor/app/volume control is optional (--reachy-daemon-url, empty by
+# default) and reachy.py's only dependency is `requests` - not installed everywhere this UI's own
+# stdlib-only camera/mic proxy already runs. A missing `requests` should not crash the whole UI
+# over a feature nobody asked for; main() refuses --reachy-daemon-url instead, at the point where
+# the user actually asked for it.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "reachy"))
+try:
+    from reachy import Reachy
+except ImportError:
+    Reachy = None
 MAX_BODY = 2 * 1024 * 1024
 MAX_RESPONSE = 1024 * 1024
 MAX_SECONDS = 120
@@ -333,6 +349,76 @@ def media_type(response):
     return response.getheader("Content-Type", "").split(";")[0].strip().lower()
 
 
+class Piper:
+    """Local TTS via a persistent Piper process, one JSON line per utterance on stdin.
+
+    A fresh process per utterance would pay Piper's ~1-3 s cold model load every time, which alone
+    misses any reasonable speak-after-caption latency target. Keeping one process warm (--json-input
+    mode) means only the first call after startup pays that cost. See deploy/07 section 9 on main
+    for the full latency writeup this port carries forward.
+    """
+
+    def __init__(self, binary: Path, model: Path, out_dir: Path):
+        self.binary = binary
+        self.model = model
+        self.out_dir = out_dir
+        self.proc = None
+        self.lock = threading.Lock()
+
+    def _start(self):
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ, LD_LIBRARY_PATH=str(self.binary.parent))
+        self.proc = subprocess.Popen(
+            [str(self.binary), "-m", str(self.model), "--json-input", "--length_scale", "0.85", "-q"],
+            cwd=str(self.out_dir), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, env=env, text=True)
+
+    def synth(self, text: str, timeout: float = 8.0) -> Path | None:
+        """Synthesize text to a WAV file. Thread-safe (holds self.lock for the whole call)."""
+        with self.lock:
+            if self.proc is None or self.proc.poll() is not None:
+                self._start()
+            name = f"{uuid.uuid4().hex}.wav"
+            out = self.out_dir / name
+            line = json.dumps({"text": text, "output_file": name}) + "\n"
+            try:
+                self.proc.stdin.write(line)
+                self.proc.stdin.flush()
+            except (BrokenPipeError, OSError):
+                self._start()
+                try:
+                    self.proc.stdin.write(line)
+                    self.proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    return None
+            # Two consecutive equal, non-empty size readings is "done writing" - avoids reading a
+            # half-written file without an fsync/rename dance for something that lives seconds.
+            deadline = time.monotonic() + timeout
+            last_size, stable = -1, 0
+            while time.monotonic() < deadline:
+                if out.exists():
+                    size = out.stat().st_size
+                    if size > 44 and size == last_size:
+                        stable += 1
+                        if stable >= 2:
+                            return out
+                    else:
+                        stable = 0
+                    last_size = size
+                time.sleep(0.015)
+            return None
+
+    @staticmethod
+    def spoken_summary(text: str, max_chars: int = 140) -> str:
+        """First sentence, capped to max_chars - shorter text infers faster and reads more
+        naturally aloud than a full multi-clause caption."""
+        m = re.search(r"[.!?](\s|$)", text)
+        s = text[:m.end()].strip() if m else text.strip()
+        if len(s) > max_chars:
+            s = s[:max_chars].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+        return s
+
+
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 8
@@ -469,6 +555,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
+        if route == "/api/reachy/state":
+            self.reachy_state()
+            return
+        if route == "/api/reachy/apps":
+            self.reachy_apps()
+            return
         # Only the bare page is upgraded to HTTPS above, for the camera. A link such as
         # /?source=reachy is served where it was asked for: the robot needs no secure
         # context, and a detour through a self-signed certificate would only add a warning.
@@ -487,6 +579,9 @@ class Handler(BaseHTTPRequestHandler):
         self.headers_in = self.headers
         if not self.origin_allowed():
             self.json_error(403, "Cross-origin requests are disabled.")
+            return
+        if self.path.startswith("/api/reachy/"):
+            self.reachy_control(self.path[len("/api/reachy/"):])
             return
         if self.path != "/v1/chat/completions":
             self.json_error(404, "Not found.")
@@ -763,6 +858,147 @@ class Handler(BaseHTTPRequestHandler):
                 OPEN_REACHY_STREAMS -= 1
             REACHY_STREAM_SLOTS.release()
 
+    # ------------------------------------------------------------------ Reachy motors/apps/speech
+    # Distinct from REACHY_FETCHES/REACHY_STREAMS above: those relay the bridge's camera/mic feed
+    # (read-only, token-gated against drive-by embedding) and stay open for a browser tab. These
+    # talk to the ROBOT'S OWN DAEMON (motors, apps, speaker) - one-shot requests, no stream, no
+    # relay token - trusting the same same-origin check (origin_allowed) as /v1/chat/completions.
+
+    def read_json_body(self, max_len=8192):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0:
+            return {}
+        if length > max_len:
+            raise ValueError(f"body must be under {max_len} bytes")
+        raw = self.rfile.read(length)
+        if not raw:
+            return {}
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("expected a JSON object")
+        return data
+
+    def reachy_result(self, ok, msg):
+        body = json.dumps({"ok": ok, "message": msg}).encode()
+        self.send_headers(200 if ok else 400, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_state(self):
+        if not self.server.reachy_client:
+            body = json.dumps({"enabled": False}).encode()
+            self.send_headers(200, "application/json", len(body))
+            self.wfile.write(body)
+            return
+        st = self.server.reachy_client.state()
+        st["enabled"] = True
+        st["speech_enabled"] = self.server.piper is not None
+        body = json.dumps(st).encode()
+        self.send_headers(200, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_apps(self):
+        if not self.server.reachy_client:
+            self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
+            return
+        body = json.dumps(self.server.reachy_client.apps()).encode()
+        self.send_headers(200, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_control(self, sub):
+        """Dispatch every POST /api/reachy/<sub>. sub has no leading slash (stripped by do_POST)."""
+        client = self.server.reachy_client
+        parts = sub.split("/")
+        try:
+            if sub == "speak":
+                self.reachy_speak()
+                return
+            if not client:
+                self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
+                return
+            if parts[0] == "action" and len(parts) == 2:
+                actions = {"wake": client.wake, "sleep": client.sleep, "center": client.center,
+                          "look-at-voice": client.look_at_voice}
+                fn = actions.get(parts[1])
+                if not fn:
+                    self.json_error(404, f"unknown action {parts[1]}")
+                    return
+                self.reachy_result(*fn())
+                return
+            if parts[0] == "motors" and len(parts) == 2:
+                self.reachy_result(*client.set_motor_mode(parts[1]))
+                return
+            if parts[0] == "volume" and len(parts) == 3:
+                if parts[1] not in ("speaker", "mic"):
+                    self.json_error(400, "which must be speaker or mic")
+                    return
+                self.reachy_result(*client.set_volume(parts[1], int(parts[2])))
+                return
+            if parts[0] == "look" and len(parts) == 3:
+                if parts[1] not in ("pitch", "yaw", "roll", "body_yaw"):
+                    self.json_error(400, "axis must be pitch, yaw, roll or body_yaw")
+                    return
+                self.reachy_result(*client.look(**{parts[1]: float(parts[2])}))
+                return
+            if sub == "target":
+                body = self.read_json_body()
+                pose = {k: body[k] for k in ("x", "y", "z", "roll", "pitch", "yaw")
+                       if body.get(k) is not None}
+                antennas = body.get("antennas")
+                if antennas is not None and (not isinstance(antennas, (list, tuple)) or len(antennas) != 2):
+                    self.json_error(400, "antennas must be [left, right]")
+                    return
+                self.reachy_result(*client.set_target(pose=pose or None, body_yaw=body.get("body_yaw"),
+                                                       antennas=antennas))
+                return
+            if parts[0] == "apps" and len(parts) == 3 and parts[1] == "start":
+                self.reachy_result(*client.start_app(parts[2]))
+                return
+            if sub == "apps/stop":
+                self.reachy_result(*client.stop_app())
+                return
+            self.json_error(404, "unknown Reachy control route")
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            self.json_error(400, str(exc))
+
+    def reachy_speak(self):
+        piper = self.server.piper
+        if not piper:
+            self.json_error(503, "speech not configured (--piper-bin / --piper-model)")
+            return
+        try:
+            body = self.read_json_body()
+        except (ValueError, json.JSONDecodeError) as exc:
+            self.json_error(400, str(exc))
+            return
+        text = str(body.get("text") or "").strip()
+        if not text:
+            self.json_error(400, "expected a non-empty 'text'")
+            return
+        if not self.server.reachy_client:
+            self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
+            return
+        t0 = time.monotonic()
+        wav = piper.synth(Piper.spoken_summary(text))
+        if not wav:
+            self.json_error(502, "speech synthesis failed or timed out")
+            return
+        t1 = time.monotonic()
+        try:
+            ok, remote = self.server.reachy_client.upload_sound(wav.read_bytes(), wav.name)
+            if not ok:
+                self.reachy_result(False, f"upload failed: {remote}")
+                return
+            ok, msg = self.server.reachy_client.play_sound(remote)
+        finally:
+            try:
+                wav.unlink()
+            except OSError:
+                pass
+        t2 = time.monotonic()
+        if ok:
+            msg = f"spoke in {t2 - t0:.2f}s (synth {t1 - t0:.2f}s, play {t2 - t1:.2f}s)"
+        self.reachy_result(ok, msg)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -780,6 +1016,16 @@ def main():
     parser.add_argument("--allowed-host", action="append", default=[], metavar="NAME",
                         help="A host name (such as orin.local) that /reachy/ and /api/access answer "
                              "to, besides IP addresses and localhost. Repeat for more names.")
+    parser.add_argument("--reachy-daemon-url", default="",
+                        help="Robot daemon REST API (motors, apps, volume) - NOT the camera/mic "
+                             "bridge. Empty disables motor/app control; the camera/mic still works "
+                             "through --reachy-url either way.")
+    parser.add_argument("--piper-bin", type=Path, default=None,
+                        help="Path to a Piper TTS binary. Empty disables /api/reachy/speak.")
+    parser.add_argument("--piper-model", type=Path, default=None,
+                        help="Path to a Piper .onnx voice model. Required with --piper-bin.")
+    parser.add_argument("--piper-out-dir", type=Path, default=Path("/tmp/reachy_tts"),
+                        help="Scratch directory for synthesized WAV files.")
     args = parser.parse_args()
     try:
         allowed_hosts = frozenset(allowed_host_name(name) for name in args.allowed_host)
@@ -793,6 +1039,12 @@ def main():
         reachy_address = bridge_address(args.reachy_url)
     except ValueError as exc:
         parser.error(str(exc))
+    if args.reachy_daemon_url and Reachy is None:
+        parser.error("--reachy-daemon-url needs the `requests` package (pip install requests).")
+    if bool(args.piper_bin) != bool(args.piper_model):
+        parser.error("Provide both --piper-bin and --piper-model.")
+    if args.piper_bin and not args.reachy_daemon_url:
+        parser.error("--piper-bin needs --reachy-daemon-url too (speech plays through the robot).")
     if any(not 1 <= port <= 65535 for port in
            (args.port, args.backend_port, *([args.https_port] if args.https_port is not None else []))):
         parser.error("Ports must be from 1 to 65535.")
@@ -813,10 +1065,15 @@ def main():
     servers = []
     threads = []
     try:
+        reachy_client = Reachy(args.reachy_daemon_url) if args.reachy_daemon_url else None
+        piper = (Piper(args.piper_bin, args.piper_model, args.piper_out_dir)
+                if args.piper_bin and args.piper_model else None)
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
         server.reachy_address = reachy_address
+        server.reachy_client = reachy_client
+        server.piper = piper
         server.https_port = args.https_port
         server.allowed_hosts = allowed_hosts
         if primary_tls:
@@ -826,6 +1083,8 @@ def main():
             servers.append(secure)
             secure.backend_port = args.backend_port
             secure.reachy_address = reachy_address
+            secure.reachy_client = reachy_client
+            secure.piper = piper
             secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
             worker = threading.Thread(target=secure.serve_forever, name="https-ui", daemon=True)
@@ -835,6 +1094,9 @@ def main():
         scheme = "https" if primary_tls else "http"
         print(f"UI: {scheme}://{args.host}:{args.port}; backend: http://127.0.0.1:{args.backend_port}", flush=True)
         print(f"Reachy Mini bridge: {args.reachy_url}, relayed under /reachy/", flush=True)
+        print(f"Reachy Mini daemon (motors/apps/volume): "
+              f"{args.reachy_daemon_url or 'not configured'}", flush=True)
+        print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:

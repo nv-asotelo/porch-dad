@@ -33,6 +33,34 @@
       <p id="reachyHelp" class="hint">Reachy Mini video and microphone come from the robot bridge on the Jetson, not from this device. Listen is off until you turn it on. The video pauses while this tab is hidden; Listen keeps playing.</p>
       <p class="hint capture-observation"><span id="captureStatus">No frame sent</span><span id="samplingStatus">Capture after each answer</span></p>
     </section>
+    <section id="reachyControls" class="panel" aria-label="Reachy Mini controls" hidden>
+      <div class="panel-heading"><h2>Reachy Mini controls</h2><span id="reachyControlStatus">Checking robot…</span></div>
+      <div class="controls">
+        <button id="reachyWake">Wake</button>
+        <button id="reachySleep">Sleep</button>
+        <button id="reachyCenter">Centre</button>
+        <button id="reachyFaceSound" title="Turns the base toward the last sound the microphone array heard">Face last sound</button>
+        <label>Motors
+          <select id="reachyMotorMode"><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="gravity_compensation">Gravity compensation</option></select>
+        </label>
+      </div>
+      <div class="controls">
+        <label>App
+          <select id="reachyAppSelect"><option value="">No apps found</option></select>
+        </label>
+        <button id="reachyAppStart">Start app</button>
+        <button id="reachyAppStop">Stop app</button>
+        <label>Speaker <input id="reachySpeakerVol" type="range" min="0" max="100" value="60"></label>
+        <label>Mic <input id="reachyMicVol" type="range" min="0" max="100" value="60"></label>
+      </div>
+      <div class="controls">
+        <label for="reachySpeakText" class="file-button" style="flex:1">Speak on the robot
+          <input id="reachySpeakText" type="text" placeholder="Text for Reachy to say" maxlength="500" style="width:100%">
+        </label>
+        <button id="reachySpeakButton">Speak</button>
+      </div>
+      <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Piper) and plays through the robot's own speaker.</p>
+    </section>
     <div class="output-column">
       <section id="captionPanel" class="results panel" aria-label="Model output">
         <div class="panel-heading"><h2>VLM output info</h2><span id="runStatus" role="status">Waiting for input</span></div>

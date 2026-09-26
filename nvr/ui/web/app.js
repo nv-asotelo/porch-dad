@@ -1140,4 +1140,70 @@ if (typeof document !== "undefined") {
     }).catch(() => {});
   }
   startDeviceTelemetry();
+
+  // Reachy Mini motor/app/speech controls: talks to /api/reachy/* (this server's own routes onto
+  // the robot's daemon - see serve_ui.py's reachy_control), separate from the /reachy/ camera+mic
+  // relay used elsewhere in this file. Polled rather than tied to the camera source, so the panel
+  // works whether the robot is the active input or just sitting there reachable.
+  async function reachyControlRequest(path, options) {
+    try {
+      const response = await fetch(path, options);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error?.message || body.message || `HTTP ${response.status}`);
+      if (body.ok === false) throw new Error(body.message || "request failed");
+      return body;
+    } catch (err) {
+      error(`Reachy: ${err.message}`);
+      throw err;
+    }
+  }
+  function reachyPost(path, jsonBody) {
+    const options = {method: "POST"};
+    if (jsonBody !== undefined) { options.headers = {"Content-Type": "application/json"}; options.body = JSON.stringify(jsonBody); }
+    return reachyControlRequest(path, options);
+  }
+  let reachyAppsLoadedAt = 0;
+  async function refreshReachyApps() {
+    if (Date.now() - reachyAppsLoadedAt < 15000) return;
+    reachyAppsLoadedAt = Date.now();
+    try {
+      const apps = await reachyControlRequest("/api/reachy/apps");
+      const select = $("reachyAppSelect");
+      const installed = apps.installed || [];
+      select.innerHTML = installed.length
+        ? installed.map(name => `<option value="${name}">${name}${name === apps.current ? " (running)" : ""}</option>`).join("")
+        : `<option value="">No apps found</option>`;
+    } catch (_) { /* surfaced already via error() */ }
+  }
+  async function pollReachyControlState() {
+    try {
+      const response = await fetch("/api/reachy/state", {cache: "no-store"});
+      const st = await response.json();
+      const panel = $("reachyControls");
+      if (!st.enabled) { panel.hidden = true; return; }
+      panel.hidden = false;
+      $("reachyControlStatus").textContent = st.reachable === false
+        ? "Robot daemon unreachable" : `Motors: ${st.motor_mode || "unknown"}`;
+      if (st.motor_mode && document.activeElement !== $("reachyMotorMode")) $("reachyMotorMode").value = st.motor_mode;
+      if (st.reachable !== false) refreshReachyApps();
+    } catch (_) { /* keep last known state on a transient poll failure */ }
+  }
+  $("reachyWake").addEventListener("click", () => reachyPost("/api/reachy/action/wake"));
+  $("reachySleep").addEventListener("click", () => reachyPost("/api/reachy/action/sleep"));
+  $("reachyCenter").addEventListener("click", () => reachyPost("/api/reachy/action/center"));
+  $("reachyFaceSound").addEventListener("click", () => reachyPost("/api/reachy/action/look-at-voice"));
+  $("reachyMotorMode").addEventListener("change", e => reachyPost(`/api/reachy/motors/${e.target.value}`));
+  $("reachyAppStart").addEventListener("click", () => {
+    const name = $("reachyAppSelect").value;
+    if (name) reachyPost(`/api/reachy/apps/start/${encodeURIComponent(name)}`);
+  });
+  $("reachyAppStop").addEventListener("click", () => reachyPost("/api/reachy/apps/stop"));
+  $("reachySpeakerVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/speaker/${e.target.value}`));
+  $("reachyMicVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/mic/${e.target.value}`));
+  $("reachySpeakButton").addEventListener("click", () => {
+    const text = $("reachySpeakText").value.trim();
+    if (text) reachyPost("/api/reachy/speak", {text});
+  });
+  pollReachyControlState();
+  setInterval(pollReachyControlState, 5000);
 }
