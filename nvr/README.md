@@ -8,7 +8,7 @@ has been removed outright, not just disabled. See `main` for that project.
 
 ```
 USB webcam ──┐
-             ├─▶ browser (getUserMedia) ──▶ Live Vision :8090/:8091 ──▶ Cosmos3-Edge shim :8000
+             ├─▶ browser (getUserMedia) ──▶ Live Vision :8091 (http, redirects) / :8443 (https) ──▶ Cosmos3-Edge shim
 Reachy Mini ─┘        │                           │
   camera/mic           │                    /api/reachy/* ──▶ Reachy Mini daemon :8000 (on the robot)
   (needs the bridge,    │                           │
@@ -16,6 +16,10 @@ Reachy Mini ─┘        │                           │
                    /api/engines/*              motors, apps, speaker (Piper TTS)
                    (TensorRT engine swap)
 ```
+
+Browser camera access requires a secure context, so :8091 (http) auto-redirects to :8443 (https,
+self-signed - reuses `cosmos-edge`'s own cert at `deployment/tls/`, accept the browser warning
+once). Open `https://<clone-ip>:8443/` directly to skip the redirect hop.
 
 ## What's here
 
@@ -44,11 +48,19 @@ pinned `aiortc==1.10.1` (a newer aiortc has the same RTX-decoding bug this versi
 
 ```
 python3 nvr/ui/scripts/serve_ui.py \
-  --host 0.0.0.0 --port 8091 --backend-port 8000 --allow-insecure-lan \
+  --host 0.0.0.0 --port 8091 --https-port 8443 --cert /path/to/cert.pem --key /path/to/key.pem \
+  --allow-insecure-lan --backend-port 8001 \
   --reachy-daemon-url http://<reachy-ip>:8000 \
   --piper-bin /path/to/piper --piper-model /path/to/voice.onnx \
-  --engine-link /path/to/engine-symlink --engines-config /path/to/engines.json
+  --engine-link /path/to/engine-symlink --engines-config /path/to/engines.json \
+  --services-config /path/to/services.json
 ```
+
+`--https-port`/`--cert`/`--key` matter beyond the obvious: browsers refuse camera access
+(`getUserMedia`) on a plain-HTTP origin unless it's localhost, so the webcam path needs this to
+work from any other device on the LAN. Without `--https-port`, port 8091 (http) just serves
+everything over http; with it, http auto-redirects to https (`camera_redirect_url`) and the
+camera works from a phone or another machine, not just from the Orin's own browser.
 
 Every one of `--reachy-daemon-url`, `--piper-bin`/`--piper-model`, and `--engine-link`/
 `--engines-config` is independently optional - omit any of them and that feature's UI simply
@@ -69,8 +81,12 @@ is shaped like main's `config.yaml` `engines:` dict: `{"id": {"name", "path", "p
 
 Deployed to `jetson@<clone-ip>:/home/jetson/porch-dad-demo/` (mirroring this repo's `nvr/`
 layout - `serve_ui.py` locates `reachy.py` via a relative path, see its own comment) and run as
-`porch-dad-demo-ui.service` on port 8091, **alongside** that box's own pre-existing Live-Vision-
-style setup on port 8090 - additive, nothing on the clone was replaced or disabled.
+`porch-dad-demo-ui.service`: **`https://<clone-ip>:8443/`** (port 8091 is http-only and just
+redirects there - browsers refuse camera access on plain HTTP from anything but localhost). The
+box's own pre-existing Live-Vision-style setup, `cosmos-edge-ui.service` on port 8090/8443, is
+**stopped and disabled**, not left running alongside this one: it was serving the same 8443 this
+branch's HTTPS listener now uses (reusing its cert - `deployment/tls/orin.crt`/`.key`, the same
+self-signed pair, accept the browser warning once), and two services on one port do not coexist.
 
 Verified against the real robot over the LAN:
 - `GET /api/reachy/state` - live telemetry (pose, battery-relevant fields, motor mode).
@@ -99,18 +115,23 @@ Verified against the real robot over the LAN:
     layout (`--engine-link /home/jetson/porch-dad-demo/engine-link`, `--engines-config
     /home/jetson/porch-dad-demo/engines.json`, `--shim-service porch-dad-shim-v3`) - not just
     verified against fake directories anymore.
-  - All four relevant services active together with 3.3 GB still available: `cosmos-edge-ui`
-    (the box's own, untouched), `porch-dad-demo-ui` (this branch's Live Vision), `porch-dad-
-    shim-v3` (serves the v3 engine), `reachy-mjpeg-bridge`.
+  - Three services active together with 3.2 GB still available: `porch-dad-demo-ui` (this
+    branch's Live Vision, http :8091 redirecting to https :8443), `porch-dad-shim-v3` (serves the
+    v3 engine on :8001), `reachy-mjpeg-bridge`. `cosmos-edge-ui`/`cosmos-edge-backend` (the box's
+    own original setup) are stopped and disabled - see the tradeoff below.
 
-**One deliberate, documented tradeoff**: `cosmos-edge-backend.service` (the box's own default MLP
-backend) is stopped and disabled, because its ~6.6 GB resident footprint and the v3 engine's
-footprint cannot both fit in 8 GB - confirmed by two OOM kills hitting it directly while building
-and testing v3 alongside it. This is not a bug to fix later; it is the actual point of choosing
-the smallest-footprint engine; a board this size runs one VLM backend at a time. `cosmos-edge-ui`
-(the box's own webUI on :8090) still loads but its inference calls will fail until that service is
-restarted - reversible with `systemctl enable --now cosmos-edge-backend` (and stopping
-`porch-dad-shim-v3` first, for the same memory reason in reverse).
+**Two deliberate, documented tradeoffs**, both because this is an 8 GB board:
+- `cosmos-edge-backend.service` (the box's own default MLP backend) is stopped and disabled: its
+  ~6.6 GB resident footprint and the v3 engine's footprint cannot both fit in 8 GB - confirmed by
+  two OOM kills hitting it directly while building and testing v3 alongside it. This is the actual
+  point of choosing the smallest-footprint engine; a board this size runs one VLM backend at a
+  time. Reversible with `systemctl enable --now cosmos-edge-backend` (stop `porch-dad-shim-v3`
+  first, for the same memory reason in reverse).
+- `cosmos-edge-ui.service` (the box's own webUI, port 8090/8443) is stopped and disabled too - it
+  was serving HTTPS on the same 8443 this branch's Live Vision now uses, and without its own
+  backend running its captions would not work anyway. Reversible with
+  `systemctl enable --now cosmos-edge-ui` (after stopping `porch-dad-demo-ui`, since both bind
+  8443 with the same cert).
 
 ## How the v3 engine was actually built (for reproducing this, or building v1/v2 the same way)
 
