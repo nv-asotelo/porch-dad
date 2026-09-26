@@ -74,8 +74,10 @@
 @media(max-width:900px){#workspace:not([data-caption-position="side"]) .output-column.full-width{grid-template-columns:1fr}}
 .status-bar{max-width:1440px;margin:0 auto;padding:0 40px 18px}
 .status-bar .services-block{margin:0;padding:16px 20px;border:1px solid var(--line);border-radius:12px;background:#19221c}
-.status-bar .services-list{display:flex;flex-wrap:wrap;gap:10px 24px}
-.status-bar .service-row{flex:0 0 auto}
+.status-bar .services-list{display:flex;flex-wrap:wrap;gap:8px 18px}
+.status-bar .service-row{flex:0 0 auto;font-size:14px;gap:8px}
+.status-bar .service-detail{font-size:12.5px}
+.latency-divider{align-self:stretch;width:1px;background:var(--line);flex:none}
 #reachyControls{border:1px solid var(--line);border-radius:10px;margin:14px 20px 0;background:#141c16}
 #reachyControls summary{cursor:pointer;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;font-weight:600;list-style:revert}
 #reachyControls[open] summary{border-bottom:1px solid var(--line)}
