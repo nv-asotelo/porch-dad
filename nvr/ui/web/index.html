@@ -98,6 +98,12 @@
         <p id="advancedError" class="advanced-error" role="alert" hidden></p>
         <dl class="engine-settings"><div><dt>Fixed device clocks</dt><dd id="staticClocksValue">Checking engine…</dd><small><code>COSMOS_STATIC_CLOCKS</code> · load default: disabled (0)</small></div><div><dt>Vision encoder cache</dt><dd id="encoderCacheValue">Checking engine…</dd><small><code>COSMOS_ENCODER_CACHE_BYTES</code> · load default: disabled (0 bytes)</small></div></dl>
         <p id="runtimeStatus" class="hint">Reading active engine settings. These two settings are applied by the server at engine load; changing them requires a backend restart.</p>
+        <div class="setting-row" id="engineSwitchRow" hidden>
+          <label for="engineSelect">TensorRT engine<select id="engineSelect"></select></label>
+          <button id="engineSwitchButton" type="button">Switch engine</button>
+          <small id="engineSwitchStatus" class="setting-help">Currently: checking…</small>
+        </div>
+        <p id="engineSwitchHint" class="hint" hidden>Switching restarts the local backend and takes up to about two minutes; the camera stays connected but inference is unavailable until the new engine loads.</p>
       </details>
       <details class="comparison-details"><summary>About the comparison</summary><p>Lightweight restores the first demo settings. The Live VLM WebUI capture preset matches its camera request, frame interval, JPEG quality and temperature. Switching capture presets preserves your prompt, output token limit and advanced settings. For its default prompt and answer cap, choose Scene Description and set the output limit to 512. Actual camera resolution and FPS depend on your device. This interface counts browser video frames and streams tokens; upstream counts frames after WebRTC and returns complete answers. Reachy Mini arrives as an image stream, which exposes no frame count, so with that preset it is sampled on a 6-second timer while its bridge is live: the time 30 frames take at the bridge's nominal 5 FPS. Input image tokens and top-p are separate model settings above. Latency and Average use server inference timing only, excluding JPEG encoding and decoding, network transfer and queueing. Compare the same images, prompts and settings across backends; browser timing diagnostics are not used for scoring.</p></details>
     </section>

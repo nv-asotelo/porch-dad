@@ -349,6 +349,75 @@ def media_type(response):
     return response.getheader("Content-Type", "").split(";")[0].strip().lower()
 
 
+class EngineSwitcher:
+    """Swap the TensorRT engine the local shim serves, and restart it to load the swap.
+
+    Ported from porch-feed's switch_engine (main, nvr/feed/porch_feed.py) - same recipe: an atomic
+    symlink swap the shim's own launch config always reads the same path from, then a systemctl
+    restart, then poll the shim's own /v1/models until it answers again. Requires passwordless
+    sudo for exactly `ln -sfn` on --engine-link and `systemctl restart` on --shim-service - this
+    class does not configure that; deploy/03 on main documents the sudoers line it needs.
+    """
+
+    def __init__(self, engine_link: Path, engines: dict, shim_service: str, backend_port: int):
+        self.engine_link = engine_link
+        self.engines = engines
+        self.shim_service = shim_service
+        self.backend_port = backend_port
+        self.lock = threading.Lock()
+
+    def _run(self, cmd, timeout=180):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return r.returncode == 0, (r.stderr or r.stdout)[-400:]
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, f"{type(exc).__name__}: {exc}"
+
+    def active(self) -> dict:
+        try:
+            target = os.path.realpath(self.engine_link)
+        except OSError:
+            target = ""
+        for eid, e in self.engines.items():
+            if os.path.realpath(e["path"]) == target:
+                return {"id": eid, **e}
+        return {"id": "unknown", "name": "Unknown", "path": target,
+               "profile": "", "notes": "active engine does not match any configured build"}
+
+    def switch(self, eid: str) -> tuple[bool, str]:
+        if not self.lock.acquire(blocking=False):
+            return False, "another engine switch is already in progress"
+        try:
+            return self._switch(eid)
+        finally:
+            self.lock.release()
+
+    def _switch(self, eid: str) -> tuple[bool, str]:
+        if eid not in self.engines:
+            return False, f"unknown engine {eid}"
+        path = self.engines[eid]["path"]
+        if not os.path.isfile(os.path.join(path, "llm.engine")):
+            return False, f"engine not built at {path}"
+        ok, msg = self._run(["sudo", "-n", "ln", "-sfn", path, str(self.engine_link)])
+        if not ok:
+            return False, f"symlink failed: {msg}"
+        ok, msg = self._run(["sudo", "-n", "systemctl", "restart", self.shim_service])
+        if not ok:
+            return False, f"restart failed: {msg}"
+        for _ in range(60):
+            conn = http.client.HTTPConnection("127.0.0.1", self.backend_port, timeout=2)
+            try:
+                conn.request("GET", "/v1/models")
+                if conn.getresponse().status == 200:
+                    return True, f"switched to {self.engines[eid]['name']}"
+            except (OSError, http.client.HTTPException):
+                pass
+            finally:
+                conn.close()
+            time.sleep(2)
+        return False, "engine swapped but the shim did not become ready in 120s"
+
+
 class Piper:
     """Local TTS via a persistent Piper process, one JSON line per utterance on stdin.
 
@@ -561,6 +630,16 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/reachy/apps":
             self.reachy_apps()
             return
+        if route == "/api/engines":
+            switcher = self.server.engine_switcher
+            if not switcher:
+                body = json.dumps({"configured": False, "engines": []}).encode()
+            else:
+                body = json.dumps({"configured": True, "active": switcher.active(),
+                                   "engines": [{"id": eid, **e} for eid, e in switcher.engines.items()]}).encode()
+            self.send_headers(200, "application/json", len(body))
+            self.wfile.write(body)
+            return
         # Only the bare page is upgraded to HTTPS above, for the camera. A link such as
         # /?source=reachy is served where it was asked for: the robot needs no secure
         # context, and a detour through a self-signed certificate would only add a warning.
@@ -582,6 +661,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/reachy/"):
             self.reachy_control(self.path[len("/api/reachy/"):])
+            return
+        if self.path.startswith("/api/engines/"):
+            self.engine_switch(self.path[len("/api/engines/"):])
             return
         if self.path != "/v1/chat/completions":
             self.json_error(404, "Not found.")
@@ -999,6 +1081,17 @@ class Handler(BaseHTTPRequestHandler):
             msg = f"spoke in {t2 - t0:.2f}s (synth {t1 - t0:.2f}s, play {t2 - t1:.2f}s)"
         self.reachy_result(ok, msg)
 
+    def engine_switch(self, eid):
+        switcher = self.server.engine_switcher
+        if not switcher:
+            self.json_error(503, "engine switching not configured (--engine-link/--engines-config)")
+            return
+        # Can take up to 120s (symlink + service restart + readiness poll) - see EngineSwitcher.
+        # No separate ack-then-poll: a slow synchronous response is simpler for a demo UI and this
+        # server already has one thread per request (ThreadingHTTPServer).
+        ok, msg = switcher.switch(eid)
+        self.reachy_result(ok, msg)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1026,6 +1119,15 @@ def main():
                         help="Path to a Piper .onnx voice model. Required with --piper-bin.")
     parser.add_argument("--piper-out-dir", type=Path, default=Path("/tmp/reachy_tts"),
                         help="Scratch directory for synthesized WAV files.")
+    parser.add_argument("--engine-link", type=Path, default=None,
+                        help="Symlink the shim reads its engine directory from. Required with "
+                             "--engines-config; needs passwordless `sudo ln -sfn` on this path.")
+    parser.add_argument("--engines-config", type=Path, default=None,
+                        help='JSON file: {"id": {"name": "...", "path": "...", "profile": "..."}, '
+                             '...}. Empty disables /api/engines.')
+    parser.add_argument("--shim-service", default="cosmos3-edge-shim",
+                        help="systemd unit restarted after an engine swap - needs passwordless "
+                             "`sudo systemctl restart` on this unit. Default matches main's shim.")
     args = parser.parse_args()
     try:
         allowed_hosts = frozenset(allowed_host_name(name) for name in args.allowed_host)
@@ -1045,6 +1147,17 @@ def main():
         parser.error("Provide both --piper-bin and --piper-model.")
     if args.piper_bin and not args.reachy_daemon_url:
         parser.error("--piper-bin needs --reachy-daemon-url too (speech plays through the robot).")
+    if bool(args.engine_link) != bool(args.engines_config):
+        parser.error("Provide both --engine-link and --engines-config.")
+    engines = {}
+    if args.engines_config:
+        try:
+            engines = json.loads(args.engines_config.read_text())
+            if not isinstance(engines, dict) or not all(
+                    isinstance(e, dict) and "name" in e and "path" in e for e in engines.values()):
+                raise ValueError("expected {id: {name, path, ...}}")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"--engines-config: {exc}")
     if any(not 1 <= port <= 65535 for port in
            (args.port, args.backend_port, *([args.https_port] if args.https_port is not None else []))):
         parser.error("Ports must be from 1 to 65535.")
@@ -1068,12 +1181,15 @@ def main():
         reachy_client = Reachy(args.reachy_daemon_url) if args.reachy_daemon_url else None
         piper = (Piper(args.piper_bin, args.piper_model, args.piper_out_dir)
                 if args.piper_bin and args.piper_model else None)
+        engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port)
+                          if engines else None)
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
         server.reachy_address = reachy_address
         server.reachy_client = reachy_client
         server.piper = piper
+        server.engine_switcher = engine_switcher
         server.https_port = args.https_port
         server.allowed_hosts = allowed_hosts
         if primary_tls:
@@ -1085,6 +1201,7 @@ def main():
             secure.reachy_address = reachy_address
             secure.reachy_client = reachy_client
             secure.piper = piper
+            secure.engine_switcher = engine_switcher
             secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
             worker = threading.Thread(target=secure.serve_forever, name="https-ui", daemon=True)
@@ -1097,6 +1214,7 @@ def main():
         print(f"Reachy Mini daemon (motors/apps/volume): "
               f"{args.reachy_daemon_url or 'not configured'}", flush=True)
         print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)
+        print(f"Engines: {', '.join(engines) if engines else 'not configured'}", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:

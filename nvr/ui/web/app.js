@@ -1206,4 +1206,42 @@ if (typeof document !== "undefined") {
   });
   pollReachyControlState();
   setInterval(pollReachyControlState, 5000);
+
+  // Engine switching: which TensorRT-Edge-LLM build the local shim serves (see EngineSwitcher in
+  // serve_ui.py). Hidden entirely when --engine-link/--engines-config were not passed, so a
+  // deployment without switching configured shows nothing rather than a dead control.
+  let engineSwitching = false;
+  async function refreshEngines() {
+    if (engineSwitching) return;
+    try {
+      const response = await fetch("/api/engines", {cache: "no-store"});
+      const data = await response.json();
+      const row = $("engineSwitchRow"), hint = $("engineSwitchHint");
+      if (!data.configured) { row.hidden = true; hint.hidden = true; return; }
+      row.hidden = false; hint.hidden = false;
+      const select = $("engineSelect");
+      if (document.activeElement !== select) {
+        select.innerHTML = data.engines.map(e =>
+          `<option value="${e.id}"${e.id === data.active.id ? " selected" : ""}>${e.name}${e.profile ? " · " + e.profile : ""}</option>`).join("");
+      }
+      $("engineSwitchStatus").textContent = `Currently: ${data.active.name}${data.active.id === "unknown" ? " (unrecognized build)" : ""}`;
+    } catch (_) { /* keep last known state on a transient poll failure */ }
+  }
+  $("engineSwitchButton").addEventListener("click", async () => {
+    const id = $("engineSelect").value;
+    if (!id) return;
+    engineSwitching = true;
+    const button = $("engineSwitchButton");
+    button.disabled = true; button.textContent = "Switching (up to ~2 min)…";
+    $("engineSwitchStatus").textContent = "Switching…";
+    try {
+      await reachyPost(`/api/engines/${encodeURIComponent(id)}`, undefined);
+    } catch (_) { /* surfaced already via error() */ } finally {
+      button.disabled = false; button.textContent = "Switch engine";
+      engineSwitching = false;
+      refreshEngines();
+    }
+  });
+  refreshEngines();
+  setInterval(refreshEngines, 5000);
 }
