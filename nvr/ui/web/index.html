@@ -10,6 +10,12 @@
 </head>
 <body>
   <header><div><span class="eyebrow">LOCAL VISION LAB</span><h1>Cosmos3 <span>Edge</span></h1></div><span id="backendStatus" class="badge" role="status">Checking backend…</span></header>
+  <div id="statusBar" class="status-bar">
+    <div class="services-block">
+      <h3 class="services-heading">Services</h3>
+      <ul id="servicesList" class="services-list"><li class="hint">Checking…</li></ul>
+    </div>
+  </div>
   <main id="workspace" data-caption-position="below">
     <fieldset class="caption-toolbar">
       <legend>Caption position</legend>
@@ -19,7 +25,7 @@
         <label><input type="radio" name="captionPosition" value="below" checked> Below camera</label>
       </div>
     </fieldset>
-    <section id="cameraPanel" class="vision panel" aria-label="Camera and image input">
+    <section id="cameraPanel" class="vision panel full-width" aria-label="Camera and image input">
       <div class="panel-heading"><h2>Live view</h2><span id="sourceStatus">No camera running</span></div>
       <div class="video-frame">
         <div id="captionAbove" class="caption-dock" hidden></div>
@@ -27,41 +33,41 @@
         <div id="captionBelow" class="caption-dock"><div id="answer" class="answer" aria-live="polite" tabindex="0">Start your camera or choose an image to see captions.</div></div>
       </div>
       <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="flipCameraButton" hidden title="Switch between the outward-facing and self-facing camera">⟲ Flip camera</button><button id="reachyButton" aria-describedby="reachyHelp">Use Reachy Mini</button><button id="listenButton" aria-pressed="false" hidden>Listen: Off</button><button id="stopButton" disabled>Stop</button><button id="analyzeButton" disabled>Run inference</button><button id="liveToggleButton" aria-pressed="true" aria-describedby="liveToggleHelp">Live streaming: On</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+      <details id="reachyControls" aria-label="Reachy Mini controls" hidden>
+        <summary><span>Reachy Mini controls</span><span id="reachyControlStatus" class="hint">Checking robot…</span></summary>
+        <div class="controls">
+          <button id="reachyWake">Wake</button>
+          <button id="reachySleep">Sleep</button>
+          <button id="reachyCenter">Centre</button>
+          <button id="reachyFaceSound" title="Turns the base toward the last sound the microphone array heard">Face last sound</button>
+          <label>Motors
+            <select id="reachyMotorMode"><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="gravity_compensation">Gravity compensation</option></select>
+          </label>
+        </div>
+        <div class="controls">
+          <label>App
+            <select id="reachyAppSelect"><option value="">No apps found</option></select>
+          </label>
+          <button id="reachyAppStart">Start app</button>
+          <button id="reachyAppStop">Stop app</button>
+          <label>Speaker <input id="reachySpeakerVol" type="range" min="0" max="100" value="60"></label>
+          <label>Mic <input id="reachyMicVol" type="range" min="0" max="100" value="60"></label>
+        </div>
+        <div class="controls">
+          <label for="reachySpeakText" class="file-button" style="flex:1">Speak on the robot
+            <input id="reachySpeakText" type="text" placeholder="Text for Reachy to say" maxlength="500" style="width:100%">
+          </label>
+          <button id="reachySpeakButton">Speak</button>
+        </div>
+        <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Piper) and plays through the robot's own speaker. Available any time the robot is configured, whichever feed is active - these control the robot, not the video source.</p>
+      </details>
       <audio id="reachyAudio" preload="none" hidden></audio>
       <p id="liveToggleHelp" class="hint">Turn live streaming off to keep the camera preview and run one inference at a time. Run inference also works with an uploaded image.</p>
       <p id="cameraHelp" class="hint">Camera stays in your browser. Only sampled frames are sent to the local backend.</p>
       <p id="reachyHelp" class="hint">Reachy Mini video and microphone come from the robot bridge on the Jetson, not from this device. Listen is off until you turn it on. The video pauses while this tab is hidden; Listen keeps playing.</p>
       <p class="hint capture-observation"><span id="captureStatus">No frame sent</span><span id="samplingStatus">Capture after each answer</span></p>
     </section>
-    <section id="reachyControls" class="panel" aria-label="Reachy Mini controls" hidden>
-      <div class="panel-heading"><h2>Reachy Mini controls</h2><span id="reachyControlStatus">Checking robot…</span></div>
-      <div class="controls">
-        <button id="reachyWake">Wake</button>
-        <button id="reachySleep">Sleep</button>
-        <button id="reachyCenter">Centre</button>
-        <button id="reachyFaceSound" title="Turns the base toward the last sound the microphone array heard">Face last sound</button>
-        <label>Motors
-          <select id="reachyMotorMode"><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="gravity_compensation">Gravity compensation</option></select>
-        </label>
-      </div>
-      <div class="controls">
-        <label>App
-          <select id="reachyAppSelect"><option value="">No apps found</option></select>
-        </label>
-        <button id="reachyAppStart">Start app</button>
-        <button id="reachyAppStop">Stop app</button>
-        <label>Speaker <input id="reachySpeakerVol" type="range" min="0" max="100" value="60"></label>
-        <label>Mic <input id="reachyMicVol" type="range" min="0" max="100" value="60"></label>
-      </div>
-      <div class="controls">
-        <label for="reachySpeakText" class="file-button" style="flex:1">Speak on the robot
-          <input id="reachySpeakText" type="text" placeholder="Text for Reachy to say" maxlength="500" style="width:100%">
-        </label>
-        <button id="reachySpeakButton">Speak</button>
-      </div>
-      <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Piper) and plays through the robot's own speaker.</p>
-    </section>
-    <div class="output-column">
+    <div class="output-column full-width">
       <section id="captionPanel" class="results panel" aria-label="Model output">
         <div class="panel-heading"><h2>VLM output info</h2><span id="runStatus" role="status">Waiting for input</span></div>
         <div class="latency-summary" aria-label="Server inference timing"><div aria-describedby="serverTtftHelp"><span>TTFT</span><strong id="serverTtftValue">—</strong><small>ms</small></div><div><span>Latency</span><strong id="latencyValue">—</strong><small>ms</small></div><div><span>Average</span><strong id="avgLatencyValue">—</strong><small>ms</small></div><div><span>Timed</span><strong id="countValue">0</strong></div></div>
@@ -79,10 +85,6 @@
           <div class="resource-stat resource-memory"><span class="resource-label">VRAM / shared RAM</span><div id="memoryUsage" class="resource-value memory-value"><strong id="memoryAmount">—</strong> <span id="memoryPercent">Unavailable</span></div><div class="resource-meter" aria-hidden="true"><span id="memoryMeter"></span></div><canvas id="memoryHistory" class="resource-history" role="img" aria-label="System shared RAM usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">System shared RAM history, including the OS and applications. Missing readings appear as gaps.</canvas><small id="memoryHistoryScale" class="resource-history-scale">No samples</small></div>
         </div>
         <p class="resource-note"><span id="resourceHistoryDescription">Last 60 seconds. Each chart auto-scales from 0% to its displayed maximum. Gaps mark unavailable readings.</span> Orin CPU and GPU share RAM. Memory includes the OS and applications, not a dedicated GPU allocation.</p>
-        <div class="services-block">
-          <h3 class="services-heading">Services</h3>
-          <ul id="servicesList" class="services-list"><li class="hint">Checking…</li></ul>
-        </div>
       </section>
     </div>
     <section class="settings panel" aria-label="Inference settings">

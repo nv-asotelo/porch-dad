@@ -69,3 +69,16 @@
 .services-block{margin:18px 20px 20px;padding-top:16px;border-top:1px solid var(--line)}.services-heading{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 10px;font-weight:600}.services-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}.service-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:12px}.service-row .service-name{display:flex;align-items:center;gap:7px;color:#e8eee9}.service-dot{width:7px;height:7px;border-radius:50%;background:#5a775e;flex:none}.service-row.running .service-dot{background:var(--green)}.service-row.stopped .service-dot{background:#e9a480}.service-detail{color:var(--muted);font-size:10.5px;text-align:right;white-space:nowrap}
 .model-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.model-buttons button{position:relative}.model-buttons button.active{color:#13220b;background:var(--green);border-color:var(--green);font-weight:650}.model-buttons button[disabled]{opacity:.4;cursor:not-allowed}
 #flipCameraButton{display:inline-flex;align-items:center;gap:5px}
+#workspace:not([data-caption-position="side"]) .full-width{grid-column:1/-1}
+#workspace:not([data-caption-position="side"]) .output-column.full-width{grid-template-columns:1fr 1fr;align-items:start}
+@media(max-width:900px){#workspace:not([data-caption-position="side"]) .output-column.full-width{grid-template-columns:1fr}}
+.status-bar{max-width:1440px;margin:0 auto;padding:0 40px 18px}
+.status-bar .services-block{margin:0;padding:16px 20px;border:1px solid var(--line);border-radius:12px;background:#19221c}
+.status-bar .services-list{display:flex;flex-wrap:wrap;gap:10px 24px}
+.status-bar .service-row{flex:0 0 auto}
+#reachyControls{border:1px solid var(--line);border-radius:10px;margin:14px 20px 0;background:#141c16}
+#reachyControls summary{cursor:pointer;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;font-weight:600;list-style:revert}
+#reachyControls[open] summary{border-bottom:1px solid var(--line)}
+#reachyControls .controls{padding:14px 18px 0}
+#reachyControls .hint{margin:12px 18px 16px}
+@media(max-width:600px){.status-bar{padding:0 16px 14px}.caption-dock .answer,.caption-dock .answer.streaming{min-height:120px}}

@@ -1194,9 +1194,12 @@ if (typeof document !== "undefined") {
       const response = await fetch("/api/reachy/state", {cache: "no-store"});
       const st = await response.json();
       const panel = $("reachyControls");
-      // Only while Reachy is the active feed - these move the same robot the video is coming
-      // from, and showing them while driving the webcam invites pressing them by mistake.
-      if (!st.enabled || !reachyActive()) { panel.hidden = true; return; }
+      // Available whenever the robot is configured, regardless of which feed is active - these
+      // control the robot itself (motors, apps, speech), not the video source, and hiding them
+      // just because the webcam is on made TTS unreachable without switching feeds first. A
+      // <details>, collapsed by default, is the safety net instead: nothing here fires without a
+      // deliberate expand-then-click.
+      if (!st.enabled) { panel.hidden = true; return; }
       panel.hidden = false;
       $("reachyControlStatus").textContent = st.reachable === false
         ? "Robot daemon unreachable" : `Motors: ${st.motor_mode || "unknown"}`;
