@@ -19,17 +19,36 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
 import math
+import os
 from pathlib import Path
 import re
 import secrets
 import select
 import socket
 import ssl
+import subprocess
+import sys
 import threading
 import time
+import uuid
 from urllib.parse import parse_qs, urlsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from engine_backends import ServiceEngineSwitcher, brockone_request, brockone_sse
+
 ROOT = Path(__file__).resolve().parents[1] / "web"
+# nvr/reachy/reachy.py: the robot daemon client. Path-inserted rather than duplicated so there is
+# one copy, not two that can drift - same reasoning as porch-feed's roller_eye_srv import on main.
+# Import is best-effort: motor/app/volume control is optional (--reachy-daemon-url, empty by
+# default) and reachy.py's only dependency is `requests` - not installed everywhere this UI's own
+# stdlib-only camera/mic proxy already runs. A missing `requests` should not crash the whole UI
+# over a feature nobody asked for; main() refuses --reachy-daemon-url instead, at the point where
+# the user actually asked for it.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "reachy"))
+try:
+    from reachy import Reachy
+except ImportError:
+    Reachy = None
 MAX_BODY = 2 * 1024 * 1024
 MAX_RESPONSE = 1024 * 1024
 MAX_SECONDS = 120
@@ -245,6 +264,101 @@ def validate_request(payload):
         raise ValueError("Invalid or oversized JPEG image.")
 
 
+# --------------------------------------------------------------------------- service inventory
+# The "which services are up, how much RAM and disk do they use, SD card or NVMe" panel. Every
+# service here besides this UI process itself and the Piper subprocess (which this process starts
+# and already holds a handle to) is a *separate* process this UI does not manage - found by
+# scanning /proc for a matching command line, the only channel available without adding an agent
+# or a dependency on each service exposing its own metrics endpoint.
+
+def read_proc_rss_mb(pid):
+    """Resident memory for one PID, or None if it has already exited or /proc denies us."""
+    try:
+        with open(f"/proc/{pid}/status", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return round(int(line.split()[1]) / 1024, 1)
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def find_pid_by_cmdline(substring):
+    """First PID whose command line contains substring, or None. O(processes), fine at UI poll
+    rates (every few seconds) on a single-board machine with a few dozen processes."""
+    try:
+        proc_root = Path("/proc")
+        for entry in proc_root.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                cmdline = entry.joinpath("cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+            except OSError:
+                continue
+            if substring in cmdline:
+                return int(entry.name)
+    except OSError:
+        pass
+    return None
+
+
+def disk_for_path(path):
+    """'SD card', 'NVMe', or the raw block device name, for whichever filesystem contains path -
+    the longest-prefix-matching entry in /proc/mounts, same algorithm findmnt uses."""
+    try:
+        target = os.path.realpath(str(path))
+    except OSError:
+        return "unknown"
+    best_mount, best_device = "", ""
+    try:
+        with open("/proc/mounts", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                device, mount_point = parts[0], parts[1].replace("\\040", " ")
+                if (target == mount_point or target.startswith(mount_point.rstrip("/") + "/")
+                        or mount_point == "/") and len(mount_point) >= len(best_mount):
+                    best_mount, best_device = mount_point, device
+    except OSError:
+        return "unknown"
+    if "mmcblk" in best_device:
+        return "SD card"
+    if "nvme" in best_device:
+        return "NVMe"
+    return best_device.rsplit("/", 1)[-1] or "unknown"
+
+
+_dir_size_cache = {}
+
+
+def dir_size_mb(path):
+    """Total on-disk size under path, in MB. Cached per path: these are static build artifacts
+    (engine files, a voice model) that do not change size during a UI process's lifetime, and a
+    multi-GB engine directory is too slow to re-walk on every poll."""
+    key = str(path)
+    if key in _dir_size_cache:
+        return _dir_size_cache[key]
+    total = 0
+    try:
+        p = Path(path)
+        if p.is_file():
+            total = p.stat().st_size
+        else:
+            for entry in p.rglob("*"):
+                try:
+                    if entry.is_file():
+                        total += entry.stat().st_size
+                except OSError:
+                    continue
+    except OSError:
+        _dir_size_cache[key] = None
+        return None
+    result = round(total / (1024 * 1024), 1)
+    _dir_size_cache[key] = result
+    return result
+
+
 def parse_host(host_header):
     """(host, IP address or None) named by a Host header, which may carry a port."""
     if not isinstance(host_header, str) or not host_header or any(
@@ -333,6 +447,145 @@ def media_type(response):
     return response.getheader("Content-Type", "").split(";")[0].strip().lower()
 
 
+class EngineSwitcher:
+    """Swap the TensorRT engine the local shim serves, and restart it to load the swap.
+
+    Ported from porch-feed's switch_engine (main, nvr/feed/porch_feed.py) - same recipe: an atomic
+    symlink swap the shim's own launch config always reads the same path from, then a systemctl
+    restart, then poll the shim's own /v1/models until it answers again. Requires passwordless
+    sudo for exactly `ln -sfn` on --engine-link and `systemctl restart` on --shim-service - this
+    class does not configure that; deploy/03 on main documents the sudoers line it needs.
+    """
+
+    def __init__(self, engine_link: Path, engines: dict, shim_service: str, backend_port: int):
+        self.engine_link = engine_link
+        self.engines = engines
+        self.shim_service = shim_service
+        self.backend_port = backend_port
+        self.lock = threading.Lock()
+
+    def _run(self, cmd, timeout=180):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return r.returncode == 0, (r.stderr or r.stdout)[-400:]
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, f"{type(exc).__name__}: {exc}"
+
+    def active(self) -> dict:
+        try:
+            target = os.path.realpath(self.engine_link)
+        except OSError:
+            target = ""
+        for eid, e in self.engines.items():
+            if os.path.realpath(e["path"]) == target:
+                return {"id": eid, **e}
+        return {"id": "unknown", "name": "Unknown", "path": target,
+               "profile": "", "notes": "active engine does not match any configured build"}
+
+    def switch(self, eid: str) -> tuple[bool, str]:
+        if not self.lock.acquire(blocking=False):
+            return False, "another engine switch is already in progress"
+        try:
+            return self._switch(eid)
+        finally:
+            self.lock.release()
+
+    def _switch(self, eid: str) -> tuple[bool, str]:
+        if eid not in self.engines:
+            return False, f"unknown engine {eid}"
+        path = self.engines[eid]["path"]
+        if not os.path.isfile(os.path.join(path, "llm.engine")):
+            return False, f"engine not built at {path}"
+        ok, msg = self._run(["sudo", "-n", "ln", "-sfn", path, str(self.engine_link)])
+        if not ok:
+            return False, f"symlink failed: {msg}"
+        ok, msg = self._run(["sudo", "-n", "systemctl", "restart", self.shim_service])
+        if not ok:
+            return False, f"restart failed: {msg}"
+        for _ in range(60):
+            conn = http.client.HTTPConnection("127.0.0.1", self.backend_port, timeout=2)
+            try:
+                conn.request("GET", "/v1/models")
+                if conn.getresponse().status == 200:
+                    return True, f"switched to {self.engines[eid]['name']}"
+            except (OSError, http.client.HTTPException):
+                pass
+            finally:
+                conn.close()
+            time.sleep(2)
+        return False, "engine swapped but the shim did not become ready in 120s"
+
+
+class Piper:
+    """Local TTS via a persistent Piper process, one JSON line per utterance on stdin.
+
+    A fresh process per utterance would pay Piper's ~1-3 s cold model load every time, which alone
+    misses any reasonable speak-after-caption latency target. Keeping one process warm (--json-input
+    mode) means only the first call after startup pays that cost. See deploy/07 section 9 on main
+    for the full latency writeup this port carries forward.
+    """
+
+    def __init__(self, binary: Path, model: Path, out_dir: Path):
+        self.binary = binary
+        self.model = model
+        self.out_dir = out_dir
+        self.proc = None
+        self.lock = threading.Lock()
+
+    def _start(self):
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ, LD_LIBRARY_PATH=str(self.binary.parent))
+        self.proc = subprocess.Popen(
+            [str(self.binary), "-m", str(self.model), "--json-input", "--length_scale", "0.85", "-q"],
+            cwd=str(self.out_dir), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, env=env, text=True)
+
+    def synth(self, text: str, timeout: float = 8.0) -> Path | None:
+        """Synthesize text to a WAV file. Thread-safe (holds self.lock for the whole call)."""
+        with self.lock:
+            if self.proc is None or self.proc.poll() is not None:
+                self._start()
+            name = f"{uuid.uuid4().hex}.wav"
+            out = self.out_dir / name
+            line = json.dumps({"text": text, "output_file": name}) + "\n"
+            try:
+                self.proc.stdin.write(line)
+                self.proc.stdin.flush()
+            except (BrokenPipeError, OSError):
+                self._start()
+                try:
+                    self.proc.stdin.write(line)
+                    self.proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    return None
+            # Two consecutive equal, non-empty size readings is "done writing" - avoids reading a
+            # half-written file without an fsync/rename dance for something that lives seconds.
+            deadline = time.monotonic() + timeout
+            last_size, stable = -1, 0
+            while time.monotonic() < deadline:
+                if out.exists():
+                    size = out.stat().st_size
+                    if size > 44 and size == last_size:
+                        stable += 1
+                        if stable >= 2:
+                            return out
+                    else:
+                        stable = 0
+                    last_size = size
+                time.sleep(0.015)
+            return None
+
+    @staticmethod
+    def spoken_summary(text: str, max_chars: int = 140) -> str:
+        """First sentence, capped to max_chars - shorter text infers faster and reads more
+        naturally aloud than a full multi-clause caption."""
+        m = re.search(r"[.!?](\s|$)", text)
+        s = text[:m.end()].strip() if m else text.strip()
+        if len(s) > max_chars:
+            s = s[:max_chars].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+        return s
+
+
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 8
@@ -344,11 +597,36 @@ class Server(ThreadingHTTPServer):
         self.https_port = None
         # Names besides IP literals and localhost that /reachy/ and /api/access answer to.
         self.allowed_hosts = frozenset()
+        # Populated in main(): {name: {"cmdline_match": str, "path": str}} for services this
+        # process does not itself manage (the shim, the Reachy bridge) - see --services-config.
+        self.services_config = {}
 
     def server_close(self):
         if getattr(self, "owns_telemetry", False):
             self.telemetry.close()
         super().server_close()
+
+    def service_list(self):
+        """Live Vision itself and the Piper subprocess are known directly (this process started
+        them); everything else in --services-config is a separate process, found by scanning
+        /proc for a matching command line - see find_pid_by_cmdline."""
+        out = [{"name": "Live Vision UI", "running": True,
+               "memory_mb": read_proc_rss_mb(os.getpid()),
+               "storage_mb": dir_size_mb(Path(__file__).resolve().parent),
+               "disk": disk_for_path(Path(__file__).resolve())}]
+        if self.piper:
+            pid = self.piper.proc.pid if self.piper.proc and self.piper.proc.poll() is None else None
+            out.append({"name": "TTS (Piper)", "running": pid is not None,
+                       "memory_mb": read_proc_rss_mb(pid) if pid else None,
+                       "storage_mb": dir_size_mb(self.piper.model.parent),
+                       "disk": disk_for_path(self.piper.model)})
+        for name, spec in self.services_config.items():
+            pid = find_pid_by_cmdline(spec["cmdline_match"])
+            out.append({"name": name, "running": pid is not None,
+                       "memory_mb": read_proc_rss_mb(pid) if pid else None,
+                       "storage_mb": dir_size_mb(spec["path"]) if spec.get("path") else None,
+                       "disk": disk_for_path(spec["path"]) if spec.get("path") else "unknown"})
+        return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -469,6 +747,34 @@ class Handler(BaseHTTPRequestHandler):
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
+        if route == "/api/reachy/state":
+            self.reachy_state()
+            return
+        if route == "/api/reachy/apps":
+            self.reachy_apps()
+            return
+        if route == "/api/engines":
+            switcher = self.server.engine_switcher
+            if not switcher:
+                body = json.dumps({"configured": False, "engines": []}).encode()
+            elif getattr(switcher, "managed", False):
+                body = json.dumps(switcher.status()).encode()
+            else:
+                available = [{"id": eid, **e,
+                              "available": (Path(e["path"]) / "llm.engine").is_file(),
+                              "reason": "" if (Path(e["path"]) / "llm.engine").is_file()
+                              else "Engine has not been built on this device"}
+                             for eid, e in switcher.engines.items()]
+                body = json.dumps({"configured": True, "active": switcher.active(),
+                                   "switching": False, "engines": available}).encode()
+            self.send_headers(200, "application/json", len(body))
+            self.wfile.write(body)
+            return
+        if route == "/api/services":
+            body = json.dumps({"services": self.server.service_list()}).encode()
+            self.send_headers(200, "application/json", len(body))
+            self.wfile.write(body)
+            return
         # Only the bare page is upgraded to HTTPS above, for the camera. A link such as
         # /?source=reachy is served where it was asked for: the robot needs no secure
         # context, and a detour through a self-signed certificate would only add a warning.
@@ -487,6 +793,12 @@ class Handler(BaseHTTPRequestHandler):
         self.headers_in = self.headers
         if not self.origin_allowed():
             self.json_error(403, "Cross-origin requests are disabled.")
+            return
+        if self.path.startswith("/api/reachy/"):
+            self.reachy_control(self.path[len("/api/reachy/"):])
+            return
+        if self.path.startswith("/api/engines/"):
+            self.engine_switch(self.path[len("/api/engines/"):])
             return
         if self.path != "/v1/chat/completions":
             self.json_error(404, "Not found.")
@@ -519,6 +831,18 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.client_disconnected():
                 return
+            switcher = getattr(self.server, "engine_switcher", None)
+            if getattr(switcher, "managed", False):
+                backend = switcher.backend()
+                if switcher.switching or payload["model"] != backend["model_id"]:
+                    self.json_error(409, "The model changed; refresh Live Vision before sending another image.")
+                    return
+                if backend["protocol"] == "brockone":
+                    try:
+                        body = json.dumps(brockone_request(payload)).encode()
+                    except ValueError as exc:
+                        self.json_error(400, str(exc))
+                        return
             self.proxy(self.path, body)
         finally:
             GENERATION_LOCK.release()
@@ -551,7 +875,20 @@ class Handler(BaseHTTPRequestHandler):
             GENERATION_WAIT_LOCK.release()
 
     def proxy(self, path, body=None):
-        connection = http.client.HTTPConnection("127.0.0.1", self.server.backend_port,
+        switcher = getattr(self.server, "engine_switcher", None)
+        managed = getattr(switcher, "managed", False)
+        backend = switcher.backend() if managed else None
+        if managed and switcher.switching:
+            self.json_error(503, "Switching model services; inference is paused.")
+            return
+        if managed and not switcher.active()["available"]:
+            self.json_error(503, switcher.active()["reason"] or "The selected model is not qualified on this device.")
+            return
+        brockone = backend is not None and backend["protocol"] == "brockone"
+        original_path = path
+        if brockone and path in {"/health/ready", "/api/runtime"}:
+            path = "/health"
+        connection = http.client.HTTPConnection("127.0.0.1", backend["backend_port"] if managed else self.server.backend_port,
                                                timeout=MAX_SECONDS if body else 3)
         finished = threading.Event()
         expired = threading.Event()
@@ -585,7 +922,7 @@ class Handler(BaseHTTPRequestHandler):
                 watcher = threading.Thread(target=watch_disconnect, daemon=True)
                 watcher.start()
             connection.request("POST" if body else "GET", path, body=body,
-                               headers={"Content-Type": "application/json", "Accept": "text/event-stream" if body else "application/json"})
+                headers={"Content-Type": "application/json", "Accept": "text/event-stream" if body and not brockone else "application/json"})
             response = connection.getresponse()
             if response.status != 200:
                 raw = response.read(MAX_RESPONSE + 1)
@@ -596,6 +933,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_error(response.status, message)
                 return
             if body:
+                if brockone:
+                    raw = response.read(MAX_RESPONSE + 1)
+                    if len(raw) > MAX_RESPONSE or expired.is_set():
+                        raise ValueError("brockone response exceeded its size or time limit")
+                    data = brockone_sse(json.loads(raw))
+                    self.send_headers(200, "text/event-stream; charset=utf-8", len(data))
+                    stream_started = True
+                    self.wfile.write(data)
+                    self.wfile.flush()
+                    return
                 if "text/event-stream" not in response.getheader("Content-Type", ""):
                     raise ValueError("Backend did not return SSE token streaming.")
                 self.send_headers(200, "text/event-stream; charset=utf-8")
@@ -616,6 +963,13 @@ class Handler(BaseHTTPRequestHandler):
                 data = response.read(MAX_RESPONSE + 1)
                 if len(data) > MAX_RESPONSE:
                     raise ValueError("Backend response exceeded the size limit.")
+                if brockone and original_path == "/api/runtime":
+                    # Do not invent clock/cache settings or native token timings.
+                    health = json.loads(data)
+                    data = json.dumps({"engine_id": switcher.active()["id"],
+                                       "request_policy": switcher.active()["request_policy"],
+                                       "configuration": health.get("configuration", {}),
+                                       "streaming": False}).encode()
                 self.send_headers(200, "application/json", len(data))
                 self.wfile.write(data)
         except (OSError, http.client.HTTPException, ValueError) as exc:
@@ -763,6 +1117,164 @@ class Handler(BaseHTTPRequestHandler):
                 OPEN_REACHY_STREAMS -= 1
             REACHY_STREAM_SLOTS.release()
 
+    # ------------------------------------------------------------------ Reachy motors/apps/speech
+    # Distinct from REACHY_FETCHES/REACHY_STREAMS above: those relay the bridge's camera/mic feed
+    # (read-only, token-gated against drive-by embedding) and stay open for a browser tab. These
+    # talk to the ROBOT'S OWN DAEMON (motors, apps, speaker) - one-shot requests, no stream, no
+    # relay token - trusting the same same-origin check (origin_allowed) as /v1/chat/completions.
+
+    def read_json_body(self, max_len=8192):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0:
+            return {}
+        if length > max_len:
+            raise ValueError(f"body must be under {max_len} bytes")
+        raw = self.rfile.read(length)
+        if not raw:
+            return {}
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("expected a JSON object")
+        return data
+
+    def reachy_result(self, ok, msg):
+        body = json.dumps({"ok": ok, "message": msg}).encode()
+        self.send_headers(200 if ok else 400, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_state(self):
+        if not self.server.reachy_client:
+            body = json.dumps({"enabled": False}).encode()
+            self.send_headers(200, "application/json", len(body))
+            self.wfile.write(body)
+            return
+        st = self.server.reachy_client.state()
+        st["enabled"] = True
+        st["speech_enabled"] = self.server.piper is not None
+        body = json.dumps(st).encode()
+        self.send_headers(200, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_apps(self):
+        if not self.server.reachy_client:
+            self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
+            return
+        body = json.dumps(self.server.reachy_client.apps()).encode()
+        self.send_headers(200, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_control(self, sub):
+        """Dispatch every POST /api/reachy/<sub>. sub has no leading slash (stripped by do_POST)."""
+        client = self.server.reachy_client
+        parts = sub.split("/")
+        try:
+            if sub == "speak":
+                self.reachy_speak()
+                return
+            if not client:
+                self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
+                return
+            if parts[0] == "action" and len(parts) == 2:
+                actions = {"wake": client.wake, "sleep": client.sleep, "center": client.center,
+                          "look-at-voice": client.look_at_voice}
+                fn = actions.get(parts[1])
+                if not fn:
+                    self.json_error(404, f"unknown action {parts[1]}")
+                    return
+                self.reachy_result(*fn())
+                return
+            if parts[0] == "motors" and len(parts) == 2:
+                self.reachy_result(*client.set_motor_mode(parts[1]))
+                return
+            if parts[0] == "volume" and len(parts) == 3:
+                if parts[1] not in ("speaker", "mic"):
+                    self.json_error(400, "which must be speaker or mic")
+                    return
+                self.reachy_result(*client.set_volume(parts[1], int(parts[2])))
+                return
+            if parts[0] == "look" and len(parts) == 3:
+                if parts[1] not in ("pitch", "yaw", "roll", "body_yaw"):
+                    self.json_error(400, "axis must be pitch, yaw, roll or body_yaw")
+                    return
+                self.reachy_result(*client.look(**{parts[1]: float(parts[2])}))
+                return
+            if sub == "target":
+                body = self.read_json_body()
+                pose = {k: body[k] for k in ("x", "y", "z", "roll", "pitch", "yaw")
+                       if body.get(k) is not None}
+                antennas = body.get("antennas")
+                if antennas is not None and (not isinstance(antennas, (list, tuple)) or len(antennas) != 2):
+                    self.json_error(400, "antennas must be [left, right]")
+                    return
+                self.reachy_result(*client.set_target(pose=pose or None, body_yaw=body.get("body_yaw"),
+                                                       antennas=antennas))
+                return
+            if parts[0] == "apps" and len(parts) == 3 and parts[1] == "start":
+                self.reachy_result(*client.start_app(parts[2]))
+                return
+            if sub == "apps/stop":
+                self.reachy_result(*client.stop_app())
+                return
+            self.json_error(404, "unknown Reachy control route")
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            self.json_error(400, str(exc))
+
+    def reachy_speak(self):
+        piper = self.server.piper
+        if not piper:
+            self.json_error(503, "speech not configured (--piper-bin / --piper-model)")
+            return
+        try:
+            body = self.read_json_body()
+        except (ValueError, json.JSONDecodeError) as exc:
+            self.json_error(400, str(exc))
+            return
+        text = str(body.get("text") or "").strip()
+        if not text:
+            self.json_error(400, "expected a non-empty 'text'")
+            return
+        if not self.server.reachy_client:
+            self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
+            return
+        t0 = time.monotonic()
+        wav = piper.synth(Piper.spoken_summary(text))
+        if not wav:
+            self.json_error(502, "speech synthesis failed or timed out")
+            return
+        t1 = time.monotonic()
+        try:
+            ok, remote = self.server.reachy_client.upload_sound(wav.read_bytes(), wav.name)
+            if not ok:
+                self.reachy_result(False, f"upload failed: {remote}")
+                return
+            ok, msg = self.server.reachy_client.play_sound(remote)
+        finally:
+            try:
+                wav.unlink()
+            except OSError:
+                pass
+        t2 = time.monotonic()
+        if ok:
+            msg = f"spoke in {t2 - t0:.2f}s (synth {t1 - t0:.2f}s, play {t2 - t1:.2f}s)"
+        self.reachy_result(ok, msg)
+
+    def engine_switch(self, eid):
+        if self.host_refused():
+            return
+        token = self.headers.get("X-Reachy-Token", "")
+        if not self.fetch_site_allowed() or not secrets.compare_digest(token.encode(), RELAY_TOKEN.encode()):
+            self.json_error(403, "Reload Live Vision before switching engines.")
+            return
+        switcher = self.server.engine_switcher
+        if not switcher:
+            self.json_error(503, "engine switching not configured (--engine-link/--engines-config)")
+            return
+        # Can take up to 120s (symlink + service restart + readiness poll) - see EngineSwitcher.
+        # No separate ack-then-poll: a slow synchronous response is simpler for a demo UI and this
+        # server already has one thread per request (ThreadingHTTPServer).
+        ok, msg = switcher.switch(eid)
+        self.reachy_result(ok, msg)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -780,6 +1292,32 @@ def main():
     parser.add_argument("--allowed-host", action="append", default=[], metavar="NAME",
                         help="A host name (such as orin.local) that /reachy/ and /api/access answer "
                              "to, besides IP addresses and localhost. Repeat for more names.")
+    parser.add_argument("--reachy-daemon-url", default="",
+                        help="Robot daemon REST API (motors, apps, volume) - NOT the camera/mic "
+                             "bridge. Empty disables motor/app control; the camera/mic still works "
+                             "through --reachy-url either way.")
+    parser.add_argument("--piper-bin", type=Path, default=None,
+                        help="Path to a Piper TTS binary. Empty disables /api/reachy/speak.")
+    parser.add_argument("--piper-model", type=Path, default=None,
+                        help="Path to a Piper .onnx voice model. Required with --piper-bin.")
+    parser.add_argument("--piper-out-dir", type=Path, default=Path("/tmp/reachy_tts"),
+                        help="Scratch directory for synthesized WAV files.")
+    parser.add_argument("--engine-link", type=Path, default=None,
+                        help="Symlink the shim reads its engine directory from. Required with "
+                             "--engines-config; needs passwordless `sudo ln -sfn` on this path.")
+    parser.add_argument("--engines-config", type=Path, default=None,
+                        help='JSON file: {"id": {"name": "...", "path": "...", "profile": "..."}, '
+                             '...}. Empty disables /api/engines.')
+    parser.add_argument("--default-engine", default=None,
+                        help="Initial engine ID for a registry of separate model services.")
+    parser.add_argument("--shim-service", default="cosmos3-edge-shim",
+                        help="systemd unit restarted after an engine swap - needs passwordless "
+                             "`sudo systemctl restart` on this unit. Default matches main's shim.")
+    parser.add_argument("--services-config", type=Path, default=None,
+                        help='JSON file: {"Display Name": {"cmdline_match": "substring to find '
+                             'in /proc/*/cmdline", "path": "/dir/to/report/size/and/disk/for"}, '
+                             '...} - for /api/services, services this process does not itself '
+                             "manage (Live Vision itself and Piper are always included).")
     args = parser.parse_args()
     try:
         allowed_hosts = frozenset(allowed_host_name(name) for name in args.allowed_host)
@@ -793,6 +1331,40 @@ def main():
         reachy_address = bridge_address(args.reachy_url)
     except ValueError as exc:
         parser.error(str(exc))
+    if args.reachy_daemon_url and Reachy is None:
+        parser.error("--reachy-daemon-url needs the `requests` package (pip install requests).")
+    if bool(args.piper_bin) != bool(args.piper_model):
+        parser.error("Provide both --piper-bin and --piper-model.")
+    if args.piper_bin and not args.reachy_daemon_url:
+        parser.error("--piper-bin needs --reachy-daemon-url too (speech plays through the robot).")
+    engines = {}
+    managed_engines = False
+    if args.engines_config:
+        try:
+            engines = json.loads(args.engines_config.read_text())
+            if not isinstance(engines, dict) or not all(
+                    isinstance(e, dict) and "name" in e and "path" in e for e in engines.values()):
+                raise ValueError("expected {id: {name, path, ...}}")
+            managed_engines = bool(engines) and all(e.get("kind") == "service" for e in engines.values())
+            if any(e.get("kind") == "service" for e in engines.values()) and not managed_engines:
+                raise ValueError("Do not mix symlink and separate-service engines")
+            if managed_engines and not args.default_engine:
+                raise ValueError("Separate-service engines require --default-engine")
+            if not managed_engines and not args.engine_link:
+                raise ValueError("Legacy symlink engines require --engine-link")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"--engines-config: {exc}")
+    elif args.engine_link:
+        parser.error("--engine-link requires --engines-config")
+    services_config = {}
+    if args.services_config:
+        try:
+            services_config = json.loads(args.services_config.read_text())
+            if not isinstance(services_config, dict) or not all(
+                    isinstance(s, dict) and "cmdline_match" in s for s in services_config.values()):
+                raise ValueError("expected {name: {cmdline_match, path?}}")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"--services-config: {exc}")
     if any(not 1 <= port <= 65535 for port in
            (args.port, args.backend_port, *([args.https_port] if args.https_port is not None else []))):
         parser.error("Ports must be from 1 to 65535.")
@@ -813,10 +1385,22 @@ def main():
     servers = []
     threads = []
     try:
+        reachy_client = Reachy(args.reachy_daemon_url) if args.reachy_daemon_url else None
+        piper = (Piper(args.piper_bin, args.piper_model, args.piper_out_dir)
+                if args.piper_bin and args.piper_model else None)
+        if managed_engines:
+            engine_switcher = ServiceEngineSwitcher(engines, args.default_engine, GENERATION_LOCK)
+        else:
+            engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port)
+                               if engines else None)
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
         server.reachy_address = reachy_address
+        server.reachy_client = reachy_client
+        server.piper = piper
+        server.engine_switcher = engine_switcher
+        server.services_config = services_config
         server.https_port = args.https_port
         server.allowed_hosts = allowed_hosts
         if primary_tls:
@@ -826,6 +1410,10 @@ def main():
             servers.append(secure)
             secure.backend_port = args.backend_port
             secure.reachy_address = reachy_address
+            secure.reachy_client = reachy_client
+            secure.piper = piper
+            secure.engine_switcher = engine_switcher
+            secure.services_config = services_config
             secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
             worker = threading.Thread(target=secure.serve_forever, name="https-ui", daemon=True)
@@ -835,6 +1423,10 @@ def main():
         scheme = "https" if primary_tls else "http"
         print(f"UI: {scheme}://{args.host}:{args.port}; backend: http://127.0.0.1:{args.backend_port}", flush=True)
         print(f"Reachy Mini bridge: {args.reachy_url}, relayed under /reachy/", flush=True)
+        print(f"Reachy Mini daemon (motors/apps/volume): "
+              f"{args.reachy_daemon_url or 'not configured'}", flush=True)
+        print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)
+        print(f"Engines: {', '.join(engines) if engines else 'not configured'}", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
