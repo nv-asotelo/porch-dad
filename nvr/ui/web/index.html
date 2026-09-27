@@ -44,6 +44,49 @@
             <select id="reachyMotorMode"><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="gravity_compensation">Gravity compensation</option></select>
           </label>
         </div>
+        <div class="sec">⌇⌇ Antennas</div>
+        <div class="ctlrow">
+          <div class="ctl">
+            <h4>Left <b id="antLv">0.000 rad</b></h4>
+            <input type="range" id="antL" min="-3.14" max="3.14" step="0.01" value="0.175">
+          </div>
+          <div class="ctl">
+            <h4>Right <b id="antRv">0.000 rad</b></h4>
+            <input type="range" id="antR" min="-3.14" max="3.14" step="0.01" value="0.175">
+          </div>
+        </div>
+        <div class="sec">◉◉ Head</div>
+        <div class="ctlrow">
+          <div class="ctl">
+            <h4>Position X/Y <b id="xyv">0.000 0.000</b></h4>
+            <div class="padwrap">
+              <div class="pad" id="padXY"><i></i></div>
+              <div class="vwrap">
+                <span class="hint" style="margin:0;font-size:10px">Z</span>
+                <input type="range" class="vert" id="posZ" min="-0.018" max="0.018" step="0.001" value="0">
+                <b class="hint" id="zv" style="margin:0;font-size:10.5px">0.000</b>
+              </div>
+            </div>
+          </div>
+          <div class="ctl">
+            <h4>Pitch / Yaw <b id="pyv">0.000 0.000</b></h4>
+            <div class="pad" id="padPY"><i></i></div>
+          </div>
+        </div>
+        <div class="ctlrow" style="margin-top:8px">
+          <div class="ctl wide">
+            <h4>Roll <b id="rollv">0.000 rad</b></h4>
+            <input type="range" id="roll" min="-0.7" max="0.7" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="sec">▭ Body</div>
+        <div class="ctlrow">
+          <div class="ctl wide">
+            <h4>Yaw <b id="byawv">0.000 rad</b></h4>
+            <input type="range" id="byaw" min="-2.79" max="2.79" step="0.01" value="0">
+          </div>
+        </div>
+        <p class="hint">Live control: these set the target the robot's control loop is already chasing, so they track your finger rather than queueing moves. Pitch is positive downward - the pad is inverted so dragging up looks up. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in Z.</p>
         <div class="controls">
           <label>App
             <select id="reachyAppSelect"><option value="">No apps found</option></select>

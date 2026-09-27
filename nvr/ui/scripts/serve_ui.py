@@ -33,6 +33,9 @@ import time
 import uuid
 from urllib.parse import parse_qs, urlsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from engine_backends import ServiceEngineSwitcher, brockone_request, brockone_sse
+
 ROOT = Path(__file__).resolve().parents[1] / "web"
 # nvr/reachy/reachy.py: the robot daemon client. Path-inserted rather than duplicated so there is
 # one copy, not two that can drift - same reasoning as porch-feed's roller_eye_srv import on main.
@@ -754,9 +757,16 @@ class Handler(BaseHTTPRequestHandler):
             switcher = self.server.engine_switcher
             if not switcher:
                 body = json.dumps({"configured": False, "engines": []}).encode()
+            elif getattr(switcher, "managed", False):
+                body = json.dumps(switcher.status()).encode()
             else:
+                available = [{"id": eid, **e,
+                              "available": (Path(e["path"]) / "llm.engine").is_file(),
+                              "reason": "" if (Path(e["path"]) / "llm.engine").is_file()
+                              else "Engine has not been built on this device"}
+                             for eid, e in switcher.engines.items()]
                 body = json.dumps({"configured": True, "active": switcher.active(),
-                                   "engines": [{"id": eid, **e} for eid, e in switcher.engines.items()]}).encode()
+                                   "switching": False, "engines": available}).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
@@ -821,6 +831,18 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.client_disconnected():
                 return
+            switcher = getattr(self.server, "engine_switcher", None)
+            if getattr(switcher, "managed", False):
+                backend = switcher.backend()
+                if switcher.switching or payload["model"] != backend["model_id"]:
+                    self.json_error(409, "The model changed; refresh Live Vision before sending another image.")
+                    return
+                if backend["protocol"] == "brockone":
+                    try:
+                        body = json.dumps(brockone_request(payload)).encode()
+                    except ValueError as exc:
+                        self.json_error(400, str(exc))
+                        return
             self.proxy(self.path, body)
         finally:
             GENERATION_LOCK.release()
@@ -853,7 +875,20 @@ class Handler(BaseHTTPRequestHandler):
             GENERATION_WAIT_LOCK.release()
 
     def proxy(self, path, body=None):
-        connection = http.client.HTTPConnection("127.0.0.1", self.server.backend_port,
+        switcher = getattr(self.server, "engine_switcher", None)
+        managed = getattr(switcher, "managed", False)
+        backend = switcher.backend() if managed else None
+        if managed and switcher.switching:
+            self.json_error(503, "Switching model services; inference is paused.")
+            return
+        if managed and not switcher.active()["available"]:
+            self.json_error(503, switcher.active()["reason"] or "The selected model is not qualified on this device.")
+            return
+        brockone = backend is not None and backend["protocol"] == "brockone"
+        original_path = path
+        if brockone and path in {"/health/ready", "/api/runtime"}:
+            path = "/health"
+        connection = http.client.HTTPConnection("127.0.0.1", backend["backend_port"] if managed else self.server.backend_port,
                                                timeout=MAX_SECONDS if body else 3)
         finished = threading.Event()
         expired = threading.Event()
@@ -887,7 +922,7 @@ class Handler(BaseHTTPRequestHandler):
                 watcher = threading.Thread(target=watch_disconnect, daemon=True)
                 watcher.start()
             connection.request("POST" if body else "GET", path, body=body,
-                               headers={"Content-Type": "application/json", "Accept": "text/event-stream" if body else "application/json"})
+                headers={"Content-Type": "application/json", "Accept": "text/event-stream" if body and not brockone else "application/json"})
             response = connection.getresponse()
             if response.status != 200:
                 raw = response.read(MAX_RESPONSE + 1)
@@ -898,6 +933,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_error(response.status, message)
                 return
             if body:
+                if brockone:
+                    raw = response.read(MAX_RESPONSE + 1)
+                    if len(raw) > MAX_RESPONSE or expired.is_set():
+                        raise ValueError("brockone response exceeded its size or time limit")
+                    data = brockone_sse(json.loads(raw))
+                    self.send_headers(200, "text/event-stream; charset=utf-8", len(data))
+                    stream_started = True
+                    self.wfile.write(data)
+                    self.wfile.flush()
+                    return
                 if "text/event-stream" not in response.getheader("Content-Type", ""):
                     raise ValueError("Backend did not return SSE token streaming.")
                 self.send_headers(200, "text/event-stream; charset=utf-8")
@@ -918,6 +963,13 @@ class Handler(BaseHTTPRequestHandler):
                 data = response.read(MAX_RESPONSE + 1)
                 if len(data) > MAX_RESPONSE:
                     raise ValueError("Backend response exceeded the size limit.")
+                if brockone and original_path == "/api/runtime":
+                    # Do not invent clock/cache settings or native token timings.
+                    health = json.loads(data)
+                    data = json.dumps({"engine_id": switcher.active()["id"],
+                                       "request_policy": switcher.active()["request_policy"],
+                                       "configuration": health.get("configuration", {}),
+                                       "streaming": False}).encode()
                 self.send_headers(200, "application/json", len(data))
                 self.wfile.write(data)
         except (OSError, http.client.HTTPException, ValueError) as exc:
@@ -1207,6 +1259,12 @@ class Handler(BaseHTTPRequestHandler):
         self.reachy_result(ok, msg)
 
     def engine_switch(self, eid):
+        if self.host_refused():
+            return
+        token = self.headers.get("X-Reachy-Token", "")
+        if not self.fetch_site_allowed() or not secrets.compare_digest(token.encode(), RELAY_TOKEN.encode()):
+            self.json_error(403, "Reload Live Vision before switching engines.")
+            return
         switcher = self.server.engine_switcher
         if not switcher:
             self.json_error(503, "engine switching not configured (--engine-link/--engines-config)")
@@ -1250,6 +1308,8 @@ def main():
     parser.add_argument("--engines-config", type=Path, default=None,
                         help='JSON file: {"id": {"name": "...", "path": "...", "profile": "..."}, '
                              '...}. Empty disables /api/engines.')
+    parser.add_argument("--default-engine", default=None,
+                        help="Initial engine ID for a registry of separate model services.")
     parser.add_argument("--shim-service", default="cosmos3-edge-shim",
                         help="systemd unit restarted after an engine swap - needs passwordless "
                              "`sudo systemctl restart` on this unit. Default matches main's shim.")
@@ -1277,17 +1337,25 @@ def main():
         parser.error("Provide both --piper-bin and --piper-model.")
     if args.piper_bin and not args.reachy_daemon_url:
         parser.error("--piper-bin needs --reachy-daemon-url too (speech plays through the robot).")
-    if bool(args.engine_link) != bool(args.engines_config):
-        parser.error("Provide both --engine-link and --engines-config.")
     engines = {}
+    managed_engines = False
     if args.engines_config:
         try:
             engines = json.loads(args.engines_config.read_text())
             if not isinstance(engines, dict) or not all(
                     isinstance(e, dict) and "name" in e and "path" in e for e in engines.values()):
                 raise ValueError("expected {id: {name, path, ...}}")
+            managed_engines = bool(engines) and all(e.get("kind") == "service" for e in engines.values())
+            if any(e.get("kind") == "service" for e in engines.values()) and not managed_engines:
+                raise ValueError("Do not mix symlink and separate-service engines")
+            if managed_engines and not args.default_engine:
+                raise ValueError("Separate-service engines require --default-engine")
+            if not managed_engines and not args.engine_link:
+                raise ValueError("Legacy symlink engines require --engine-link")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             parser.error(f"--engines-config: {exc}")
+    elif args.engine_link:
+        parser.error("--engine-link requires --engines-config")
     services_config = {}
     if args.services_config:
         try:
@@ -1320,8 +1388,11 @@ def main():
         reachy_client = Reachy(args.reachy_daemon_url) if args.reachy_daemon_url else None
         piper = (Piper(args.piper_bin, args.piper_model, args.piper_out_dir)
                 if args.piper_bin and args.piper_model else None)
-        engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port)
-                          if engines else None)
+        if managed_engines:
+            engine_switcher = ServiceEngineSwitcher(engines, args.default_engine, GENERATION_LOCK)
+        else:
+            engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port)
+                               if engines else None)
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port

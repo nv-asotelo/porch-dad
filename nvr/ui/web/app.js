@@ -1176,6 +1176,98 @@ if (typeof document !== "undefined") {
     if (jsonBody !== undefined) { options.headers = {"Content-Type": "application/json"}; options.body = JSON.stringify(jsonBody); }
     return reachyControlRequest(path, options);
   }
+  // Live pose control: X/Y, Z, roll/pitch/yaw, body_yaw and antennas, all POSTed together to
+  // /api/reachy/target (serve_ui.py's reachy_control forwards them straight into Reachy.set_target).
+  // Throttled to one POST per 60ms so a fast drag doesn't flood the daemon; syncCtl() pulls the
+  // live pose back into the widgets, but only once 1500ms have passed since the user last touched
+  // a control, so a poll reply never yanks a slider out from under a finger mid-drag.
+  const T = {x: 0, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0, body_yaw: 0, antennas: [0.175, 0.175]};
+  let tBusy = false, tPend = false, tLast = 0, tGrabbed = 0;
+  const D2R = Math.PI / 180;
+  function tTouch() { tGrabbed = Date.now(); }
+  async function tSend() {
+    if (tBusy) { tPend = true; return; }
+    const now = Date.now();
+    if (now - tLast < 60) { if (!tPend) { tPend = true; setTimeout(() => { tPend = false; tSend(); }, 60 - (now - tLast)); } return; }
+    tBusy = true; tLast = now;
+    try { await reachyPost("/api/reachy/target", T); } catch (_) { /* a dropped frame of control is not worth a second banner */ }
+    tBusy = false;
+    if (tPend) { tPend = false; tSend(); }
+  }
+  function rcNum(v, n) { return (v < 0 ? "" : " ") + v.toFixed(n === undefined ? 3 : n); }
+  function bindSlider(id, lblId, key, unit, idx) {
+    const el = $(id), lbl = $(lblId);
+    if (!el) return;
+    const paint = () => { const v = parseFloat(el.value); lbl.textContent = rcNum(v) + (unit || ""); };
+    el.addEventListener("input", () => {
+      tTouch();
+      const v = parseFloat(el.value);
+      if (idx === undefined) T[key] = v; else T.antennas[idx] = v;
+      paint(); tSend();
+    });
+    paint();
+  }
+  // A pad maps the two axes of a square onto two target fields. `inv` flips the vertical axis for
+  // pitch, which is positive downward on this robot: without it, dragging up would look down.
+  function bindPad(id, lblId, kx, ky, rx, ry, inv) {
+    const pad = $(id); if (!pad) return;
+    const dot = pad.querySelector("i"), lbl = $(lblId);
+    let down = false;
+    const paint = () => {
+      const fx = (T[kx] / rx + 1) / 2, fy = ((inv ? -T[ky] : T[ky]) / ry + 1) / 2;
+      dot.style.left = (Math.min(1, Math.max(0, fx)) * 100) + "%";
+      dot.style.top = (100 - Math.min(1, Math.max(0, fy)) * 100) + "%";
+      lbl.textContent = rcNum(T[kx]) + " " + rcNum(T[ky]);
+    };
+    const at = ev => {
+      const b = pad.getBoundingClientRect();
+      const fx = Math.min(1, Math.max(0, (ev.clientX - b.left) / b.width));
+      const fy = Math.min(1, Math.max(0, (ev.clientY - b.top) / b.height));
+      T[kx] = (fx * 2 - 1) * rx;
+      const vy = ((1 - fy) * 2 - 1) * ry;
+      T[ky] = inv ? -vy : vy;
+      tTouch(); paint(); tSend();
+    };
+    pad.addEventListener("pointerdown", e => { down = true; pad.setPointerCapture(e.pointerId); at(e); });
+    pad.addEventListener("pointermove", e => { if (down) at(e); });
+    pad.addEventListener("pointerup", e => { down = false; at(e); });
+    pad.addEventListener("pointercancel", () => { down = false; });
+    pad._paint = paint; paint();
+  }
+  function syncCtl(rs) {
+    if (Date.now() - tGrabbed < 1500) return;
+    const p = rs.pose_deg || {}, m = rs.pos_m || {};
+    const set = (id, lbl, v, unit) => {
+      const e = $(id);
+      if (e && document.activeElement !== e && v != null) {
+        e.value = v;
+        const b = $(lbl); if (b) b.textContent = rcNum(v) + (unit || "");
+      }
+    };
+    if (p.roll != null) { T.roll = p.roll * D2R; set("roll", "rollv", T.roll, " rad"); }
+    if (p.pitch != null) T.pitch = p.pitch * D2R;
+    if (p.yaw != null) T.yaw = p.yaw * D2R;
+    if (rs.body_yaw_deg != null) { T.body_yaw = rs.body_yaw_deg * D2R; set("byaw", "byawv", T.body_yaw, " rad"); }
+    if (m.x != null) T.x = m.x;
+    if (m.y != null) T.y = m.y;
+    if (m.z != null) { T.z = m.z; set("posZ", "zv", T.z, ""); }
+    const a = rs.antennas_deg;
+    if (a && a.length === 2) {
+      T.antennas = [a[0] * D2R, a[1] * D2R];
+      set("antL", "antLv", T.antennas[0], " rad"); set("antR", "antRv", T.antennas[1], " rad");
+    }
+    const px = $("padXY"), pp = $("padPY");
+    if (px && px._paint) px._paint();
+    if (pp && pp._paint) pp._paint();
+  }
+  bindSlider("antL", "antLv", null, " rad", 0);
+  bindSlider("antR", "antRv", null, " rad", 1);
+  bindSlider("roll", "rollv", "roll", " rad");
+  bindSlider("byaw", "byawv", "body_yaw", " rad");
+  bindSlider("posZ", "zv", "z", "");
+  bindPad("padXY", "xyv", "x", "y", 0.02, 0.02, false);
+  bindPad("padPY", "pyv", "yaw", "pitch", Math.PI, 0.7, true);
+
   let reachyAppsLoadedAt = 0;
   async function refreshReachyApps() {
     if (Date.now() - reachyAppsLoadedAt < 15000) return;
@@ -1204,7 +1296,7 @@ if (typeof document !== "undefined") {
       $("reachyControlStatus").textContent = st.reachable === false
         ? "Robot daemon unreachable" : `Motors: ${st.motor_mode || "unknown"}`;
       if (st.motor_mode && document.activeElement !== $("reachyMotorMode")) $("reachyMotorMode").value = st.motor_mode;
-      if (st.reachable !== false) refreshReachyApps();
+      if (st.reachable !== false) { refreshReachyApps(); syncCtl(st); }
     } catch (_) { /* keep last known state on a transient poll failure */ }
   }
   $("reachyWake").addEventListener("click", () => reachyPost("/api/reachy/action/wake"));
@@ -1226,14 +1318,17 @@ if (typeof document !== "undefined") {
   pollReachyControlState();
   setInterval(pollReachyControlState, 5000);
 
-  // Engine switching: which TensorRT-Edge-LLM build the local shim serves (see EngineSwitcher in
-  // serve_ui.py). Hidden entirely when --engine-link/--engines-config were not passed, so a
+  // Engine switching: which model backend serves inference - either a symlinked TensorRT-Edge-LLM
+  // build restarted in place (EngineSwitcher) or a registry of separate, independently started/
+  // stopped model services such as brockone (ServiceEngineSwitcher) - see serve_ui.py and
+  // engine_backends.py. Hidden entirely when --engine-link/--engines-config were not passed, so a
   // deployment without switching configured shows nothing rather than a dead control. One button
-  // per model rather than a dropdown, so post-training placeholders (brockone/brocktwo - not
-  // wired to any backend yet) can sit alongside the real ones, visibly greyed out rather than
-  // absent, without inventing fake /api/engines entries for models that do not exist yet.
+  // per model rather than a dropdown, so a post-training placeholder not yet in the registry
+  // (brocktwo) can sit alongside the real ones, visibly greyed out rather than absent, without
+  // inventing a fake /api/engines entry for a model that does not exist yet. A switch needs the
+  // same relay token as the Reachy camera/mic routes (X-Reachy-Token) - closes off triggering a
+  // model stop/start, which briefly interrupts inference, from a cross-site request.
   const PLACEHOLDER_MODELS = [
-    {id: "brockone", name: "brockone", note: "Post-training - size/RAM footprint not final"},
     {id: "brocktwo", name: "brocktwo", note: "Post-training - size/RAM footprint not final"},
   ];
   let engineSwitching = false;
@@ -1242,7 +1337,9 @@ if (typeof document !== "undefined") {
     $("engineSwitchStatus").textContent = "Switching…";
     for (const btn of $("modelButtons").querySelectorAll("button")) btn.disabled = true;
     try {
-      await reachyPost(`/api/engines/${encodeURIComponent(id)}`, undefined);
+      await loadAccess();
+      await reachyControlRequest(`/api/engines/${encodeURIComponent(id)}`,
+        {method: "POST", headers: {"X-Reachy-Token": access.reachy_token}});
     } catch (_) { /* surfaced already via error() */ } finally {
       engineSwitching = false;
       refreshEngines();
@@ -1256,18 +1353,22 @@ if (typeof document !== "undefined") {
       const row = $("engineSwitchRow"), hint = $("engineSwitchHint");
       if (!data.configured) { row.hidden = true; hint.hidden = true; return; }
       row.hidden = false; hint.hidden = false;
+      const switching = data.switching === true;
       const real = data.engines.map(e => {
         const active = e.id === data.active.id;
-        const title = e.profile ? `${e.name} · ${e.profile}` : e.name;
-        return `<button type="button" data-model-id="${e.id}" class="${active ? "active" : ""}" title="${title}"${active ? " disabled" : ""}>${e.name}</button>`;
+        const disabled = active || switching || e.available === false;
+        const title = [e.profile ? `${e.name} · ${e.profile}` : e.name, e.available === false ? e.reason : null]
+          .filter(Boolean).join(" — ");
+        return `<button type="button" data-model-id="${e.id}" class="${active ? "active" : ""}" title="${title}"${disabled ? " disabled" : ""}>${e.name}</button>`;
       });
-      const placeholders = PLACEHOLDER_MODELS.map(m =>
-        `<button type="button" disabled title="${m.note}">${m.name}</button>`);
+      const placeholders = PLACEHOLDER_MODELS.filter(m => !data.engines.some(e => e.id === m.id))
+        .map(m => `<button type="button" disabled title="${m.note}">${m.name}</button>`);
       $("modelButtons").innerHTML = [...real, ...placeholders].join("");
       for (const btn of $("modelButtons").querySelectorAll("button[data-model-id]")) {
         btn.addEventListener("click", () => switchToEngine(btn.dataset.modelId));
       }
-      $("engineSwitchStatus").textContent = `Currently: ${data.active.name}${data.active.id === "unknown" ? " (unrecognized build)" : ""}`;
+      $("engineSwitchStatus").textContent = switching ? "Switching…"
+        : `Currently: ${data.active.name}${data.active.id === "unknown" ? " (unrecognized build)" : ""}`;
     } catch (_) { /* keep last known state on a transient poll failure */ }
   }
   refreshEngines();
