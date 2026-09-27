@@ -142,6 +142,89 @@ class RegistryTests(unittest.TestCase):
                 engines.brockone_sse(bad)
 
 
+class LiveTrialTests(unittest.TestCase):
+    """Explicitly synthetic authorization; no real readiness or systemd calls."""
+
+    setUp = RegistryTests.setUp
+
+    def trial(self, **changes):
+        entry = self.entries['brockone']
+        entry['validation_mode'] = 'live_trial'
+        value = {'state': 'orin_engine_live_trial', 'model_id': 'brockone',
+                 'engine_root': entry['path'], 'user_authorized_validation_bypass': True,
+                 'validation_performed': False, 'validation_passed': False}
+        value.update(changes)
+        proof = Path(entry['readiness_receipt'])
+        proof.write_text(json.dumps(value))
+        entry['readiness_sha256'] = hashlib.sha256(proof.read_bytes()).hexdigest()
+        return value
+
+    def test_trial_is_explicit_and_visibly_unvalidated(self):
+        proof = self.trial()
+        self.assertTrue(self.switcher.availability('brockone')[0])
+        self.assertNotIn('engine_load_passed', proof)
+        self.assertNotIn('prepared_pixels_passed', proof)
+        descriptor = self.switcher.descriptor('brockone')
+        self.assertIn('unvalidated trial', descriptor['name'])
+        self.assertIn('Unvalidated live trial', descriptor['profile'])
+        self.assertEqual(descriptor['validation_status'], 'unvalidated_live_trial')
+        self.assertEqual(descriptor['model_id'], 'brockone')
+        self.assertEqual(descriptor['request_policy'], engines.BROCKONE_POLICY)
+        self.assertEqual(self.switcher.selected, 'cosmos')
+
+    def test_trial_receipt_cannot_pass_default_validated_mode(self):
+        self.trial()
+        self.entries['brockone'].pop('validation_mode')
+        self.assertFalse(self.switcher.availability('brockone')[0])
+
+    def test_validated_receipt_cannot_pass_trial_mode(self):
+        self.entries['brockone']['validation_mode'] = 'live_trial'
+        self.assertFalse(self.switcher.availability('brockone')[0])
+
+    def test_exact_authorization_scope_is_required(self):
+        for key, value in [('state', 'orin_engine_validated'), ('model_id', 'other'),
+                           ('engine_root', '/wrong/engine'), ('user_authorized_validation_bypass', False),
+                           ('user_authorized_validation_bypass', 1), ('validation_performed', True),
+                           ('validation_passed', True)]:
+            with self.subTest(key=key, value=value):
+                self.trial(**{key: value})
+                with mock.patch.object(self.switcher, 'command') as command:
+                    self.assertFalse(self.switcher.switch('brockone')[0])
+                command.assert_not_called()
+                self.assertEqual(self.switcher.selected, 'cosmos')
+
+    def test_trial_keeps_hash_and_disabled_engine_gates(self):
+        self.trial()
+        self.entries['brockone']['readiness_sha256'] = '0' * 64
+        self.assertFalse(self.switcher.availability('brockone')[0])
+        self.trial()
+        self.entries['brockone']['enabled'] = False
+        self.assertFalse(self.switcher.availability('brockone')[0])
+
+    def test_trial_switches_both_ways_and_preserves_rollback(self):
+        self.trial()
+        with mock.patch.object(self.switcher, 'command', return_value=True) as command, \
+             mock.patch.object(self.switcher, 'wait_ready', return_value=True):
+            self.assertTrue(self.switcher.switch('brockone')[0])
+            self.assertTrue(self.switcher.switch('cosmos')[0])
+        self.assertEqual(command.call_args_list, [mock.call('stop', 'cosmos'), mock.call('start', 'brockone'),
+                                                 mock.call('stop', 'brockone'), mock.call('start', 'cosmos')])
+        self.assertEqual(self.switcher.selected, 'cosmos')
+        with mock.patch.object(self.switcher, 'command', return_value=True) as command, \
+             mock.patch.object(self.switcher, 'wait_ready', side_effect=[False, True]):
+            ok, reason = self.switcher.switch('brockone')
+        self.assertFalse(ok)
+        self.assertIn('restored Cosmos3-Edge', reason)
+        self.assertEqual(self.switcher.selected, 'cosmos')
+        self.assertEqual(command.call_args_list, [mock.call('stop', 'cosmos'), mock.call('start', 'brockone'),
+                                                 mock.call('stop', 'brockone'), mock.call('start', 'cosmos')])
+
+    def test_unknown_mode_rejected(self):
+        self.entries['brockone']['validation_mode'] = 'bypass_everything'
+        with self.assertRaises(ValueError):
+            engines.validate_registry(self.entries)
+
+
 class FakeModel(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass

@@ -53,6 +53,9 @@ def validate_registry(entries):
         if entry["protocol"] == "brockone":
             if entry["model_id"] != "brockone":
                 raise ValueError("The brockone protocol requires model_id brockone")
+            mode = entry.get("validation_mode", "validated")
+            if mode not in {"validated", "live_trial"}:
+                raise ValueError("Unknown brockone validation mode")
             proof, sha = entry.get("readiness_receipt"), entry.get("readiness_sha256")
             if (not isinstance(proof, str) or not Path(proof).is_absolute()
                     or not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{64}", sha)):
@@ -93,6 +96,17 @@ class ServiceEngineSwitcher:
                 if hashlib.sha256(proof).hexdigest() != entry["readiness_sha256"]:
                     return False, "Target validation receipt differs from the installed configuration"
                 value = json.loads(proof)
+                if not isinstance(value, dict):
+                    return False, "Target admission receipt must be an object"
+                if entry.get("validation_mode", "validated") == "live_trial":
+                    if (value.get("state") != "orin_engine_live_trial"
+                            or value.get("model_id") != "brockone"
+                            or value.get("engine_root") != entry["path"]
+                            or value.get("user_authorized_validation_bypass") is not True
+                            or value.get("validation_performed") is not False
+                            or value.get("validation_passed") is not False):
+                        return False, "Unvalidated live trial authorization is incomplete"
+                    return True, ""
                 if (value.get("state") != "orin_engine_validated" or value.get("model_id") != "brockone"
                         or value.get("engine_root") != entry["path"]
                         or value.get("engine_load_passed") is not True
@@ -106,8 +120,14 @@ class ServiceEngineSwitcher:
     def descriptor(self, key):
         entry = self.engines[key]
         available, reason = self.availability(key)
-        return {"id": key, "name": entry["name"], "model_id": entry["model_id"],
-                "profile": entry.get("profile", ""), "available": available, "reason": reason,
+        trial = entry["protocol"] == "brockone" and entry.get("validation_mode") == "live_trial"
+        name = entry["name"] + " (unvalidated trial)" if trial else entry["name"]
+        profile = entry.get("profile", "")
+        if trial:
+            profile = "Unvalidated live trial" + (" · " + profile if profile else "")
+        return {"id": key, "name": name, "model_id": entry["model_id"],
+                "profile": profile, "available": available, "reason": reason,
+                "validation_status": "unvalidated_live_trial" if trial else "standard",
                 "request_policy": BROCKONE_POLICY.copy() if entry["protocol"] == "brockone" else None}
 
     def active(self):
