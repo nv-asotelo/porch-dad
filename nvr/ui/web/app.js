@@ -1437,6 +1437,38 @@ if (typeof document !== "undefined") {
     btn.addEventListener("pointerleave", stop);
     btn.addEventListener("pointercancel", stop);
   }
+  // Body yaw drives the head yaw target to match (so the two swing together as one turn, rather
+  // than the base rotating while the head stays fixed relative to it - awkward to watch and to
+  // demo), and snaps near a handful of key angles: an in-zone drag holds at the snap point
+  // instead of tracking the pointer 1:1, the way a detent does, so a fixed angle is easy to hit
+  // exactly rather than eyeballed against the readout.
+  const BODY_YAW_SNAPS_DEG = [-135, -90, -45, 0, 45, 90, 135];
+  const BODY_YAW_SNAP_TOLERANCE_DEG = 2.5;
+  function snapBodyYawRad(rad) {
+    const deg = rad / D2R;
+    let nearest = null, nearestDist = Infinity;
+    for (const snap of BODY_YAW_SNAPS_DEG) {
+      const dist = Math.abs(deg - snap);
+      if (dist < nearestDist) { nearest = snap; nearestDist = dist; }
+    }
+    return nearestDist <= BODY_YAW_SNAP_TOLERANCE_DEG ? nearest * D2R : rad;
+  }
+  function bindBodyYaw(id, lblId) {
+    const el = $(id), lbl = $(lblId);
+    if (!el) return;
+    const paint = () => { lbl.textContent = rcNum(T.body_yaw) + " rad"; };
+    el.addEventListener("input", () => {
+      tTouch();
+      const snapped = snapBodyYawRad(parseFloat(el.value));
+      el.value = snapped;
+      T.body_yaw = snapped;
+      T.yaw = Math.max(-Math.PI, Math.min(Math.PI, snapped));
+      paint();
+      const pad = $("padPY"); if (pad && pad._paint) pad._paint();
+      tSend();
+    });
+    paint();
+  }
   function syncCtl(rs) {
     if (Date.now() - tGrabbed < 1500) return;
     const p = rs.pose_deg || {}, m = rs.pos_m || {};
@@ -1466,7 +1498,7 @@ if (typeof document !== "undefined") {
   bindSlider("antL", "antLv", null, " rad", 0);
   bindSlider("antR", "antRv", null, " rad", 1);
   bindSlider("roll", "rollv", "roll", " rad");
-  bindSlider("byaw", "byawv", "body_yaw", " rad");
+  bindBodyYaw("byaw", "byawv");
   bindSlider("posZ", "zv", "z", "");
   bindPad("padXY", "xyv", "x", "y", 0.02, 0.02, false, false);
   // Both axes flipped from the original porch-feed mapping - reported backwards on the physical
