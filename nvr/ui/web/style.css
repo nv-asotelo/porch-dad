@@ -82,6 +82,7 @@
 #reachyControls summary{cursor:pointer;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;font-weight:600;list-style:revert}
 #reachyControls[open] summary{border-bottom:1px solid var(--line)}
 #reachyControls .controls{padding:14px 18px 0}
+#reachyControls input[type=text]{font:inherit;font-size:13px;background:#121b15;color:#e8eee9;border:1px solid #3c5041;border-radius:6px;padding:10px 11px;line-height:1.5}
 #reachyControls .hint{margin:12px 18px 16px}
 #reachyControls .sec{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:14px 18px 6px;display:flex;align-items:center;gap:7px}
 #reachyControls .ctlrow{display:flex;gap:8px;flex-wrap:wrap;padding:0 18px}
