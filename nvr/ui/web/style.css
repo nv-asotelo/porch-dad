@@ -97,6 +97,12 @@
 #reachyControls input[type=range].vert{writing-mode:vertical-lr;direction:rtl;width:22px;height:120px}
 #reachyControls .controls button.active{color:#13220b;background:var(--green);border-color:var(--green);font-weight:650}
 #reachyPoseStatus{color:#ffb3a7;margin:0 18px 12px}
+#reachyControls .jogpad{display:grid;grid-template-columns:repeat(3,32px);grid-template-rows:repeat(3,32px);gap:4px;justify-content:center;margin-top:9px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#reachyControls .jog{padding:0;font-size:12px;line-height:1;border-radius:8px;touch-action:none}
+#reachyControls .jog-u{grid-area:1/2}
+#reachyControls .jog-l{grid-area:2/1}
+#reachyControls .jog-r{grid-area:2/3}
+#reachyControls .jog-d{grid-area:3/2}
 @media(max-width:600px){.status-bar{padding:0 16px 14px}.caption-dock .answer,.caption-dock .answer.streaming{min-height:120px}}
 
 .model-panel{grid-column:1/-1;padding:18px 20px;border:1px solid var(--line);border-radius:12px;background:#19221c}
