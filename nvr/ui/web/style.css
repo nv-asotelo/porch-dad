@@ -98,8 +98,9 @@
 #reachyControls .controls button.active{color:#13220b;background:var(--green);border-color:var(--green);font-weight:650}
 #reachyPoseStatus{color:#ffb3a7;margin:0 18px 12px}
 #reachyControls .padjog{display:flex;flex-direction:column;align-items:center;gap:5px;margin-top:9px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-#reachyControls .padjog .padrow{display:flex;align-items:center;gap:7px}
-#reachyControls .jog{width:22px;height:22px;padding:0;font-size:10px;line-height:1;border-radius:6px;touch-action:none;background:transparent;color:var(--muted);opacity:.6}
+#reachyControls .padjog .padrow{display:flex;align-items:center;justify-content:center;gap:7px}
+#reachyControls .padjog .padrow .pad{flex:0 0 150px;max-width:150px}
+#reachyControls .jog{width:32px;height:32px;padding:0;font-size:12px;line-height:1;border-radius:8px;touch-action:none;background:transparent;color:var(--muted);opacity:.6}
 #reachyControls .jog:hover,#reachyControls .jog:active,#reachyControls .jog:focus-visible{opacity:1;color:#e8eee9}
 @media(max-width:600px){.status-bar{padding:0 16px 14px}.caption-dock .answer,.caption-dock .answer.streaming{min-height:120px}}
 
