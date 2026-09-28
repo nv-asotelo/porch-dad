@@ -1382,12 +1382,12 @@ if (typeof document !== "undefined") {
   }
   // A pad maps the two axes of a square onto two target fields. `inv` flips the vertical axis for
   // pitch, which is positive downward on this robot: without it, dragging up would look down.
-  function bindPad(id, lblId, kx, ky, rx, ry, inv) {
+  function bindPad(id, lblId, kx, ky, rx, ry, invX, invY) {
     const pad = $(id); if (!pad) return;
     const dot = pad.querySelector("i"), lbl = $(lblId);
     let down = false;
     const paint = () => {
-      const fx = (T[kx] / rx + 1) / 2, fy = ((inv ? -T[ky] : T[ky]) / ry + 1) / 2;
+      const fx = ((invX ? -T[kx] : T[kx]) / rx + 1) / 2, fy = ((invY ? -T[ky] : T[ky]) / ry + 1) / 2;
       dot.style.left = (Math.min(1, Math.max(0, fx)) * 100) + "%";
       dot.style.top = (100 - Math.min(1, Math.max(0, fy)) * 100) + "%";
       lbl.textContent = rcNum(T[kx]) + " " + rcNum(T[ky]);
@@ -1396,9 +1396,9 @@ if (typeof document !== "undefined") {
       const b = pad.getBoundingClientRect();
       const fx = Math.min(1, Math.max(0, (ev.clientX - b.left) / b.width));
       const fy = Math.min(1, Math.max(0, (ev.clientY - b.top) / b.height));
-      T[kx] = (fx * 2 - 1) * rx;
-      const vy = ((1 - fy) * 2 - 1) * ry;
-      T[ky] = inv ? -vy : vy;
+      const vx = (fx * 2 - 1) * rx, vy = ((1 - fy) * 2 - 1) * ry;
+      T[kx] = invX ? -vx : vx;
+      T[ky] = invY ? -vy : vy;
       tTouch(); paint(); tSend();
     };
     pad.addEventListener("pointerdown", e => { down = true; pad.setPointerCapture(e.pointerId); at(e); });
@@ -1406,6 +1406,26 @@ if (typeof document !== "undefined") {
     pad.addEventListener("pointerup", e => { down = false; at(e); });
     pad.addEventListener("pointercancel", () => { down = false; });
     pad._paint = paint; paint();
+  }
+  // A small fixed step per press/tick, held to repeat - independent of the pad's own drag
+  // sensitivity, for a finer, steadier adjustment than a twitchy pad allows. sign follows the
+  // same invX/invY convention bindPad above was just given: a jog button moves the same way as
+  // dragging the pad in that direction would.
+  function bindJog(id, key, stepDeg, sign, limitRad, padId) {
+    const btn = $(id); if (!btn) return;
+    let timer = null;
+    const tick = () => {
+      T[key] = Math.max(-limitRad, Math.min(limitRad, T[key] + sign * stepDeg * D2R));
+      tTouch();
+      const pad = $(padId); if (pad && pad._paint) pad._paint();
+      tSend();
+    };
+    const start = ev => { ev.preventDefault(); tick(); timer = setInterval(tick, 120); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    btn.addEventListener("pointerdown", start);
+    btn.addEventListener("pointerup", stop);
+    btn.addEventListener("pointerleave", stop);
+    btn.addEventListener("pointercancel", stop);
   }
   function syncCtl(rs) {
     if (Date.now() - tGrabbed < 1500) return;
@@ -1438,8 +1458,16 @@ if (typeof document !== "undefined") {
   bindSlider("roll", "rollv", "roll", " rad");
   bindSlider("byaw", "byawv", "body_yaw", " rad");
   bindSlider("posZ", "zv", "z", "");
-  bindPad("padXY", "xyv", "x", "y", 0.02, 0.02, false);
-  bindPad("padPY", "pyv", "yaw", "pitch", Math.PI, 0.7, true);
+  bindPad("padXY", "xyv", "x", "y", 0.02, 0.02, false, false);
+  // Both axes flipped from the original porch-feed mapping - reported backwards on the physical
+  // robot for set_target's target_head_pose (a different daemon route than the goto()-based
+  // look()/centre() this sign convention was originally verified against - see Reachy.look()'s
+  // own docstring - so the two need not agree).
+  bindPad("padPY", "pyv", "yaw", "pitch", Math.PI, 0.7, true, false);
+  bindJog("jogPitchUp", "pitch", 2, 1, 0.7, "padPY");
+  bindJog("jogPitchDown", "pitch", 2, -1, 0.7, "padPY");
+  bindJog("jogYawLeft", "yaw", 2, 1, Math.PI, "padPY");
+  bindJog("jogYawRight", "yaw", 2, -1, Math.PI, "padPY");
 
   let reachyAppsLoadedAt = 0;
   async function refreshReachyApps() {
