@@ -1125,6 +1125,11 @@ if (typeof document !== "undefined") {
   function startReachy() {
     // No getUserMedia: the robot's video comes from the Jetson, so this works over plain HTTP.
     error(); reachyRequested = false;
+    // Same reasoning as startCamera()'s own releaseCamera() call: switching source while one is
+    // already open otherwise leaks the previous one instead of properly stopping it - a webcam's
+    // MediaStream tracks were never being stopped when switching straight to Reachy, which could
+    // leave the camera hardware held (and on some browsers, unavailable to reacquire later).
+    releaseCamera();
     state.running = true; state.source = "reachy";
     const generation = ++state.cameraGeneration;
     Object.assign(reachy, {polling: null, live: false, wasLive: false, healthAt: 0, audioLive: false,
@@ -1226,7 +1231,12 @@ if (typeof document !== "undefined") {
     facingMode = facingMode === "environment" ? "user" : "environment";
     if (state.running && state.source === "camera") startCamera();
   });
-  $("reachyButton").addEventListener("click", () => { if (!state.running && !state.busy) startReachy(); });
+  // No !state.running guard (unlike the old version of this handler): startReachy() now tears
+  // down any active webcam itself via releaseCamera(), the same way startButton's startCamera()
+  // has always torn down an active Reachy session - so this needs to work while the camera is
+  // already running, not only from a stopped state. That asymmetry (camera->Reachy silently did
+  // nothing unless Stop was clicked first; Reachy->camera always worked) was the reported bug.
+  $("reachyButton").addEventListener("click", () => { if (!state.busy) startReachy(); });
   $("listenButton").addEventListener("click", () => {
     if (!reachyActive()) return;
     error();
@@ -1520,6 +1530,14 @@ if (typeof document !== "undefined") {
   $("reachyMicVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/mic/${e.target.value}`));
   $("reachySpeakButton").addEventListener("click", () => {
     const text = $("reachySpeakText").value.trim();
+    if (text) reachyPost("/api/reachy/speak", {text});
+  });
+  $("reachySpeakAnswer").addEventListener("click", () => {
+    if (!state.completed || $("answer").classList.contains("streaming")) {
+      error("No completed caption to speak yet - wait for one to finish.");
+      return;
+    }
+    const text = $("answer").textContent.trim();
     if (text) reachyPost("/api/reachy/speak", {text});
   });
   pollReachyControlState();
