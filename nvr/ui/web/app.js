@@ -510,7 +510,11 @@ if (typeof document !== "undefined") {
     advanced: {...ADVANCED_DEFAULTS}, advancedValid: true, source: "camera",
     policy: null, activeEngineId: null, remoteSwitching: false};
   const engineRequests = new EngineRequestScope(), policySettings = new EnginePolicySettings();
-  let engineSwitching = false, engineData = null;
+  let engineSwitching = false, engineData = null, switchProgressTimer = null;
+  // ?model=<id> (a bookmarkable/kiosk link) requests a switch once the backend is confirmed
+  // ready, the same one-shot pattern as ?source=reachy below - honoured once, and only if
+  // nothing else was chosen while the page was loading.
+  let modelRequested = new URLSearchParams(window.location.search).get("model") || null;
   const switchingEngine = () => engineSwitching || state.remoteSwitching;
   const canvas = document.createElement("canvas");
   // The Reachy source while state.source === "reachy": bridge health, the relayed MJPEG
@@ -764,6 +768,15 @@ if (typeof document !== "undefined") {
     if (state.ready && reachyRequested) {
       reachyRequested = false;
       if (!state.running && !state.busy && !state.imageURL) startReachy();
+    }
+    if (state.ready && modelRequested && engineData?.configured) {
+      const target = modelRequested; modelRequested = null;
+      const choice = engineChoices(engineData).find(engine => engine.id === target);
+      if (!choice) error(`?model=${target} is not a known model on this device.`);
+      else if (target !== engineData.active?.id) {
+        if (choice.available) switchToEngine(target);
+        else error(`?model=${target} requested, but it is not available: ${choice.reason || "not available on this device"}`);
+      }
     }
   }
   function capture(source) {
@@ -1467,6 +1480,29 @@ if (typeof document !== "undefined") {
   pollReachyControlState();
   setInterval(pollReachyControlState, 5000);
 
+  // Real elapsed time against the server's own switch_progress.timeout - never a fabricated
+  // percentage. started_at/timeout come from whichever switcher is active (ServiceEngineSwitcher
+  // or the legacy symlink EngineSwitcher, both now report it - see /api/engines in serve_ui.py).
+  // Ticks on a local timer between the 5 s /api/engines polls so the bar moves smoothly; capped
+  // short of 100% until the switch actually reports done, since "done" is a real event, not a
+  // time estimate.
+  function updateSwitchProgress() {
+    const bar = $("engineSwitchProgress"), fill = $("engineSwitchProgressFill");
+    const active = switchingEngine();
+    bar.hidden = !active;
+    if (!active) {
+      if (switchProgressTimer) { clearInterval(switchProgressTimer); switchProgressTimer = null; }
+      fill.style.width = "0%";
+      return;
+    }
+    const progress = engineData?.switch_progress;
+    const pct = progress && Number.isFinite(progress.started_at) && progress.timeout > 0
+      ? Math.max(2, Math.min(96, (Date.now() / 1000 - progress.started_at) / progress.timeout * 100))
+      : 2;
+    fill.style.width = `${pct}%`;
+    bar.setAttribute("aria-valuenow", String(Math.round(pct)));
+    if (!switchProgressTimer) switchProgressTimer = setInterval(updateSwitchProgress, 300);
+  }
   // One health/engine poll owns the complete model snapshot. Switches retire it
   // and refresh every endpoint on success and rollback; camera/robot preview stays.
   function renderEngines() {
@@ -1480,6 +1516,7 @@ if (typeof document !== "undefined") {
     $("engineSwitchHint").textContent = engineData.configured
       ? "Only one model is resident at a time. Switching pauses inference while the new model loads; a failed switch attempts to restore the previous model."
       : "Model switching is not configured on this device.";
+    updateSwitchProgress();
   }
   async function switchToEngine(id) {
     const choice = engineData && engineChoices(engineData).find(engine => engine.id === id);
@@ -1522,11 +1559,25 @@ if (typeof document !== "undefined") {
       const response = await fetch("/api/services", {cache: "no-store"});
       const data = await response.json();
       const fmtMb = mb => mb === null || mb === undefined ? "—" : mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
-      $("servicesList").innerHTML = (data.services || []).map(s => `
-        <li class="service-row ${s.running ? "running" : "stopped"}">
+      // A switchable model's own service is stopped whenever it is not the currently selected
+      // one - expected, not a fault. "active" (present only for entries backed by the engine
+      // registry - see service_list() in serve_ui.py) tells the two apart: an unselected model
+      // reads "not selected" rather than the alarming bare "stopped" it used to, and the one real
+      // fault state - selected but its process is not actually up - gets its own visible class.
+      $("servicesList").innerHTML = (data.services || []).map(s => {
+        const managed = "active" in s;
+        const fault = managed && s.active && !s.running;
+        const rowClass = fault ? "fault" : !managed ? (s.running ? "running" : "stopped")
+          : s.active ? "running" : "standby";
+        const label = fault ? "active · not responding"
+          : !managed ? (s.running ? "running" : "stopped")
+          : s.active ? "active · running" : (s.running ? "running (not selected)" : "not selected");
+        return `
+        <li class="service-row ${rowClass}">
           <span class="service-name"><span class="service-dot"></span>${s.name}</span>
-          <span class="service-detail">${s.running ? "running" : "stopped"} · RAM ${fmtMb(s.memory_mb)} · disk ${fmtMb(s.storage_mb)} (${s.disk})</span>
-        </li>`).join("") || `<li class="hint">No services configured.</li>`;
+          <span class="service-detail">${label} · RAM ${fmtMb(s.memory_mb)} · disk ${fmtMb(s.storage_mb)} (${s.disk})</span>
+        </li>`;
+      }).join("") || `<li class="hint">No services configured.</li>`;
     } catch (_) { /* keep last known list on a transient poll failure */ }
   }
   refreshServices();
