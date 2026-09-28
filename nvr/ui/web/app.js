@@ -911,7 +911,15 @@ if (typeof document !== "undefined") {
       // "speaking" guard below), which is exactly the behaviour wanted here: a caption that lands
       // while Reachy is still speaking the last one is skipped, not queued, so auto-speak tracks
       // captioning as closely as the configured rate allows without ever building a backlog.
-      if (autoSpeak) speakText(output);
+      if (autoSpeak) {
+        const now = Date.now();
+        if (!rateLocked && lastCaptionCompletedAt !== null && now - lastCaptionCompletedAt < AUTO_SPEAK_LOCK_INTERVAL_MS) {
+          rateLocked = true;
+          setSpeechRate(FASTEST_SPEECH_RATE);
+        }
+        lastCaptionCompletedAt = now;
+        speakText(output);
+      }
     } catch (err) {
       if (state.abort !== controller) return;
       const skipped = trigger === "live" ? skippedSampleReason(err) : null;
@@ -1610,15 +1618,32 @@ if (typeof document !== "undefined") {
       answerBtn.textContent = answerLabel; manualBtn.textContent = manualLabel;
     }
   }
-  for (const btn of document.querySelectorAll("#reachyControls .speedopt")) {
-    btn.addEventListener("click", () => {
-      speechRate = parseFloat(btn.dataset.rate);
-      for (const other of document.querySelectorAll("#reachyControls .speedopt")) other.classList.toggle("active", other === btn);
-    });
+  const SPEECH_RATES = Array.from(document.querySelectorAll("#reachyControls .speedopt"), btn => parseFloat(btn.dataset.rate));
+  const FASTEST_SPEECH_RATE = Math.max(...SPEECH_RATES);
+  function setSpeechRate(rate) {
+    speechRate = rate;
+    for (const btn of document.querySelectorAll("#reachyControls .speedopt")) {
+      btn.classList.toggle("active", parseFloat(btn.dataset.rate) === rate);
+    }
   }
+  for (const btn of document.querySelectorAll("#reachyControls .speedopt")) {
+    btn.addEventListener("click", () => { rateLocked = false; setSpeechRate(parseFloat(btn.dataset.rate)); });
+  }
+  // Real measurement, not a guess: the fastest live captioning this box does (Live VLM WebUI,
+  // no interval throttle) lands consecutive captions well under 2s apart - see the v3 shim's own
+  // [perf] log, elapsed_ms in the 400-700ms range back to back - while Piper+sox at 1x commonly
+  // takes 2-3s for a caption-length sentence. No fixed rate keeps up with every caption; the
+  // pragmatic fix is detecting when captions are outrunning speech and switching to the fastest
+  // available rate automatically, rather than silently falling further and further behind. A
+  // one-way ratchet per auto-speak session (not continuously re-evaluated) - once captions have
+  // proven they can arrive that fast, staying fast avoids flapping back and forth every time one
+  // answer happens to land a little slower.
+  const AUTO_SPEAK_LOCK_INTERVAL_MS = 1500;
+  let lastCaptionCompletedAt = null, rateLocked = false;
   let autoSpeak = false;
   $("autoSpeakButton").addEventListener("click", () => {
     autoSpeak = !autoSpeak;
+    lastCaptionCompletedAt = null; rateLocked = false;
     $("autoSpeakButton").setAttribute("aria-pressed", String(autoSpeak));
     $("autoSpeakButton").textContent = `Auto-speak: ${autoSpeak ? "On" : "Off"}`;
   });
