@@ -132,6 +132,92 @@ function describeReachyHealth(health) {
 
 const ADVANCED_DEFAULTS = {imageTokens: 512, imageTokenLimit: 512, topP: 1};
 
+// A backend change retires both inference and health requests. Late responses
+// from either must not update the new model's caption, settings or readiness.
+class EngineRequestScope {
+  constructor() { this.version = 0; this.requests = new Set(); }
+  begin() {
+    const ticket = {version: this.version, controller: new AbortController()};
+    this.requests.add(ticket); return ticket;
+  }
+  current(ticket) { return ticket.version === this.version && !ticket.controller.signal.aborted; }
+  release(ticket) { this.requests.delete(ticket); }
+  invalidate() {
+    this.version += 1;
+    for (const ticket of this.requests) ticket.controller.abort();
+    this.requests.clear();
+  }
+}
+
+async function runEngineSwitch(scope, {before, request, after, refresh}) {
+  scope.invalidate(); before();
+  let failure;
+  try { await request(); } catch (err) { failure = err; }
+  finally {
+    after();
+    try { await refresh(); } catch (err) { failure ||= err; }
+  }
+  if (failure) throw failure;
+}
+
+function enginePolicy(active) {
+  const policy = active?.request_policy;
+  if (!policy && active?.model_id !== "brockone" && active?.id !== "brockone") return null;
+  if (!policy || typeof policy.prompt !== "string" || !policy.prompt.trim() ||
+      policy.max_tokens !== 64 || policy.temperature !== 0 || policy.image_tokens !== 512 || policy.stream !== false) {
+    throw new Error("The selected model's fixed request policy is unavailable.");
+  }
+  return {...policy};
+}
+
+class EnginePolicySettings {
+  constructor() { this.saved = null; }
+  apply(policy, current) {
+    if (policy) {
+      this.saved ||= {...current};
+      return {...current, prompt: policy.prompt, maxTokens: String(policy.max_tokens),
+        imageTokenPreset: String(policy.image_tokens), customImageTokens: String(policy.image_tokens), topP: "1"};
+    }
+    const previous = this.saved; this.saved = null; return previous;
+  }
+}
+
+function engineChoices(data) {
+  if (!data || typeof data.configured !== "boolean" || !Array.isArray(data.engines)) throw new Error("Engine list unavailable");
+  if (data.configured && (!data.active || typeof data.active.id !== "string" || typeof data.active.name !== "string")) throw new Error("Active engine identity unavailable");
+  const choices = [], ids = new Set();
+  for (const engine of data.engines) {
+    if (!engine || typeof engine.id !== "string" || !engine.id || ids.has(engine.id) || typeof engine.name !== "string") {
+      throw new Error("Invalid engine list");
+    }
+    ids.add(engine.id);
+    choices.push({...engine, available: engine.available === true,
+      reason: typeof engine.reason === "string" ? engine.reason : "Not available on this device"});
+  }
+  for (const id of ["brockone", "brocktwo"]) {
+    if (!ids.has(id)) choices.push({id, name: id, available: false, reason: "Not configured on this device"});
+  }
+  return choices;
+}
+
+function renderEngineChoices(container, data, switching, onSwitch) {
+  const nodes = engineChoices(data).map(engine => {
+    const card = container.ownerDocument.createElement("div"); card.className = "model-choice";
+    const button = container.ownerDocument.createElement("button"); button.type = "button";
+    const active = engine.id === data.active?.id;
+    button.textContent = engine.name; button.dataset.modelId = engine.id;
+    button.className = active ? "active" : "";
+    button.setAttribute("aria-pressed", String(active));
+    button.disabled = switching || active || !engine.available;
+    button.title = !engine.available ? engine.reason : (engine.profile || engine.name);
+    button.addEventListener("click", () => { if (!button.disabled) onSwitch(engine.id); });
+    const note = container.ownerDocument.createElement("small"); note.className = "model-availability";
+    note.textContent = !engine.available ? engine.reason : active ? "Active" : "Available";
+    card.append(button, note); return card;
+  });
+  container.replaceChildren(...nodes);
+}
+
 function validateAdvancedSettings(imageTokens, topP, limit = ADVANCED_DEFAULTS.imageTokenLimit) {
   if (!Number.isInteger(imageTokens) || imageTokens < 4 || imageTokens > limit) {
     throw new Error(`Choose an input image token budget from 4 to ${limit}, in whole tokens.`);
@@ -413,7 +499,7 @@ function startDeviceTelemetry() {
   resume();
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, runEngineSwitch};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -421,7 +507,15 @@ if (typeof document !== "undefined") {
     abort: null, captureAt: null, completed: 0, imageURL: null, checking: false, cameraGeneration: 0,
     preset: "lightweight", frameCallback: null, sampled: 0, skipped: 0,
     liveStreaming: true, activeTrigger: null, engineId: null, timingGroup: 0,
-    advanced: {...ADVANCED_DEFAULTS}, advancedValid: true, source: "camera"};
+    advanced: {...ADVANCED_DEFAULTS}, advancedValid: true, source: "camera",
+    policy: null, activeEngineId: null, remoteSwitching: false};
+  const engineRequests = new EngineRequestScope(), policySettings = new EnginePolicySettings();
+  let engineSwitching = false, engineData = null, switchProgressTimer = null;
+  // ?model=<id> (a bookmarkable/kiosk link) requests a switch once the backend is confirmed
+  // ready, the same one-shot pattern as ?source=reachy below - honoured once, and only if
+  // nothing else was chosen while the page was loading.
+  let modelRequested = new URLSearchParams(window.location.search).get("model") || null;
+  const switchingEngine = () => engineSwitching || state.remoteSwitching;
   const canvas = document.createElement("canvas");
   // The Reachy source while state.source === "reachy": bridge health, the relayed MJPEG
   // in #reachyImage, and the microphone. It shares running/cameraGeneration with the
@@ -566,13 +660,16 @@ if (typeof document !== "undefined") {
   matchPromptPreset();
   function error(message = "") { $("error").textContent = message; $("error").hidden = !message; }
   function controls() {
-    $("startButton").disabled = state.running || state.busy;
-    $("reachyButton").disabled = state.running || state.busy;
+    $("startButton").disabled = state.running || state.busy || switchingEngine();
+    $("reachyButton").disabled = state.running || state.busy || switchingEngine();
     $("stopButton").disabled = !state.running && !state.busy;
     const sourceReady = state.running
       ? (state.source === "reachy" ? reachyFrameReady() : Boolean(state.media && $("video").readyState >= 2))
       : Boolean(state.imageURL);
-    $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid;
+    $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid || switchingEngine();
+    for (const id of ["prompt", "promptPreset", "maxTokens", "imageTokenPreset", "customImageTokens", "topP", "lightweightPreset", "liveVlmPreset"]) {
+      $(id).disabled = Boolean(state.policy) || switchingEngine();
+    }
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
     $("listenButton").hidden = !reachyActive();
@@ -582,21 +679,66 @@ if (typeof document !== "undefined") {
     // robot regardless of which way a phone in your hand is facing.
     $("flipCameraButton").hidden = !(state.running && state.source === "camera");
   }
+  function retireEngineAnswer(message) {
+    state.abort?.abort(); state.abort = null; state.busy = false; state.activeTrigger = null;
+    state.ready = false; state.completed = 0; state.captureAt = null;
+    resetTimingGroup(message);
+    $("answer").textContent = message; $("answer").classList.remove("streaming");
+    $("runStatus").textContent = message; $("requestCount").textContent = "0 completed";
+    for (const id of ["ttft", "totalTime", "frameAge"]) $(id).textContent = "—";
+    $("captureStatus").textContent = "No frame sent";
+  }
+  function modelSettings() {
+    return Object.fromEntries(["prompt", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"].map(id => [id, $(id).value]));
+  }
+  function applyModelPolicy(policy, restored) {
+    state.policy = policy;
+    if (restored) for (const [id, value] of Object.entries(restored)) $(id).value = value;
+    if (policy) state.advanced.imageTokenLimit = 512;
+    applyAdvancedControls(false); matchPromptPreset();
+    $("modelPolicyStatus").hidden = !policy;
+    $("modelPolicyStatus").textContent = policy
+      ? "brockone identifies Pokémon with a fixed prompt, 64 output tokens, 512 image tokens and temperature 0. Answers arrive complete; token timing is unavailable." : "";
+    $("firstTextLabel").textContent = policy ? "Token timing unavailable" : "First visible token";
+    $("serverTtftHelp").textContent = policy
+      ? "brockone returns one complete answer. Native TTFT and token speed are not reported; Round trip is browser time to the complete response."
+      : "TTFT: native inference start → first nonempty server text, including server scheduling.";
+    $("presetDescription").hidden = Boolean(policy);
+    controls();
+  }
   async function checkBackend() {
-    if (state.checking) return;
-    state.checking = true;
+    if (state.checking || engineSwitching) return;
+    const ticket = engineRequests.begin(); state.checking = ticket;
+    const load = async url => {
+      try {
+        const response = await fetch(url, {cache: "no-store", signal: AbortSignal.any([ticket.controller.signal, AbortSignal.timeout(5000)])});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (_) { return null; }
+    };
     try {
-      const [health, models, runtime] = await Promise.all([
-        fetch("/health/ready", {signal: AbortSignal.timeout(5000)}),
-        fetch("/v1/models", {signal: AbortSignal.timeout(5000)}),
-        fetch("/api/runtime", {cache: "no-store", signal: AbortSignal.timeout(5000)})
-          .then(response => response.ok ? response.json() : null).catch(() => null)
-      ]);
-      if (!health.ok || !models.ok) throw new Error("unavailable");
-      const healthData = await health.json();
-      const modelsData = await models.json();
-      const model = modelsData.data?.[0]?.id;
-      if (healthData.status !== "ready" || !model) throw new Error("not ready");
+      const [healthData, modelsData, runtime, engines] = await Promise.all([
+        load("/health/ready"), load("/v1/models"), load("/api/runtime"), load("/api/engines")]);
+      if (!engineRequests.current(ticket) || state.checking !== ticket) return;
+      if (!engines) throw new Error("Engine status unavailable");
+      engineChoices(engines); engineData = engines;
+      state.remoteSwitching = engines.switching === true;
+      renderEngines();
+      if (state.remoteSwitching) {
+        retireEngineAnswer("Model switch in progress · camera preview stays connected");
+        throw new Error("Model switch in progress");
+      }
+      const active = engines.configured ? engines.active : null;
+      if (state.activeEngineId !== null && active?.id !== state.activeEngineId) {
+        retireEngineAnswer("Model changed · waiting for a new answer");
+      }
+      state.activeEngineId = active?.id ?? null;
+      const policy = enginePolicy(active);
+      if (active?.available === false) throw new Error(active.reason || "Selected model is not qualified for inference");
+      const model = modelsData?.data?.[0]?.id;
+      if (healthData?.status !== "ready" || !model || (active?.model_id && model !== active.model_id)) throw new Error("Selected model is not ready");
+      if (policy && ["prompt", "max_tokens", "temperature", "image_tokens", "stream"].some(key => runtime?.request_policy?.[key] !== policy[key])) throw new Error("Model policy and runtime do not match");
+      const restored = policySettings.apply(policy, modelSettings());
       state.ready = true; state.model = model;
       $("backendStatus").textContent = "Local backend ready";
       $("backendStatus").className = "badge ready";
@@ -604,21 +746,37 @@ if (typeof document !== "undefined") {
       try { applyRuntime(runtime); } catch (_) {
         $("staticClocksValue").textContent = "Unavailable";
         $("encoderCacheValue").textContent = "Unavailable";
-        $("runtimeStatus").textContent = "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified. Load defaults are shown above.";
+        $("runtimeStatus").textContent = policy
+          ? "brockone uses its fixed request policy. Device clocks and cache sizes are not reported by this endpoint."
+          : "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified. Load defaults are shown above.";
       }
-    } catch (_) {
+      applyModelPolicy(policy, restored);
+    } catch (err) {
+      if (!engineRequests.current(ticket) || state.checking !== ticket) return;
       state.ready = false;
-      $("backendStatus").textContent = "Backend not ready";
+      $("backendStatus").textContent = state.remoteSwitching ? "Switching model…" : "Backend not ready";
       $("backendStatus").className = "badge unavailable";
       $("modelName").textContent = "Waiting for local TensorRT-Edge-LLM";
       $("staticClocksValue").textContent = "Unavailable"; $("encoderCacheValue").textContent = "Unavailable";
       $("runtimeStatus").textContent = "Waiting for the backend to report active engine settings. Load defaults are shown above.";
-      if (!state.busy) $("runStatus").textContent = "Waiting for local backend";
-    } finally { state.checking = false; controls(); }
+      if (!state.busy) $("runStatus").textContent = err.message || "Waiting for local backend";
+    } finally {
+      engineRequests.release(ticket);
+      if (state.checking === ticket) { state.checking = null; controls(); }
+    }
     // Honoured once, and only if nothing else was chosen while the backend was loading.
     if (state.ready && reachyRequested) {
       reachyRequested = false;
       if (!state.running && !state.busy && !state.imageURL) startReachy();
+    }
+    if (state.ready && modelRequested && engineData?.configured) {
+      const target = modelRequested; modelRequested = null;
+      const choice = engineChoices(engineData).find(engine => engine.id === target);
+      if (!choice) error(`?model=${target} is not a known model on this device.`);
+      else if (target !== engineData.active?.id) {
+        if (choice.available) switchToEngine(target);
+        else error(`?model=${target} requested, but it is not available: ${choice.reason || "not available on this device"}`);
+      }
     }
   }
   function capture(source) {
@@ -650,7 +808,7 @@ if (typeof document !== "undefined") {
     return {url, capturedAt};
   }
   async function analyze(source, trigger = "manual") {
-    if (state.busy || !state.ready || !state.advancedValid) return;
+    if (state.busy || !state.ready || !state.advancedValid || switchingEngine()) return;
     // Never send the robot's last picture as if it were current; the status says why not.
     if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return; }
     // A live Reachy sample never ends the source: the robot's video and microphone stay open
@@ -658,8 +816,9 @@ if (typeof document !== "undefined") {
     // or a failed manual request do. The camera keeps stopping on a real failure, as before;
     // both skip what the server turned away for now (skippedSampleReason).
     const keepSource = trigger === "live" && state.source === "reachy";
-    const prompt = $("prompt").value.trim();
-    const maxTokens = Number($("maxTokens").value);
+    const policy = state.policy;
+    const prompt = policy?.prompt ?? $("prompt").value.trim();
+    const maxTokens = policy?.max_tokens ?? Number($("maxTokens").value);
     if (!prompt || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 512) {
       error("Enter a prompt and an output token limit from 1 to 512.");
       if (!keepSource) stop();
@@ -669,9 +828,10 @@ if (typeof document !== "undefined") {
     // engine changes affect the next request and cannot mix timing populations.
     let advanced;
     try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
+    if (policy) advanced = {topP: 1, imageTokens: policy.image_tokens};
     const timingGroup = state.timingGroup;
-    const temperature = CAPTURE_PRESETS[state.preset].temperature;
-    const controller = new AbortController();
+    const temperature = policy?.temperature ?? CAPTURE_PRESETS[state.preset].temperature;
+    const ticket = engineRequests.begin(), controller = ticket.controller;
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
     $("runStatus").textContent = "Reading frame…";
@@ -695,7 +855,7 @@ if (typeof document !== "undefined") {
           ]}]})
       }).catch(network);
       controller.signal.throwIfAborted();
-      if (state.abort !== controller) return;
+      if (state.abort !== controller || !engineRequests.current(ticket)) return;
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw Object.assign(new Error(body.error?.message || `Backend returned HTTP ${response.status}.`),
@@ -711,20 +871,20 @@ if (typeof document !== "undefined") {
         if (completion.finishReason) finishReason = completion.finishReason;
         const text = completion.text;
         if (typeof text === "string" && text.length) {
-          if (firstToken === null) { firstToken = performance.now(); $("ttft").textContent = duration(firstToken - started); }
+          if (firstToken === null) { firstToken = performance.now(); if (!policy) $("ttft").textContent = duration(firstToken - started); }
           output += text;
           if (output.length > 65536) throw new Error("Model output exceeded the display limit.");
           $("answer").textContent = output;
           $("answer").scrollTop = $("answer").scrollHeight;
-          $("answer").classList.add("streaming");
-          $("runStatus").textContent = "Writing answer…";
+          if (!policy) $("answer").classList.add("streaming");
+          $("runStatus").textContent = policy ? "Answer received" : "Writing answer…";
         }
       });
       reader = response.body.getReader();
       while (!done) {
         const chunk = await reader.read().catch(network);
         controller.signal.throwIfAborted();
-        if (state.abort !== controller) return;
+        if (state.abort !== controller || !engineRequests.current(ticket)) return;
         if (chunk.done) { parser.feed(decoder.decode(), true); break; }
         parser.feed(decoder.decode(chunk.value, {stream: true}));
       }
@@ -733,11 +893,12 @@ if (typeof document !== "undefined") {
       if (!output.trim()) throw new Error("The backend completed without visible answer text. Try a larger output token limit.");
       $("totalTime").textContent = duration(performance.now() - started);
       if (timingGroup === state.timingGroup) {
-        serverFirstTextMs = readServerFirstTextMs(serverMetrics);
-        const milliseconds = readServerInferenceMs(serverMetrics);
+        serverFirstTextMs = policy ? null : readServerFirstTextMs(serverMetrics);
+        const milliseconds = policy ? null : readServerInferenceMs(serverMetrics);
         if (milliseconds === null) {
           latency.lastMs = null;
-          $("timingStatus").textContent = "Latest answer has no valid server inference timing; excluded from Average and Timed.";
+          $("timingStatus").textContent = policy ? "Complete answer received · browser round trip only; native token timings unavailable."
+            : "Latest answer has no valid server inference timing; excluded from Average and Timed.";
         } else {
           latency.add(milliseconds);
           $("timingStatus").textContent = "Server-measured native inference · current settings only.";
@@ -761,6 +922,7 @@ if (typeof document !== "undefined") {
         if (!keepSource) state.running = false;
       }
     } finally {
+      engineRequests.release(ticket);
       // Browser cancellation can remain pending after a fetch abort. It must
       // never hold the controls busy or clean up a later request's state.
       try { if (reader) reader.cancel().catch(() => {}); } catch (_) {}
@@ -1190,7 +1352,18 @@ if (typeof document !== "undefined") {
     const now = Date.now();
     if (now - tLast < 60) { if (!tPend) { tPend = true; setTimeout(() => { tPend = false; tSend(); }, 60 - (now - tLast)); } return; }
     tBusy = true; tLast = now;
-    try { await reachyPost("/api/reachy/target", T); } catch (_) { /* a dropped frame of control is not worth a second banner */ }
+    const status = $("reachyPoseStatus");
+    try {
+      await reachyPost("/api/reachy/target", T);
+      status.hidden = true;
+    } catch (e) {
+      // The shared error() banner (also set by reachyPost above) is transient and gets
+      // overwritten by unrelated polling within seconds - a drag that silently stops moving the
+      // robot (motors switched to Limp mid-demo, most often) needs a reason that stays put next
+      // to the controls, not a flash of red text elsewhere on the page.
+      status.textContent = e.message || "Move refused";
+      status.hidden = false;
+    }
     tBusy = false;
     if (tPend) { tPend = false; tSend(); }
   }
@@ -1295,7 +1468,7 @@ if (typeof document !== "undefined") {
       panel.hidden = false;
       $("reachyControlStatus").textContent = st.reachable === false
         ? "Robot daemon unreachable" : `Motors: ${st.motor_mode || "unknown"}`;
-      if (st.motor_mode && document.activeElement !== $("reachyMotorMode")) $("reachyMotorMode").value = st.motor_mode;
+      for (const [id, mode] of MOTOR_BUTTONS) $(id).classList.toggle("active", st.motor_mode === mode);
       if (st.reachable !== false) { refreshReachyApps(); syncCtl(st); }
     } catch (_) { /* keep last known state on a transient poll failure */ }
   }
@@ -1303,7 +1476,13 @@ if (typeof document !== "undefined") {
   $("reachySleep").addEventListener("click", () => reachyPost("/api/reachy/action/sleep"));
   $("reachyCenter").addEventListener("click", () => reachyPost("/api/reachy/action/center"));
   $("reachyFaceSound").addEventListener("click", () => reachyPost("/api/reachy/action/look-at-voice"));
-  $("reachyMotorMode").addEventListener("change", e => reachyPost(`/api/reachy/motors/${e.target.value}`));
+  // Stiff/Soft/Limp, not a dropdown - the wording and routes porch-feed's own command centre
+  // uses (main, nvr/feed/porch_feed.py). Centre and the pose pad/sliders below silently refuse
+  // every move while motors are Limp (see Reachy.set_target's own "motors are disabled" check in
+  // nvr/reachy/reachy.py), so this needs to read as a mode to actively pick, not a setting to
+  // notice was wrong afterward.
+  const MOTOR_BUTTONS = [["reachyMotorStiff", "enabled"], ["reachyMotorSoft", "gravity_compensation"], ["reachyMotorLimp", "disabled"]];
+  for (const [id, mode] of MOTOR_BUTTONS) $(id).addEventListener("click", () => reachyPost(`/api/reachy/motors/${mode}`));
   $("reachyAppStart").addEventListener("click", () => {
     const name = $("reachyAppSelect").value;
     if (name) reachyPost(`/api/reachy/apps/start/${encodeURIComponent(name)}`);
@@ -1318,61 +1497,76 @@ if (typeof document !== "undefined") {
   pollReachyControlState();
   setInterval(pollReachyControlState, 5000);
 
-  // Engine switching: which model backend serves inference - either a symlinked TensorRT-Edge-LLM
-  // build restarted in place (EngineSwitcher) or a registry of separate, independently started/
-  // stopped model services such as brockone (ServiceEngineSwitcher) - see serve_ui.py and
-  // engine_backends.py. Hidden entirely when --engine-link/--engines-config were not passed, so a
-  // deployment without switching configured shows nothing rather than a dead control. One button
-  // per model rather than a dropdown, so a post-training placeholder not yet in the registry
-  // (brocktwo) can sit alongside the real ones, visibly greyed out rather than absent, without
-  // inventing a fake /api/engines entry for a model that does not exist yet. A switch needs the
-  // same relay token as the Reachy camera/mic routes (X-Reachy-Token) - closes off triggering a
-  // model stop/start, which briefly interrupts inference, from a cross-site request.
-  const PLACEHOLDER_MODELS = [
-    {id: "brocktwo", name: "brocktwo", note: "Post-training - size/RAM footprint not final"},
-  ];
-  let engineSwitching = false;
-  async function switchToEngine(id) {
-    engineSwitching = true;
-    $("engineSwitchStatus").textContent = "Switching…";
-    for (const btn of $("modelButtons").querySelectorAll("button")) btn.disabled = true;
-    try {
-      await loadAccess();
-      await reachyControlRequest(`/api/engines/${encodeURIComponent(id)}`,
-        {method: "POST", headers: {"X-Reachy-Token": access.reachy_token}});
-    } catch (_) { /* surfaced already via error() */ } finally {
-      engineSwitching = false;
-      refreshEngines();
+  // Real elapsed time against the server's own switch_progress.timeout - never a fabricated
+  // percentage. started_at/timeout come from whichever switcher is active (ServiceEngineSwitcher
+  // or the legacy symlink EngineSwitcher, both now report it - see /api/engines in serve_ui.py).
+  // Ticks on a local timer between the 5 s /api/engines polls so the bar moves smoothly; capped
+  // short of 100% until the switch actually reports done, since "done" is a real event, not a
+  // time estimate.
+  function updateSwitchProgress() {
+    const bar = $("engineSwitchProgress"), fill = $("engineSwitchProgressFill");
+    const active = switchingEngine();
+    bar.hidden = !active;
+    if (!active) {
+      if (switchProgressTimer) { clearInterval(switchProgressTimer); switchProgressTimer = null; }
+      fill.style.width = "0%";
+      return;
     }
+    const progress = engineData?.switch_progress;
+    const pct = progress && Number.isFinite(progress.started_at) && progress.timeout > 0
+      ? Math.max(2, Math.min(96, (Date.now() / 1000 - progress.started_at) / progress.timeout * 100))
+      : 2;
+    fill.style.width = `${pct}%`;
+    bar.setAttribute("aria-valuenow", String(Math.round(pct)));
+    if (!switchProgressTimer) switchProgressTimer = setInterval(updateSwitchProgress, 300);
   }
-  async function refreshEngines() {
-    if (engineSwitching) return;
+  // One health/engine poll owns the complete model snapshot. Switches retire it
+  // and refresh every endpoint on success and rollback; camera/robot preview stays.
+  function renderEngines() {
+    if (!engineData) return;
+    $("engineSwitchRow").hidden = false;
+    $("engineSwitchHint").hidden = false;
+    renderEngineChoices($("modelButtons"), engineData, switchingEngine(), switchToEngine);
+    $("engineSwitchStatus").textContent = switchingEngine()
+      ? "Switching model… Preview stays connected; inference is paused."
+      : `Current model: ${engineData.active?.name || "Unavailable"}`;
+    $("engineSwitchHint").textContent = engineData.configured
+      ? "Only one model is resident at a time. Switching pauses inference while the new model loads; a failed switch attempts to restore the previous model."
+      : "Model switching is not configured on this device.";
+    updateSwitchProgress();
+  }
+  async function switchToEngine(id) {
+    const choice = engineData && engineChoices(engineData).find(engine => engine.id === id);
+    if (switchingEngine() || !choice?.available || id === engineData.active?.id) return;
     try {
-      const response = await fetch("/api/engines", {cache: "no-store"});
-      const data = await response.json();
-      const row = $("engineSwitchRow"), hint = $("engineSwitchHint");
-      if (!data.configured) { row.hidden = true; hint.hidden = true; return; }
-      row.hidden = false; hint.hidden = false;
-      const switching = data.switching === true;
-      const real = data.engines.map(e => {
-        const active = e.id === data.active.id;
-        const disabled = active || switching || e.available === false;
-        const title = [e.profile ? `${e.name} · ${e.profile}` : e.name, e.available === false ? e.reason : null]
-          .filter(Boolean).join(" — ");
-        return `<button type="button" data-model-id="${e.id}" class="${active ? "active" : ""}" title="${title}"${disabled ? " disabled" : ""}>${e.name}</button>`;
+      await runEngineSwitch(engineRequests, {
+        before() {
+          engineSwitching = true; state.checking = null;
+          retireEngineAnswer("Switching model · inference paused"); error();
+          $("backendStatus").textContent = "Switching model…";
+          $("backendStatus").className = "badge unavailable";
+          renderEngines(); controls();
+        },
+        async request() {
+          const credentials = await loadAccess();
+          const response = await fetch(`/api/engines/${encodeURIComponent(id)}`, {
+            method: "POST", credentials: "same-origin", headers: {"X-Reachy-Token": credentials.reachy_token},
+            signal: AbortSignal.timeout(420000)
+          });
+          const body = await response.json().catch(() => null);
+          if (response.status === 401) access = null;
+          if (!response.ok || body?.ok === false) throw new Error(body?.error?.message || body?.message || `Model switch failed (HTTP ${response.status}).`);
+        },
+        after() {
+          engineSwitching = false;
+          resetTimingGroup("Model switch finished · waiting for a new answer.");
+        },
+        refresh: checkBackend,
       });
-      const placeholders = PLACEHOLDER_MODELS.filter(m => !data.engines.some(e => e.id === m.id))
-        .map(m => `<button type="button" disabled title="${m.note}">${m.name}</button>`);
-      $("modelButtons").innerHTML = [...real, ...placeholders].join("");
-      for (const btn of $("modelButtons").querySelectorAll("button[data-model-id]")) {
-        btn.addEventListener("click", () => switchToEngine(btn.dataset.modelId));
-      }
-      $("engineSwitchStatus").textContent = switching ? "Switching…"
-        : `Currently: ${data.active.name}${data.active.id === "unknown" ? " (unrecognized build)" : ""}`;
-    } catch (_) { /* keep last known state on a transient poll failure */ }
+    } catch (err) {
+      error(`${err.message} Check the current model status before retrying.`);
+    } finally { renderEngines(); controls(); }
   }
-  refreshEngines();
-  setInterval(refreshEngines, 5000);
 
   // Services panel: what's running, its RAM and on-disk size, and SD card vs NVMe. Polled
   // independently of engine switching - a service can be up or down regardless of which model is
@@ -1382,11 +1576,25 @@ if (typeof document !== "undefined") {
       const response = await fetch("/api/services", {cache: "no-store"});
       const data = await response.json();
       const fmtMb = mb => mb === null || mb === undefined ? "—" : mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
-      $("servicesList").innerHTML = (data.services || []).map(s => `
-        <li class="service-row ${s.running ? "running" : "stopped"}">
+      // A switchable model's own service is stopped whenever it is not the currently selected
+      // one - expected, not a fault. "active" (present only for entries backed by the engine
+      // registry - see service_list() in serve_ui.py) tells the two apart: an unselected model
+      // reads "not selected" rather than the alarming bare "stopped" it used to, and the one real
+      // fault state - selected but its process is not actually up - gets its own visible class.
+      $("servicesList").innerHTML = (data.services || []).map(s => {
+        const managed = "active" in s;
+        const fault = managed && s.active && !s.running;
+        const rowClass = fault ? "fault" : !managed ? (s.running ? "running" : "stopped")
+          : s.active ? "running" : "standby";
+        const label = fault ? "active · not responding"
+          : !managed ? (s.running ? "running" : "stopped")
+          : s.active ? "active · running" : (s.running ? "running (not selected)" : "not selected");
+        return `
+        <li class="service-row ${rowClass}">
           <span class="service-name"><span class="service-dot"></span>${s.name}</span>
-          <span class="service-detail">${s.running ? "running" : "stopped"} · RAM ${fmtMb(s.memory_mb)} · disk ${fmtMb(s.storage_mb)} (${s.disk})</span>
-        </li>`).join("") || `<li class="hint">No services configured.</li>`;
+          <span class="service-detail">${label} · RAM ${fmtMb(s.memory_mb)} · disk ${fmtMb(s.storage_mb)} (${s.disk})</span>
+        </li>`;
+      }).join("") || `<li class="hint">No services configured.</li>`;
     } catch (_) { /* keep last known list on a transient poll failure */ }
   }
   refreshServices();

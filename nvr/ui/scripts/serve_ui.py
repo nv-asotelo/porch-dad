@@ -302,6 +302,20 @@ def find_pid_by_cmdline(substring):
     return None
 
 
+def find_pid_by_systemd_unit(unit):
+    """MainPID of a systemd unit, or None if it is not running. Unlike find_pid_by_cmdline, this
+    needs no assumption about a service's argv shape - the engine registry already names the unit
+    (ServiceEngineSwitcher.command uses the same name to start/stop it), so this is the reliable
+    way to report a managed engine's own process state without duplicating that name elsewhere."""
+    try:
+        result = subprocess.run(["systemctl", "show", unit, "-p", "MainPID", "--value"],
+                                capture_output=True, text=True, timeout=3)
+        pid = int(result.stdout.strip())
+        return pid if result.returncode == 0 and pid > 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
 def disk_for_path(path):
     """'SD card', 'NVMe', or the raw block device name, for whichever filesystem contains path -
     the longest-prefix-matching entry in /proc/mounts, same algorithm findmnt uses."""
@@ -457,12 +471,17 @@ class EngineSwitcher:
     class does not configure that; deploy/03 on main documents the sudoers line it needs.
     """
 
+    switch_timeout = 120
+
     def __init__(self, engine_link: Path, engines: dict, shim_service: str, backend_port: int):
         self.engine_link = engine_link
         self.engines = engines
         self.shim_service = shim_service
         self.backend_port = backend_port
         self.lock = threading.Lock()
+        self.switching = False
+        self.switch_target = None
+        self.switch_started_at = None
 
     def _run(self, cmd, timeout=180):
         try:
@@ -485,9 +504,18 @@ class EngineSwitcher:
     def switch(self, eid: str) -> tuple[bool, str]:
         if not self.lock.acquire(blocking=False):
             return False, "another engine switch is already in progress"
+        # Set before the restart/poll below, which can take up to switch_timeout seconds - a
+        # concurrent GET /api/engines from another tab must see this, not just the caller of
+        # switch() once the synchronous call finally returns.
+        self.switching = True
+        self.switch_target = eid
+        self.switch_started_at = time.time()
         try:
             return self._switch(eid)
         finally:
+            self.switching = False
+            self.switch_target = None
+            self.switch_started_at = None
             self.lock.release()
 
     def _switch(self, eid: str) -> tuple[bool, str]:
@@ -609,7 +637,13 @@ class Server(ThreadingHTTPServer):
     def service_list(self):
         """Live Vision itself and the Piper subprocess are known directly (this process started
         them); everything else in --services-config is a separate process, found by scanning
-        /proc for a matching command line - see find_pid_by_cmdline."""
+        /proc for a matching command line - see find_pid_by_cmdline. A registry of separate model
+        services (ServiceEngineSwitcher) is reported from that registry directly rather than
+        needing its own mirror entries in --services-config: --services-config and engines.json
+        naming the same service under two different keys is exactly how a switchable model can
+        show as permanently "down" once it stops being the selected one - see the "active" field,
+        which tells the caller a stopped-and-unselected engine apart from a stopped one that
+        should be running."""
         out = [{"name": "Live Vision UI", "running": True,
                "memory_mb": read_proc_rss_mb(os.getpid()),
                "storage_mb": dir_size_mb(Path(__file__).resolve().parent),
@@ -626,6 +660,16 @@ class Server(ThreadingHTTPServer):
                        "memory_mb": read_proc_rss_mb(pid) if pid else None,
                        "storage_mb": dir_size_mb(spec["path"]) if spec.get("path") else None,
                        "disk": disk_for_path(spec["path"]) if spec.get("path") else "unknown"})
+        switcher = self.engine_switcher
+        if switcher is not None and getattr(switcher, "managed", False):
+            active_id = switcher.active()["id"]
+            for eid, entry in switcher.engines.items():
+                pid = find_pid_by_systemd_unit(entry["service"])
+                out.append({"name": entry["name"], "running": pid is not None,
+                           "memory_mb": read_proc_rss_mb(pid) if pid else None,
+                           "storage_mb": dir_size_mb(entry["path"]) if entry.get("path") else None,
+                           "disk": disk_for_path(entry["path"]) if entry.get("path") else "unknown",
+                           "active": eid == active_id})
         return out
 
 
@@ -765,8 +809,11 @@ class Handler(BaseHTTPRequestHandler):
                               "reason": "" if (Path(e["path"]) / "llm.engine").is_file()
                               else "Engine has not been built on this device"}
                              for eid, e in switcher.engines.items()]
+                progress = ({"target": switcher.switch_target, "started_at": switcher.switch_started_at,
+                            "timeout": switcher.switch_timeout} if switcher.switching else None)
                 body = json.dumps({"configured": True, "active": switcher.active(),
-                                   "switching": False, "engines": available}).encode()
+                                   "switching": switcher.switching, "switch_progress": progress,
+                                   "engines": available}).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return

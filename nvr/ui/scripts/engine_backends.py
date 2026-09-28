@@ -77,6 +77,8 @@ class ServiceEngineSwitcher:
         self.lock = threading.Lock()
         self.state_lock = threading.Lock()
         self.switching = False
+        self.switch_target = None
+        self.switch_started_at = None
         self.timeout = timeout
         # UI restarts must not claim the configured default if another service is
         # actually resident. Reading model identities neither starts nor stops one.
@@ -136,7 +138,15 @@ class ServiceEngineSwitcher:
         return self.descriptor(key)
 
     def status(self):
+        progress = None
+        if self.switching and self.switch_started_at is not None:
+            # started_at/timeout, not a percentage: the actual step (stop old, start new, poll
+            # health) has no measurable midpoint, so the caller computes elapsed/timeout itself
+            # and decides how close to the timeout to let the bar visually reach.
+            progress = {"target": self.switch_target, "started_at": self.switch_started_at,
+                       "timeout": self.timeout}
         return {"configured": True, "active": self.active(), "switching": self.switching,
+                "switch_progress": progress,
                 "engines": [self.descriptor(key) for key in self.engines]}
 
     def backend(self):
@@ -195,6 +205,8 @@ class ServiceEngineSwitcher:
         acquired = False
         try:
             self.switching = True
+            self.switch_target = key
+            self.switch_started_at = time.time()
             acquired = self.generation_lock.acquire(timeout=5)
             if not acquired:
                 return False, "Inference is still running; stop Live Vision and retry"
@@ -219,6 +231,8 @@ class ServiceEngineSwitcher:
             if acquired:
                 self.generation_lock.release()
             self.switching = False
+            self.switch_target = None
+            self.switch_started_at = None
             self.lock.release()
 
 
