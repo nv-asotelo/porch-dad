@@ -1417,21 +1417,37 @@ if (typeof document !== "undefined") {
     pad.addEventListener("pointercancel", () => { down = false; });
     pad._paint = paint; paint();
   }
-  // A small fixed step per press/tick, held to repeat - independent of the pad's own drag
-  // sensitivity, for a finer, steadier adjustment than a twitchy pad allows. sign follows the
-  // same invX/invY convention bindPad above was just given: a jog button moves the same way as
-  // dragging the pad in that direction would.
+  // A discrete step per press, held to repeat - lands exactly on a multiple of stepDeg every
+  // time (floor/ceil on the current value, not an accumulated +=), so repeated presses reach
+  // named angles like 30/45/60/75/90 exactly regardless of whatever off-grid value a pad drag
+  // left behind. sign follows the same invX/invY convention bindPad above was given: a jog
+  // button moves the same way as dragging the pad in that direction would.
   function bindJog(id, key, stepDeg, sign, limitRad, padId) {
     const btn = $(id); if (!btn) return;
     let timer = null;
     const tick = () => {
-      T[key] = Math.max(-limitRad, Math.min(limitRad, T[key] + sign * stepDeg * D2R));
+      const stepRad = stepDeg * D2R;
+      const n = sign > 0 ? Math.floor(T[key] / stepRad) + 1 : Math.ceil(T[key] / stepRad) - 1;
+      T[key] = Math.max(-limitRad, Math.min(limitRad, n * stepRad));
       tTouch();
       const pad = $(padId); if (pad && pad._paint) pad._paint();
       tSend();
     };
-    const start = ev => { ev.preventDefault(); tick(); timer = setInterval(tick, 120); };
     const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const start = ev => {
+      ev.preventDefault();
+      // Without this, a finger sliding off a small button while held can mean the browser never
+      // delivers pointerup/pointerleave to it - the timer below then keeps firing indefinitely,
+      // continuously sending a stale jog target that fights anything else asked of the robot
+      // (Centre included) until the page is reloaded. bindPad's drag already does this for the
+      // same reason; this had been missed here.
+      try { btn.setPointerCapture(ev.pointerId); } catch (_) { /* unsupported is not fatal */ }
+      tick();
+      timer = setInterval(tick, 280);
+      // Belt and suspenders: cap how long one press can run even if capture itself fails on some
+      // browser/input combination, rather than leaving a stuck timer jogging the robot forever.
+      setTimeout(stop, 4000);
+    };
     btn.addEventListener("pointerdown", start);
     btn.addEventListener("pointerup", stop);
     btn.addEventListener("pointerleave", stop);
@@ -1439,19 +1455,21 @@ if (typeof document !== "undefined") {
   }
   // Body yaw drives the head yaw target to match (so the two swing together as one turn, rather
   // than the base rotating while the head stays fixed relative to it - awkward to watch and to
-  // demo), and snaps near a handful of key angles: an in-zone drag holds at the snap point
-  // instead of tracking the pointer 1:1, the way a detent does, so a fixed angle is easy to hit
-  // exactly rather than eyeballed against the readout.
-  const BODY_YAW_SNAPS_DEG = [-135, -90, -45, 0, 45, 90, 135];
-  const BODY_YAW_SNAP_TOLERANCE_DEG = 2.5;
+  // demo). Negated: the slider's own left=-max/right=+max sense is unrelated to the pad's, and
+  // matching them (slider right turns the same way dragging the pad right would) needs the sign
+  // flipped, since positive slider values already share more in common with a leftward pad drag
+  // (see bindPad's invX on padPY above) than a rightward one.
+  //
+  // Snaps at every 15deg (0/15/30/45/.../150 and their negatives, covering 30/45/60/75/90 and
+  // more): inside a small zone around a snap point, a drag holds at the exact value instead of
+  // tracking the pointer 1:1, the way a physical detent does, so a specific named angle is easy
+  // to hit exactly rather than eyeballed against the readout.
+  const BODY_YAW_SNAP_STEP_DEG = 15;
+  const BODY_YAW_SNAP_TOLERANCE_DEG = 3;
   function snapBodyYawRad(rad) {
     const deg = rad / D2R;
-    let nearest = null, nearestDist = Infinity;
-    for (const snap of BODY_YAW_SNAPS_DEG) {
-      const dist = Math.abs(deg - snap);
-      if (dist < nearestDist) { nearest = snap; nearestDist = dist; }
-    }
-    return nearestDist <= BODY_YAW_SNAP_TOLERANCE_DEG ? nearest * D2R : rad;
+    const nearest = Math.round(deg / BODY_YAW_SNAP_STEP_DEG) * BODY_YAW_SNAP_STEP_DEG;
+    return Math.abs(deg - nearest) <= BODY_YAW_SNAP_TOLERANCE_DEG ? nearest * D2R : rad;
   }
   function bindBodyYaw(id, lblId) {
     const el = $(id), lbl = $(lblId);
@@ -1462,7 +1480,7 @@ if (typeof document !== "undefined") {
       const snapped = snapBodyYawRad(parseFloat(el.value));
       el.value = snapped;
       T.body_yaw = snapped;
-      T.yaw = Math.max(-Math.PI, Math.min(Math.PI, snapped));
+      T.yaw = Math.max(-Math.PI, Math.min(Math.PI, -snapped));
       paint();
       const pad = $("padPY"); if (pad && pad._paint) pad._paint();
       tSend();
@@ -1506,10 +1524,10 @@ if (typeof document !== "undefined") {
   // look()/centre() this sign convention was originally verified against - see Reachy.look()'s
   // own docstring - so the two need not agree).
   bindPad("padPY", "pyv", "yaw", "pitch", Math.PI, 0.7, true, false);
-  bindJog("jogPitchUp", "pitch", 2, 1, 0.7, "padPY");
-  bindJog("jogPitchDown", "pitch", 2, -1, 0.7, "padPY");
-  bindJog("jogYawLeft", "yaw", 2, 1, Math.PI, "padPY");
-  bindJog("jogYawRight", "yaw", 2, -1, Math.PI, "padPY");
+  bindJog("jogPitchUp", "pitch", 15, 1, 0.7, "padPY");
+  bindJog("jogPitchDown", "pitch", 15, -1, 0.7, "padPY");
+  bindJog("jogYawLeft", "yaw", 15, 1, Math.PI, "padPY");
+  bindJog("jogYawRight", "yaw", 15, -1, Math.PI, "padPY");
 
   let reachyAppsLoadedAt = 0;
   async function refreshReachyApps() {
@@ -1560,9 +1578,32 @@ if (typeof document !== "undefined") {
   $("reachyAppStop").addEventListener("click", () => reachyPost("/api/reachy/apps/stop"));
   $("reachySpeakerVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/speaker/${e.target.value}`));
   $("reachyMicVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/mic/${e.target.value}`));
+  // Piper.synth() (serve_ui.py) holds one lock for the whole synth+play call, so a second speak
+  // request fired before the first finishes does not run alongside it - it queues behind it. A
+  // click while one is already in flight used to do exactly that, and with live captioning
+  // updating every second or two, a queued click could end up speaking a caption from several
+  // answers ago by the time its turn came - "lag" that compounded the more it was clicked.
+  // Disabling both buttons for the duration of a request keeps at most one in flight at a time,
+  // so a request always speaks the caption it was asked to, promptly, or not at all.
+  let speaking = false;
+  async function speakText(text) {
+    if (speaking || !text) return;
+    speaking = true;
+    const answerBtn = $("reachySpeakAnswer"), manualBtn = $("reachySpeakButton");
+    const answerLabel = answerBtn.textContent, manualLabel = manualBtn.textContent;
+    answerBtn.disabled = true; manualBtn.disabled = true;
+    answerBtn.textContent = "Speaking…"; manualBtn.textContent = "Speaking…";
+    try {
+      await reachyPost("/api/reachy/speak", {text});
+    } catch (_) { /* surfaced already via error() */ } finally {
+      speaking = false;
+      answerBtn.disabled = false; manualBtn.disabled = false;
+      answerBtn.textContent = answerLabel; manualBtn.textContent = manualLabel;
+    }
+  }
   $("reachySpeakButton").addEventListener("click", () => {
     const text = $("reachySpeakText").value.trim();
-    if (text) reachyPost("/api/reachy/speak", {text});
+    if (text) speakText(text);
   });
   $("reachySpeakAnswer").addEventListener("click", () => {
     if (!state.completed || $("answer").classList.contains("streaming")) {
@@ -1570,7 +1611,7 @@ if (typeof document !== "undefined") {
       return;
     }
     const text = $("answer").textContent.trim();
-    if (text) reachyPost("/api/reachy/speak", {text});
+    if (text) speakText(text);
   });
   pollReachyControlState();
   setInterval(pollReachyControlState, 5000);
