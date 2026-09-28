@@ -1352,7 +1352,18 @@ if (typeof document !== "undefined") {
     const now = Date.now();
     if (now - tLast < 60) { if (!tPend) { tPend = true; setTimeout(() => { tPend = false; tSend(); }, 60 - (now - tLast)); } return; }
     tBusy = true; tLast = now;
-    try { await reachyPost("/api/reachy/target", T); } catch (_) { /* a dropped frame of control is not worth a second banner */ }
+    const status = $("reachyPoseStatus");
+    try {
+      await reachyPost("/api/reachy/target", T);
+      status.hidden = true;
+    } catch (e) {
+      // The shared error() banner (also set by reachyPost above) is transient and gets
+      // overwritten by unrelated polling within seconds - a drag that silently stops moving the
+      // robot (motors switched to Limp mid-demo, most often) needs a reason that stays put next
+      // to the controls, not a flash of red text elsewhere on the page.
+      status.textContent = e.message || "Move refused";
+      status.hidden = false;
+    }
     tBusy = false;
     if (tPend) { tPend = false; tSend(); }
   }
@@ -1457,7 +1468,7 @@ if (typeof document !== "undefined") {
       panel.hidden = false;
       $("reachyControlStatus").textContent = st.reachable === false
         ? "Robot daemon unreachable" : `Motors: ${st.motor_mode || "unknown"}`;
-      if (st.motor_mode && document.activeElement !== $("reachyMotorMode")) $("reachyMotorMode").value = st.motor_mode;
+      for (const [id, mode] of MOTOR_BUTTONS) $(id).classList.toggle("active", st.motor_mode === mode);
       if (st.reachable !== false) { refreshReachyApps(); syncCtl(st); }
     } catch (_) { /* keep last known state on a transient poll failure */ }
   }
@@ -1465,7 +1476,13 @@ if (typeof document !== "undefined") {
   $("reachySleep").addEventListener("click", () => reachyPost("/api/reachy/action/sleep"));
   $("reachyCenter").addEventListener("click", () => reachyPost("/api/reachy/action/center"));
   $("reachyFaceSound").addEventListener("click", () => reachyPost("/api/reachy/action/look-at-voice"));
-  $("reachyMotorMode").addEventListener("change", e => reachyPost(`/api/reachy/motors/${e.target.value}`));
+  // Stiff/Soft/Limp, not a dropdown - the wording and routes porch-feed's own command centre
+  // uses (main, nvr/feed/porch_feed.py). Centre and the pose pad/sliders below silently refuse
+  // every move while motors are Limp (see Reachy.set_target's own "motors are disabled" check in
+  // nvr/reachy/reachy.py), so this needs to read as a mode to actively pick, not a setting to
+  // notice was wrong afterward.
+  const MOTOR_BUTTONS = [["reachyMotorStiff", "enabled"], ["reachyMotorSoft", "gravity_compensation"], ["reachyMotorLimp", "disabled"]];
+  for (const [id, mode] of MOTOR_BUTTONS) $(id).addEventListener("click", () => reachyPost(`/api/reachy/motors/${mode}`));
   $("reachyAppStart").addEventListener("click", () => {
     const name = $("reachyAppSelect").value;
     if (name) reachyPost(`/api/reachy/apps/start/${encodeURIComponent(name)}`);

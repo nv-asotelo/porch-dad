@@ -46,10 +46,14 @@
           <button id="reachySleep">Sleep</button>
           <button id="reachyCenter">Centre</button>
           <button id="reachyFaceSound" title="Turns the base toward the last sound the microphone array heard">Face last sound</button>
-          <label>Motors
-            <select id="reachyMotorMode"><option value="enabled">Enabled</option><option value="disabled">Disabled</option><option value="gravity_compensation">Gravity compensation</option></select>
-          </label>
         </div>
+        <div class="controls">
+          <span class="hint" style="margin:0">Motors</span>
+          <button id="reachyMotorStiff" title="Motors hold position - required for Centre and the pose controls below to actually move the robot">Stiff</button>
+          <button id="reachyMotorSoft" title="Gravity-compensated - the robot can be posed by hand">Soft</button>
+          <button id="reachyMotorLimp" title="Motors off - Centre and the pose controls will be refused until Stiff is selected again">Limp</button>
+        </div>
+        <p class="hint" id="reachyPoseStatus" hidden></p>
         <div class="sec">⌇⌇ Antennas</div>
         <div class="ctlrow">
           <div class="ctl">
