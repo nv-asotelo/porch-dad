@@ -87,15 +87,26 @@
           </div>
           <div class="ctl">
             <h4>Pitch / Yaw <b id="pyv">0.000 0.000</b></h4>
-            <div class="pad" id="padPY"><i></i></div>
-            <div class="jogpad">
+            <div class="padjog">
               <button type="button" id="jogPitchUp" class="jog jog-u" aria-label="Jog: look up" title="Hold to jog up">▲</button>
-              <button type="button" id="jogYawLeft" class="jog jog-l" aria-label="Jog: turn left" title="Hold to jog left">◀</button>
-              <button type="button" id="jogYawRight" class="jog jog-r" aria-label="Jog: turn right" title="Hold to jog right">▶</button>
+              <div class="padrow">
+                <button type="button" id="jogYawLeft" class="jog jog-l" aria-label="Jog: turn left" title="Hold to jog left">◀</button>
+                <div class="pad" id="padPY"><i></i></div>
+                <button type="button" id="jogYawRight" class="jog jog-r" aria-label="Jog: turn right" title="Hold to jog right">▶</button>
+              </div>
               <button type="button" id="jogPitchDown" class="jog jog-d" aria-label="Jog: look down" title="Hold to jog down">▼</button>
             </div>
             <h4 style="margin-top:10px">Body yaw <b id="byawv">0.000 rad</b></h4>
-            <input type="range" id="byaw" min="-2.79" max="2.79" step="0.01" value="0">
+            <input type="range" id="byaw" min="-2.79" max="2.79" step="0.01" value="0" list="byawSnaps" title="Snaps near 0/45/90/135 degrees; turns the head to match, so head and body swing together">
+            <datalist id="byawSnaps">
+              <option value="-2.35619"></option>
+              <option value="-1.5708"></option>
+              <option value="-0.7854"></option>
+              <option value="0"></option>
+              <option value="0.7854"></option>
+              <option value="1.5708"></option>
+              <option value="2.35619"></option>
+            </datalist>
           </div>
         </div>
         <div class="ctlrow" style="margin-top:8px">
@@ -104,7 +115,7 @@
             <input type="range" id="roll" min="-0.7" max="0.7" step="0.01" value="0">
           </div>
         </div>
-        <p class="hint">Live control: these set the target the robot's control loop is already chasing, so they track your finger rather than queueing moves. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in Z. The arrow buttons under Pitch/Yaw jog a small step at a time - hold to keep moving - for finer control than the pad's own sensitivity.</p>
+        <p class="hint">Live control: these set the target the robot's control loop is already chasing, so they track your finger rather than queueing moves. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in Z. The arrow buttons around the Pitch/Yaw pad jog a small step at a time - hold to keep moving - for finer control than the pad's own sensitivity. Body yaw turns the head to match, so the two swing together, and snaps near 0/45/90/135°.</p>
         <div class="controls">
           <label>App
             <select id="reachyAppSelect"><option value="">No apps found</option></select>
