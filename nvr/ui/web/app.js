@@ -907,6 +907,11 @@ if (typeof document !== "undefined") {
       }
       $("runStatus").textContent = finishReason === "length" ? "Output token limit reached" : "Answer complete";
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
+      // speakText() itself no-ops while a previous utterance is still in flight (see its own
+      // "speaking" guard below), which is exactly the behaviour wanted here: a caption that lands
+      // while Reachy is still speaking the last one is skipped, not queued, so auto-speak tracks
+      // captioning as closely as the configured rate allows without ever building a backlog.
+      if (autoSpeak) speakText(output);
     } catch (err) {
       if (state.abort !== controller) return;
       const skipped = trigger === "live" ? skippedSampleReason(err) : null;
@@ -1547,6 +1552,7 @@ if (typeof document !== "undefined") {
       const response = await fetch("/api/reachy/state", {cache: "no-store"});
       const st = await response.json();
       const panel = $("reachyControls");
+      $("autoSpeakButton").hidden = $("autoSpeakHelp").hidden = !(st.enabled && st.speech_enabled);
       // Available whenever the robot is configured, regardless of which feed is active - these
       // control the robot itself (motors, apps, speech), not the video source, and hiding them
       // just because the webcam is on made TTS unreachable without switching feeds first. A
@@ -1585,7 +1591,10 @@ if (typeof document !== "undefined") {
   // answers ago by the time its turn came - "lag" that compounded the more it was clicked.
   // Disabling both buttons for the duration of a request keeps at most one in flight at a time,
   // so a request always speaks the caption it was asked to, promptly, or not at all.
-  let speaking = false;
+  let speaking = false, speechRate = 1;
+  // speaking also gates auto-speak (below): a caption that completes while Reachy is still
+  // speaking the previous one is skipped rather than queued, the same reasoning as the button
+  // guard - speech falls behind captioning by at most one utterance, never a growing backlog.
   async function speakText(text) {
     if (speaking || !text) return;
     speaking = true;
@@ -1594,13 +1603,25 @@ if (typeof document !== "undefined") {
     answerBtn.disabled = true; manualBtn.disabled = true;
     answerBtn.textContent = "Speaking…"; manualBtn.textContent = "Speaking…";
     try {
-      await reachyPost("/api/reachy/speak", {text});
+      await reachyPost("/api/reachy/speak", {text, rate: speechRate});
     } catch (_) { /* surfaced already via error() */ } finally {
       speaking = false;
       answerBtn.disabled = false; manualBtn.disabled = false;
       answerBtn.textContent = answerLabel; manualBtn.textContent = manualLabel;
     }
   }
+  for (const btn of document.querySelectorAll("#reachyControls .speedopt")) {
+    btn.addEventListener("click", () => {
+      speechRate = parseFloat(btn.dataset.rate);
+      for (const other of document.querySelectorAll("#reachyControls .speedopt")) other.classList.toggle("active", other === btn);
+    });
+  }
+  let autoSpeak = false;
+  $("autoSpeakButton").addEventListener("click", () => {
+    autoSpeak = !autoSpeak;
+    $("autoSpeakButton").setAttribute("aria-pressed", String(autoSpeak));
+    $("autoSpeakButton").textContent = `Auto-speak: ${autoSpeak ? "On" : "Off"}`;
+  });
   $("reachySpeakButton").addEventListener("click", () => {
     const text = $("reachySpeakText").value.trim();
     if (text) speakText(text);

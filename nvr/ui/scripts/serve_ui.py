@@ -544,6 +544,9 @@ class EngineSwitcher:
         return False, "engine swapped but the shim did not become ready in 120s"
 
 
+SPEECH_RATES = (0.5, 0.8, 1.0, 1.25, 1.5, 2.0)
+
+
 class Piper:
     """Local TTS via a persistent Piper process, one JSON line per utterance on stdin.
 
@@ -603,12 +606,39 @@ class Piper:
                 time.sleep(0.015)
             return None
 
+    def retime(self, wav: Path, rate: float) -> Path:
+        """Speed up or slow down an already-synthesized WAV with sox's tempo effect (time-stretch,
+        pitch-preserving - unlike a naive resample, which would also shift pitch). Piper's own
+        --length_scale only takes effect at process start (confirmed: a --json-input line's own
+        length_scale field is silently ignored by this build), so honouring a per-request rate
+        without restarting the warm process - and paying its cold-load cost, the whole reason it
+        stays warm - means adjusting the output afterward instead. Falls back to the untouched
+        file on any sox failure; a wrong rate is a much smaller problem than no speech at all."""
+        if rate == 1.0:
+            return wav
+        out = wav.with_name(f"{wav.stem}-x{rate}.wav")
+        try:
+            result = subprocess.run(["sox", str(wav), str(out), "tempo", str(rate)],
+                                    capture_output=True, timeout=10)
+            if result.returncode == 0 and out.is_file():
+                wav.unlink(missing_ok=True)
+                return out
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return wav
+
     @staticmethod
-    def spoken_summary(text: str, max_chars: int = 140) -> str:
-        """First sentence, capped to max_chars - shorter text infers faster and reads more
-        naturally aloud than a full multi-clause caption."""
+    def spoken_summary(text: str, max_chars: int = 500) -> str:
+        """First sentence, spoken in full. A caption that runs long before its first period used
+        to get cut off mid-word at 140 characters ("...with a Game Boy-style |console partially
+        visible..." spoken as "...Game Boy-style" - reported live) - a longer utterance is a much
+        smaller problem than an answer that stops mid-sentence, so a detected sentence end is
+        never truncated. max_chars only guards the pathological case of no sentence-ending
+        punctuation at all, where it still breaks at the last complete word, not mid-word."""
         m = re.search(r"[.!?](\s|$)", text)
-        s = text[:m.end()].strip() if m else text.strip()
+        if m:
+            return text[:m.end()].strip()
+        s = text.strip()
         if len(s) > max_chars:
             s = s[:max_chars].rsplit(" ", 1)[0].rstrip(",;:") + "…"
         return s
@@ -1280,6 +1310,11 @@ class Handler(BaseHTTPRequestHandler):
         if not text:
             self.json_error(400, "expected a non-empty 'text'")
             return
+        rate = body.get("rate", 1.0)
+        if type(rate) not in (int, float) or round(float(rate), 2) not in SPEECH_RATES:
+            self.json_error(400, f"rate must be one of {', '.join(str(r) for r in SPEECH_RATES)}")
+            return
+        rate = float(rate)
         if not self.server.reachy_client:
             self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
             return
@@ -1288,6 +1323,7 @@ class Handler(BaseHTTPRequestHandler):
         if not wav:
             self.json_error(502, "speech synthesis failed or timed out")
             return
+        wav = piper.retime(wav, rate)
         t1 = time.monotonic()
         try:
             ok, remote = self.server.reachy_client.upload_sound(wav.read_bytes(), wav.name)
