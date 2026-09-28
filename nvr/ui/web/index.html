@@ -53,6 +53,13 @@
           <button id="reachyMotorSoft" title="Gravity-compensated - the robot can be posed by hand">Soft</button>
           <button id="reachyMotorLimp" title="Motors off - Centre and the pose controls will be refused until Stiff is selected again">Limp</button>
         </div>
+        <div class="controls">
+          <button id="reachySpeakAnswer" title="Sends the current caption (the text under the camera) to Reachy's speaker, via Piper text-to-speech running on the Orin">Speak Cosmos caption</button>
+          <label for="reachySpeakText" class="file-button" style="flex:1">Or type your own text for Reachy to say aloud
+            <input id="reachySpeakText" type="text" placeholder="Type text, then press Speak" maxlength="500" style="width:100%">
+          </label>
+          <button id="reachySpeakButton" title="Speaks the text typed on the left through Reachy's speaker, via Piper text-to-speech running on the Orin">Speak</button>
+        </div>
         <p class="hint" id="reachyPoseStatus" hidden></p>
         <div class="sec">⌇⌇ Antennas</div>
         <div class="ctlrow">
@@ -106,12 +113,6 @@
           <button id="reachyAppStop">Stop app</button>
           <label>Speaker <input id="reachySpeakerVol" type="range" min="0" max="100" value="60"></label>
           <label>Mic <input id="reachyMicVol" type="range" min="0" max="100" value="60"></label>
-        </div>
-        <div class="controls">
-          <label for="reachySpeakText" class="file-button" style="flex:1">Speak on the robot
-            <input id="reachySpeakText" type="text" placeholder="Text for Reachy to say" maxlength="500" style="width:100%">
-          </label>
-          <button id="reachySpeakButton">Speak</button>
         </div>
         <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Piper) and plays through the robot's own speaker. Available any time the robot is configured, whichever feed is active - these control the robot, not the video source.</p>
       </details>
