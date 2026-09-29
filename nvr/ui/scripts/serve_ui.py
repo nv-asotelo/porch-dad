@@ -544,7 +544,7 @@ class EngineSwitcher:
         return False, "engine swapped but the shim did not become ready in 120s"
 
 
-SPEECH_RATES = (0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0)
+SPEECH_RATES = (0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5)
 
 
 class Piper:
