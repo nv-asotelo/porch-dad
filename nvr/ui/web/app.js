@@ -1223,6 +1223,10 @@ if (typeof document !== "undefined") {
     releaseCamera();  // drop any existing stream first - flipping cameras while one is open can
                        // otherwise ask a phone to hold two camera handles at once and fail.
     state.running = true; state.source = "camera"; const generation = ++state.cameraGeneration; controls();
+    // Visible right next to the preview the user is looking at - not just the catch block's
+    // error() below, which renders far away in the output panel and is easy to miss entirely
+    // (reported bug: pressing Start appeared to do nothing but briefly re-layout the buttons).
+    $("sourceStatus").textContent = "Starting camera…";
     try {
       const media = await navigator.mediaDevices.getUserMedia({audio: false,
         video: {...CAPTURE_PRESETS[state.preset].cameraConstraints, facingMode: {ideal: facingMode}}});
@@ -1237,7 +1241,15 @@ if (typeof document !== "undefined") {
       if (!state.liveStreaming) $("samplingStatus").textContent = "Live streaming off · manual capture ready";
       controls();
       if (state.preset === "live-vlm") frameCameraLoop(generation); else cameraLoop(generation);
-    } catch (err) { if (generation === state.cameraGeneration) { stop(); error(`Camera unavailable: ${err.message}. You can choose an image instead.`); } }
+    } catch (err) {
+      if (generation === state.cameraGeneration) {
+        const message = `Camera unavailable: ${err.message}`;
+        stop();  // stop() -> releaseCamera() would otherwise overwrite sourceStatus with a
+                 // generic "Camera stopped", erasing the reason right after we show it.
+        $("sourceStatus").textContent = message;
+        error(`${message}. You can choose an image instead.`);
+      }
+    }
   }
   $("startButton").addEventListener("click", startCamera);
   $("flipCameraButton").addEventListener("click", () => {
