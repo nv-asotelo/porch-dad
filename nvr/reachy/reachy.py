@@ -62,6 +62,13 @@ class Reachy:
     def __init__(self, base_url: str, timeout: float = 8.0):
         self.base = (base_url or "").rstrip("/")
         self.timeout = timeout
+        # A bare requests.get/post opens a fresh TCP connection every call - every state poll,
+        # every motor command, every speak. Over WiFi to the robot that variance shows up as
+        # occasional multi-second calls for no reason tied to what was actually asked ("still
+        # sluggish" even once Piper itself is fast and warm). A Session keeps the connection to
+        # this one host alive between calls (HTTP keep-alive, via urllib3's pooling) instead of
+        # paying a fresh TCP/TLS-equivalent handshake on every single request.
+        self.session = requests.Session()
         # Last pose commanded, so set_target() holds an axis at what it was ASKED to be
         # rather than at what the platform settled on. See set_target().
         self._last_cmd: dict = {}
@@ -70,7 +77,7 @@ class Reachy:
     # ------------------------------------------------------------------ plumbing
     def _get(self, path: str, default=None):
         try:
-            r = requests.get(f"{self.base}{path}", timeout=self.timeout)
+            r = self.session.get(f"{self.base}{path}", timeout=self.timeout)
             r.raise_for_status()
             return r.json()
         except (requests.RequestException, ValueError):
@@ -78,7 +85,7 @@ class Reachy:
 
     def _post(self, path: str, payload=None) -> tuple[bool, str]:
         try:
-            r = requests.post(f"{self.base}{path}", json=payload, timeout=self.timeout)
+            r = self.session.post(f"{self.base}{path}", json=payload, timeout=self.timeout)
             if r.status_code >= 400:
                 return False, f"HTTP {r.status_code}: {r.text[:120]}"
             return True, "ok"
@@ -177,7 +184,7 @@ class Reachy:
         """POST a sound file to the daemon's temp sound directory. Returns (ok, remote path on
         success or error message on failure). Bypasses _post: this is multipart, not JSON."""
         try:
-            r = requests.post(f"{self.base}/api/media/sounds/upload",
+            r = self.session.post(f"{self.base}/api/media/sounds/upload",
                                files={"file": (filename, data, "audio/wav")}, timeout=self.timeout)
             if r.status_code >= 400:
                 return False, f"HTTP {r.status_code}: {r.text[:120]}"

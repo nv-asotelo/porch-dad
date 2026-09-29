@@ -563,27 +563,51 @@ class Piper:
         self.proc = None
         self.lock = threading.Lock()
 
-    def _start(self):
+    def _start(self, reason: str = "startup"):
+        # Piper's own stderr used to go to DEVNULL, so a process that died left no trace at all -
+        # the next speak request would silently pay a full cold restart (this is what "Reachy
+        # went quiet for a while, then was fine" reports usually are) with nothing in the journal
+        # explaining why the previous process was gone. Now captured to a small ring buffer and
+        # printed on exit, and the restart itself is logged with the dead process's exit code -
+        # negative means killed by a signal (-9 is almost always the OOM killer on this board).
         self.out_dir.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, LD_LIBRARY_PATH=str(self.binary.parent))
+        print(f"[piper] starting ({reason})", flush=True)
         self.proc = subprocess.Popen(
             [str(self.binary), "-m", str(self.model), "--json-input", "--length_scale", "0.85", "-q"],
             cwd=str(self.out_dir), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, env=env, text=True)
+            stderr=subprocess.PIPE, env=env, text=True)
+        threading.Thread(target=self._drain_stderr, args=(self.proc,), daemon=True).start()
+
+    def _drain_stderr(self, proc):
+        tail = []
+        try:
+            for line in proc.stderr:
+                tail.append(line.rstrip("\n"))
+                tail[:] = tail[-20:]
+        except (OSError, ValueError):
+            pass
+        code = proc.poll()
+        if code in (None, 0):
+            return
+        detail = ("; last output:\n  " + "\n  ".join(tail)) if tail else "; no output"
+        print(f"[piper] process exited (code={code}){detail}", flush=True)
 
     def synth(self, text: str, timeout: float = 8.0) -> Path | None:
         """Synthesize text to a WAV file. Thread-safe (holds self.lock for the whole call)."""
         with self.lock:
-            if self.proc is None or self.proc.poll() is not None:
+            if self.proc is None:
                 self._start()
+            elif self.proc.poll() is not None:
+                self._start(reason=f"previous process exited with code {self.proc.poll()}")
             name = f"{uuid.uuid4().hex}.wav"
             out = self.out_dir / name
             line = json.dumps({"text": text, "output_file": name}) + "\n"
             try:
                 self.proc.stdin.write(line)
                 self.proc.stdin.flush()
-            except (BrokenPipeError, OSError):
-                self._start()
+            except (BrokenPipeError, OSError) as exc:
+                self._start(reason=f"broken pipe on write ({exc})")
                 try:
                     self.proc.stdin.write(line)
                     self.proc.stdin.flush()
