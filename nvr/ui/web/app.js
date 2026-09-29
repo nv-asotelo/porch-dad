@@ -1656,6 +1656,10 @@ if (typeof document !== "undefined") {
   $("autoSpeakButton").addEventListener("click", () => {
     autoSpeak = !autoSpeak;
     lastCaptionCompletedAt = null; rateLocked = false;
+    // 2x is the starting rate for an auto-speak session, not just whatever the manual speed
+    // buttons happened to be left at - the lock above can still escalate to FASTEST_SPEECH_RATE
+    // if captions start outrunning even that.
+    if (autoSpeak) setSpeechRate(2);
     $("autoSpeakButton").setAttribute("aria-pressed", String(autoSpeak));
     $("autoSpeakButton").textContent = `Auto-speak: ${autoSpeak ? "On" : "Off"}`;
   });
