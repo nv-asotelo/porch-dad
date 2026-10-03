@@ -162,9 +162,10 @@ async function runEngineSwitch(scope, {before, request, after, refresh}) {
 
 function enginePolicy(active) {
   const policy = active?.request_policy;
-  if (!policy && active?.model_id !== "brockone" && active?.id !== "brockone") return null;
-  if (!policy || typeof policy.prompt !== "string" || !policy.prompt.trim() ||
-      policy.max_tokens !== 64 || policy.temperature !== 0 || policy.image_tokens !== 512 || policy.stream !== false) {
+  if (!policy) return null;
+  if (typeof policy.prompt !== "string" || !policy.prompt.trim() ||
+      typeof policy.max_tokens !== "number" || typeof policy.temperature !== "number" ||
+      typeof policy.image_tokens !== "number" || policy.stream !== false) {
     throw new Error("The selected model's fixed request policy is unavailable.");
   }
   return {...policy};
@@ -193,9 +194,6 @@ function engineChoices(data) {
     ids.add(engine.id);
     choices.push({...engine, available: engine.available === true,
       reason: typeof engine.reason === "string" ? engine.reason : "Not available on this device"});
-  }
-  for (const id of ["brockone", "brocktwo"]) {
-    if (!ids.has(id)) choices.push({id, name: id, available: false, reason: "Not configured on this device"});
   }
   return choices;
 }
@@ -339,8 +337,8 @@ function telemetrySegments(history, key, windowEnd) {
       current = null; previous = null;
       continue;
     }
-    // The sampler runs once a second. A longer interval does not imply observed continuity.
-    if (!current || point.breakBefore || point.at - previous.at > 1500 || point.at <= previous.at) {
+    // The sampler runs every 250ms. A longer gap does not imply observed continuity.
+    if (!current || point.breakBefore || point.at - previous.at > 600 || point.at <= previous.at) {
       current = []; segments.push(current);
     }
     current.push({at: point.at, value}); previous = point;
@@ -462,7 +460,7 @@ function startDeviceTelemetry() {
       drawHistories();
       lastSample = {age, receivedAt: performance.now()};
       const partial = sample.status === "partial" || cpu === null || gpu === null || memoryPercent === null;
-      status(partial ? "Partial metrics · some readings unavailable" : "Live · updates every second", partial ? "partial" : "live");
+      status(partial ? "Partial metrics · some readings unavailable" : "Live · updates 4 times a second", partial ? "partial" : "live");
     } catch (_) {
       if (active === controller && document.visibilityState === "visible") clear("Device metrics unavailable");
     } finally {
@@ -486,7 +484,7 @@ function startDeviceTelemetry() {
     clearInterval(interval); interval = null;
     if (document.visibilityState !== "visible") { pause(); return; }
     clear("Refreshing device metrics…");
-    tick(); interval = setInterval(tick, 1000);
+    tick(); interval = setInterval(tick, 250);
   }
   document.addEventListener("visibilitychange", resume);
   window.addEventListener("pagehide", pause);
@@ -547,7 +545,23 @@ if (typeof document !== "undefined") {
   function reachyURL(path, params = {}) {
     return `${path}?${new URLSearchParams({...params, token: access.reachy_token})}`;
   }
-  // ?source=reachy (the command centre's link) selects the robot once inference can run.
+  // #reachyImage is bound to the long-running /reachy/mjpeg multipart stream for the live
+  // preview a human watches, and that keeps painting fine - but the browser's decoded bitmap
+  // backing drawImage() on that element can stop advancing even while fresh bytes keep
+  // arriving over the wire (verified server-side: every layer up to and including a direct
+  // fetch of /reachy/mjpeg delivers genuinely new frames continuously; only what an <img>
+  // bound to that long-lived stream hands to canvas can go stale). Inference correctness
+  // cannot depend on that painting behaviour, so each Reachy capture instead does its own
+  // one-shot fetch of /reachy/still.jpg - a plain request/response with no long-lived
+  // decode state to go stale - and draws that instead of the preview element.
+  async function fetchReachyStill() {
+    if (!access) throw new Error("Reachy access token not available yet.");
+    const response = await fetch(reachyURL("/reachy/still.jpg"), {cache: "no-store"});
+    if (!response.ok) throw new Error("Could not fetch a fresh frame from Reachy.");
+    const blob = await response.blob();
+    return createImageBitmap(blob);
+  }
+  // ?source=reachy (a bookmarkable link) selects the robot once inference can run.
   let reachyRequested = new URLSearchParams(window.location.search).get("source") === "reachy";
   const duration = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
   const latency = new LatencySummary();
@@ -698,10 +712,10 @@ if (typeof document !== "undefined") {
     applyAdvancedControls(false); matchPromptPreset();
     $("modelPolicyStatus").hidden = !policy;
     $("modelPolicyStatus").textContent = policy
-      ? "brockone identifies Pokémon with a fixed prompt, 64 output tokens, 512 image tokens and temperature 0. Answers arrive complete; token timing is unavailable." : "";
+      ? "This model uses a fixed prompt and settings; the controls above are disabled while it is active." : "";
     $("firstTextLabel").textContent = policy ? "Token timing unavailable" : "First visible token";
     $("serverTtftHelp").textContent = policy
-      ? "brockone returns one complete answer. Native TTFT and token speed are not reported; Round trip is browser time to the complete response."
+      ? "This model returns one complete answer. Native TTFT and token speed are not reported; Round trip is browser time to the complete response."
       : "TTFT: native inference start → first nonempty server text, including server scheduling.";
     $("presetDescription").hidden = Boolean(policy);
     controls();
@@ -747,8 +761,8 @@ if (typeof document !== "undefined") {
         $("staticClocksValue").textContent = "Unavailable";
         $("encoderCacheValue").textContent = "Unavailable";
         $("runtimeStatus").textContent = policy
-          ? "brockone uses its fixed request policy. Device clocks and cache sizes are not reported by this endpoint."
-          : "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified. Load defaults are shown above.";
+          ? "This model uses its own fixed request policy. Device clocks and cache sizes are not reported by this endpoint."
+          : "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified.";
       }
       applyModelPolicy(policy, restored);
     } catch (err) {
@@ -780,8 +794,8 @@ if (typeof document !== "undefined") {
     }
   }
   function capture(source) {
-    const width = source.videoWidth || source.naturalWidth;
-    const height = source.videoHeight || source.naturalHeight;
+    const width = source.videoWidth || source.naturalWidth || source.width;
+    const height = source.videoHeight || source.naturalHeight || source.height;
     if (!width || !height) throw new Error("The image is not ready yet.");
     const preset = CAPTURE_PRESETS[state.preset];
     const limit = state.preset === "lightweight" ? Number($("resolution").value) : null;
@@ -839,7 +853,8 @@ if (typeof document !== "undefined") {
     // Nothing answered at all: the network failed, not this request (see skippedSampleReason).
     const network = err => { if (err?.name === "TypeError") err.network = true; throw err; };
     try {
-      const image = capture(source);
+      const captureSource = source === $("reachyImage") ? await fetchReachyStill() : source;
+      const image = capture(captureSource);
       state.captureAt = image.capturedAt;
       counted = state.running && source === liveSource();
       if (counted) state.sampled += 1;
@@ -910,16 +925,8 @@ if (typeof document !== "undefined") {
       // speakText() itself no-ops while a previous utterance is still in flight (see its own
       // "speaking" guard below), which is exactly the behaviour wanted here: a caption that lands
       // while Reachy is still speaking the last one is skipped, not queued, so auto-speak tracks
-      // captioning as closely as the configured rate allows without ever building a backlog.
-      if (autoSpeak) {
-        const now = Date.now();
-        if (!rateLocked && lastCaptionCompletedAt !== null && now - lastCaptionCompletedAt < AUTO_SPEAK_LOCK_INTERVAL_MS) {
-          rateLocked = true;
-          setSpeechRate(FASTEST_SPEECH_RATE);
-        }
-        lastCaptionCompletedAt = now;
-        speakText(output);
-      }
+      // captioning as closely as the selected rate allows without ever building a backlog.
+      if (autoSpeak) speakText(output);
     } catch (err) {
       if (state.abort !== controller) return;
       const skipped = trigger === "live" ? skippedSampleReason(err) : null;
@@ -1544,7 +1551,7 @@ if (typeof document !== "undefined") {
   bindBodyYaw("byaw", "byawv");
   bindSlider("posZ", "zv", "z", "");
   bindPad("padXY", "xyv", "x", "y", 0.02, 0.02, false, false);
-  // Both axes flipped from the original porch-feed mapping - reported backwards on the physical
+  // Both axes flipped from the original mapping - reported backwards on the physical
   // robot for set_target's target_head_pose (a different daemon route than the goto()-based
   // look()/centre() this sign convention was originally verified against - see Reachy.look()'s
   // own docstring - so the two need not agree).
@@ -1590,11 +1597,10 @@ if (typeof document !== "undefined") {
   $("reachySleep").addEventListener("click", () => reachyPost("/api/reachy/action/sleep"));
   $("reachyCenter").addEventListener("click", () => reachyPost("/api/reachy/action/center"));
   $("reachyFaceSound").addEventListener("click", () => reachyPost("/api/reachy/action/look-at-voice"));
-  // Stiff/Soft/Limp, not a dropdown - the wording and routes porch-feed's own command centre
-  // uses (main, nvr/feed/porch_feed.py). Centre and the pose pad/sliders below silently refuse
-  // every move while motors are Limp (see Reachy.set_target's own "motors are disabled" check in
-  // nvr/reachy/reachy.py), so this needs to read as a mode to actively pick, not a setting to
-  // notice was wrong afterward.
+  // Stiff/Soft/Limp, not a dropdown. Centre and the pose pad/sliders below silently refuse every
+  // move while motors are Limp (see Reachy.set_target's own "motors are disabled" check in
+  // reachy/reachy.py), so this needs to read as a mode to actively pick, not a setting to notice
+  // was wrong afterward.
   const MOTOR_BUTTONS = [["reachyMotorStiff", "enabled"], ["reachyMotorSoft", "gravity_compensation"], ["reachyMotorLimp", "disabled"]];
   for (const [id, mode] of MOTOR_BUTTONS) $(id).addEventListener("click", () => reachyPost(`/api/reachy/motors/${mode}`));
   $("reachyAppStart").addEventListener("click", () => {
@@ -1630,8 +1636,6 @@ if (typeof document !== "undefined") {
       answerBtn.textContent = answerLabel; manualBtn.textContent = manualLabel;
     }
   }
-  const SPEECH_RATES = Array.from(document.querySelectorAll("#reachyControls .speedopt"), btn => parseFloat(btn.dataset.rate));
-  const FASTEST_SPEECH_RATE = Math.max(...SPEECH_RATES);
   function setSpeechRate(rate) {
     speechRate = rate;
     for (const btn of document.querySelectorAll("#reachyControls .speedopt")) {
@@ -1639,27 +1643,13 @@ if (typeof document !== "undefined") {
     }
   }
   for (const btn of document.querySelectorAll("#reachyControls .speedopt")) {
-    btn.addEventListener("click", () => { rateLocked = false; setSpeechRate(parseFloat(btn.dataset.rate)); });
+    btn.addEventListener("click", () => setSpeechRate(parseFloat(btn.dataset.rate)));
   }
-  // Real measurement, not a guess: the fastest live captioning this box does (Live VLM WebUI,
-  // no interval throttle) lands consecutive captions well under 2s apart - see the v3 shim's own
-  // [perf] log, elapsed_ms in the 400-700ms range back to back - while Piper+sox at 1x commonly
-  // takes 2-3s for a caption-length sentence. No fixed rate keeps up with every caption; the
-  // pragmatic fix is detecting when captions are outrunning speech and switching to the fastest
-  // available rate automatically, rather than silently falling further and further behind. A
-  // one-way ratchet per auto-speak session (not continuously re-evaluated) - once captions have
-  // proven they can arrive that fast, staying fast avoids flapping back and forth every time one
-  // answer happens to land a little slower.
-  const AUTO_SPEAK_LOCK_INTERVAL_MS = 1500;
-  let lastCaptionCompletedAt = null, rateLocked = false;
+  // Auto-speak speaks every caption at the selected speech rate and never changes it: the rate
+  // active when it is switched on, or any rate picked while it runs, is the rate used.
   let autoSpeak = false;
   $("autoSpeakButton").addEventListener("click", () => {
     autoSpeak = !autoSpeak;
-    lastCaptionCompletedAt = null; rateLocked = false;
-    // 2x is the starting rate for an auto-speak session, not just whatever the manual speed
-    // buttons happened to be left at - the lock above can still escalate to FASTEST_SPEECH_RATE
-    // if captions start outrunning even that.
-    if (autoSpeak) setSpeechRate(2);
     $("autoSpeakButton").setAttribute("aria-pressed", String(autoSpeak));
     $("autoSpeakButton").textContent = `Auto-speak: ${autoSpeak ? "On" : "Off"}`;
   });

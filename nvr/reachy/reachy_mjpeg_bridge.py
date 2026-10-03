@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Serve the Reachy Mini camera and microphone to everything on the Jetson, from one session.
 
-The robot speaks WebRTC only. Frigate/go2rtc, the Live VLM WebUI and the Live Vision UI all want
+The robot speaks WebRTC only. go2rtc/ffmpeg, other VLM front ends and the Live Vision UI all want
 something simpler, and each of them opening its own WebRTC session would cost the robot one H.264
 encoder per consumer. So this holds exactly ONE session to the robot and fans it out:
 
-    /mjpeg       multipart MJPEG, for Frigate/go2rtc (ffmpeg) and browser previews
+    /mjpeg       multipart MJPEG, for go2rtc/ffmpeg consumers and browser previews
     /still.jpg   the newest frame, 503 when there is no fresh one
     /audio.mp3   the robot's microphone as an endless MP3 stream (encoded only while listened to)
     /healthz     state, and WHY it is in that state
-    --push-url   optionally POST each new frame into a Live VLM WebUI push session
+    --push-url   optionally POST each new frame (image/jpeg) to an HTTP endpoint
 
 The official Reachy app is a separate WebRTC consumer and coexists with this one. An on-robot app
 that takes the camera outright, or the daemon releasing its media, is not an error: the bridge
@@ -86,9 +86,9 @@ FD_EXHAUSTED_RECHECK_S = 60.0
 # Between releasing and re-acquiring the robot's media when rebuilding its camera pipeline.
 MEDIA_REBUILD_PAUSE_S = 3.0
 # Forced recovery: with --recover-ssh/--recover-key, an exhausted daemon is restarted over SSH by a
-# key the robot only lets run `systemctl restart reachy-mini-daemon` (nvr/reachy/
-# setup_robot_recovery.sh). At most once per interval, so a daemon that wedges again at once (or a
-# restart that does not take) cannot turn into a restart loop.
+# key the robot only lets run `systemctl restart reachy-mini-daemon` (see
+# setup_robot_recovery.sh, same directory). At most once per interval, so a daemon that wedges
+# again at once (or a restart that does not take) cannot turn into a restart loop.
 RECOVER_MIN_INTERVAL_S = 900.0
 # After an attempt that restarted nothing (ssh failed, or a robot app was running), try again sooner.
 RECOVER_RETRY_S = 120.0
@@ -96,8 +96,8 @@ RECOVER_RETRY_S = 120.0
 RECOVER_TIMEOUT_S = 60.0
 _DAEMON_PID = re.compile(r"(?:launcher\.sh|python\d*)\[(\d+)\]")
 
-# Live VLM WebUI push: the pause after a refusal (an HTTP error, a 409 from Stop), and the slower
-# one after the WebUI did not answer at all, which is routine because it is stopped on purpose.
+# Frame push (--push-url): the pause after a refusal (an HTTP error, a 409 from Stop), and the
+# slower one after the receiver did not answer at all, as when it is stopped on purpose.
 PUSH_RETRY_S = 5.0
 PUSH_UNREACHABLE_RETRY_S = 10.0
 
@@ -263,7 +263,7 @@ class AudioHub:
     """Robot microphone -> MP3, encoded only while somebody is listening.
 
     MP3 because it is the one format every consumer here reads as an endless HTTP stream: ffmpeg
-    (go2rtc/Frigate) and a browser <audio> element alike. The encoder is torn down when the last
+    (go2rtc, say) and a browser <audio> element alike. The encoder is torn down when the last
     listener leaves, so an unheard microphone costs nothing beyond draining the track.
     """
 
@@ -712,13 +712,13 @@ class Bridge:
                 _LOG.debug("close: %s", e)
         return 0.0 if live_since is None else time.monotonic() - live_since
 
-    # ------------------------------------------------------------------ Live VLM WebUI push
+    # ------------------------------------------------------------------ frame push (--push-url)
     async def _push_loop(self) -> None:
-        """POST new frames into a Live VLM WebUI push session.
+        """POST new frames to the --push-url receiver.
 
-        The WebUI is routinely stopped on purpose, so its absence is a state, not an error: say so
-        once and probe slowly. A 409 means someone pressed Stop on that session in the WebUI; the
-        server refuses frames until Start is pressed there, and re-creating the session behind their
+        The receiver may be stopped on purpose, so its absence is a state, not an error: say so
+        once and probe slowly. A 409 means someone pressed Stop on that session at the receiver;
+        it refuses frames until Start is pressed there, and re-creating the session behind their
         back would silently keep the VLM running, so this waits instead.
         """
         last_seq = 0
@@ -728,7 +728,7 @@ class Bridge:
                     self._push_state("waiting for video", None)
                     continue
                 # Taken before the freshness check, so a frame too old to push still counts as
-                # seen. One that went stale while this loop slept (WebUI down, and the video
+                # seen. One that went stale while this loop slept (receiver down, and the video
                 # stopped meanwhile) would otherwise satisfy next() at once on every pass; none of
                 # those awaits suspends, so the loop would spin without yielding and freeze the
                 # whole bridge, HTTP and supervisor included.
@@ -746,11 +746,11 @@ class Bridge:
                         self.push["pushed"] += 1
                         self._push_state("pushing", None)
                     elif r.status == 409:
-                        self._push_state("stopped in the WebUI; press Start there to resume", body[:200])
+                        self._push_state("stopped at the receiver; press Start there", body[:200])
                         await asyncio.sleep(PUSH_RETRY_S)
                         continue
                     else:
-                        self._push_state(f"WebUI answered HTTP {r.status}", body[:200])
+                        self._push_state(f"receiver answered HTTP {r.status}", body[:200])
                         await asyncio.sleep(PUSH_RETRY_S)
                         continue
                 await asyncio.sleep(max(0.0, self.push_interval - (time.monotonic() - t0)))
@@ -758,7 +758,7 @@ class Bridge:
                 raise
             except (aiohttp.ClientConnectorError, aiohttp.ServerDisconnectedError,
                     asyncio.TimeoutError) as e:
-                self._push_state("WebUI not reachable (stopped?)", f"{type(e).__name__}: {e}")
+                self._push_state("receiver not reachable (stopped?)", f"{type(e).__name__}: {e}")
                 await asyncio.sleep(PUSH_UNREACHABLE_RETRY_S)
             except Exception as e:
                 self._push_state("push error", f"{type(e).__name__}: {e}")
@@ -766,7 +766,7 @@ class Bridge:
 
     def _push_state(self, state: str, detail: str | None) -> None:
         if self.push["state"] != state:
-            _LOG.info("webui push: %s%s", state, f" ({detail})" if detail else "")
+            _LOG.info("frame push: %s%s", state, f" ({detail})" if detail else "")
         self.push["state"], self.push["detail"] = state, detail
 
     # ------------------------------------------------------------------ HTTP
@@ -830,7 +830,7 @@ class Bridge:
             "state": self.state,
             "reason": self.reason,
             "live": self.state == "live" and self.frames.fresh,
-            # has_frame only vouches for a FRESH frame: the command centre reads it as "connected",
+            # has_frame only vouches for a FRESH frame: a client may read it as "connected",
             # and a picture from minutes ago is not a connection.
             "has_frame": self.frames.fresh,
             "frames": self.frames.seq,
@@ -907,7 +907,7 @@ def _address_missing(e: OSError) -> bool:
 async def _bind(runner: web.AppRunner, host: str, port: int) -> None:
     """Bind one address, waiting for it to exist rather than dying.
 
-    The docker gateway (172.17.0.1) only appears once dockerd is up. At boot this can start first,
+    The docker gateway address only appears once dockerd is up. At boot this can start first,
     and a missing address is a reason to wait, not to crash-loop.
     """
     warned = False
@@ -933,20 +933,24 @@ async def _bind(runner: web.AppRunner, host: str, port: int) -> None:
 async def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--robot-host", default="192.168.6.162")
+    # No built-in address: it's different on every LAN. The systemd unit passes REACHY_MINI_IP
+    # from reachy.env (see scripts/set-reachy-ip.sh); run by hand, export it or pass the flag.
+    p.add_argument("--robot-host", default=os.environ.get("REACHY_MINI_IP", ""),
+                   help="Reachy Mini IP or hostname (default: $REACHY_MINI_IP)")
     p.add_argument("--robot-port", type=int, default=8443, help="WebRTC signalling port")
     p.add_argument("--daemon-port", type=int, default=8000, help="robot daemon REST port")
     p.add_argument("--listen", action="append",
                    help="bind address, repeatable (default 127.0.0.1); loopback keeps it local")
     p.add_argument("--listen-port", type=int, default=8099)
     p.add_argument("--fps", type=float, default=5.0, help="rate frames are published at")
-    p.add_argument("--push-url", help="Live VLM WebUI push endpoint, e.g. "
-                   "https://127.0.0.1:8090/api/push/frame?session_id=reachy&source_name=reachy-mini")
+    p.add_argument("--push-url", help="HTTP(S) endpoint to POST each new frame to, as image/jpeg")
     p.add_argument("--push-fps", type=float, default=0.0, help="push rate (default: --fps)")
     p.add_argument("--recover-ssh", help="user@robot whose forced-command key restarts the daemon "
-                   "when it runs out of file descriptors (nvr/reachy/setup_robot_recovery.sh)")
+                   "when it runs out of file descriptors (see setup_robot_recovery.sh)")
     p.add_argument("--recover-key", help="private key for --recover-ssh")
     args = p.parse_args()
+    if not args.robot_host:
+        p.error("no robot address: set REACHY_MINI_IP or pass --robot-host <the robot's IP or hostname>")
 
     bridge = Bridge(args.robot_host, args.robot_port, args.fps, args.daemon_port,
                     args.push_url, args.push_fps, args.recover_ssh, args.recover_key)

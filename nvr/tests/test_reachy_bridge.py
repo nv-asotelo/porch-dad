@@ -975,7 +975,7 @@ class PushLoopTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_refused_then_recovers(self):
         self.start()
-        await wait_until(lambda: self.bridge.push["state"] == "WebUI not reachable (stopped?)",
+        await wait_until(lambda: self.bridge.push["state"] == "receiver not reachable (stopped?)",
                          what="the unreachable state")
         self.assertEqual(self.bridge.push["pushed"], 0)
         await self.start_webui()

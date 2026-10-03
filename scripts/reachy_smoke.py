@@ -101,9 +101,11 @@ SHIM_UNIT = "cosmos3-edge-shim.service"
 # still not listening is stuck, not loading.
 SHIM_LOAD_GRACE_S = 300
 
-# Must be enabled, or the NVR does not come back after a reboot.
+# Must be enabled, or the NVR does not come back after a reboot. porch-dad (event captions and
+# the :8095 feed) and frigate-notify (phone notifications) joined in the 2026-10-03 boot set.
 BOOT_UNITS = ("docker.service", "containerd.service", SHIM_UNIT,
-              "reachy-mjpeg-bridge.service", "porch-feed.service")
+              "reachy-mjpeg-bridge.service", "porch-feed.service",
+              "porch-dad.service", "frigate-notify.service")
 # The two Live UIs are switched off on purpose at times, so "enabled" is not the right answer for
 # them; the right answer is whatever the command centre last recorded. unit -> its key in
 # porch-feed's `services:` list, which is the key service_intent.json is written under.
@@ -999,7 +1001,9 @@ class Smoke:
                        if push.get("enabled") else "the bridge runs without --push-url")
         # A 409 means someone pressed Stop on the session in the WebUI. That is a decision, and the
         # bridge deliberately waits for Start rather than re-creating the session behind their back.
-        stopped_there = "stopped in the WebUI" in str(push.get("state"))
+        # The bridge says "stopped at the receiver"; before 2026-10-03 it said "in the WebUI".
+        stopped_there = any(s in str(push.get("state"))
+                            for s in ("stopped at the receiver", "stopped in the WebUI"))
         if not s1 or not s1.get("connected"):
             self.add(name, WARN if stopped_there else FAIL,
                      f"no connected {WEBUI_SESSION!r} session; {bridge_side}")

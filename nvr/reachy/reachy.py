@@ -1,11 +1,9 @@
-"""Reachy Mini control, shared by every UI that needs it (Live Vision on this branch; the full
-porch-dad command centre on main).
+"""Reachy Mini control: motors, pose, onboard apps, volume, sound upload/play, over the robot's
+own daemon REST API.
 
-Talks to the robot's own daemon REST API rather than proxying Home Assistant. HA's Reachy
+Talks to the robot's own daemon REST API rather than going through Home Assistant. Pollen's HA
 integration exposes the same capabilities, but routing through it would make this page depend on
-Home Assistant being up - and a demo/command UI's job is to work when other things are off. The
-camera preview already learned that lesson the hard way once: it was wired to a webUI that could
-itself be switched off, and went dark along with it.
+Home Assistant being up - and a demo UI's job is to work when other things are off.
 
 Everything here is a thin wrapper over documented daemon endpoints. Angles are degrees at this
 boundary and radians on the wire, matching the robot's published limits.
@@ -353,7 +351,7 @@ class Reachy:
     #
     # The robot runs ONE app at a time, and the daemon owns their lifecycle - installing from a
     # Hugging Face Space into a venv on the robot, starting, stopping. This is how a conversation
-    # app gets switched on without SSHing into the robot, so the command centre exposes it.
+    # app gets switched on without SSHing into the robot, so this UI exposes it.
     #
     # Only installed apps are listed. The daemon will also happily list the ~470 published Spaces,
     # which is a catalogue to browse, not a control surface, and putting it on this page would bury

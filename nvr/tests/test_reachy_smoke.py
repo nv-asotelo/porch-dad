@@ -632,13 +632,15 @@ class ConsumerChecks(unittest.TestCase):
 
             # The session exists under another name only: the bridge's reason decides the verdict.
             WebUI.session = "other"
-            stopped = "stopped in the WebUI; press Start there to resume"
+            # The bridge's wording, and the one it used before 2026-10-03.
+            for stopped in ("stopped at the receiver; press Start there",
+                            "stopped in the WebUI; press Start there to resume"):
+                s.health = {**Verdicts.LIVE,
+                            "push": {"enabled": True, "detail": "HTTP 409", "state": stopped}}
+                s.check_webui_push()
+                self.assertEqual(s.results[-1].status, smoke.WARN, stopped)
             s.health = {**Verdicts.LIVE,
-                        "push": {"enabled": True, "detail": "HTTP 409", "state": stopped}}
-            s.check_webui_push()
-            self.assertEqual(s.results[-1].status, smoke.WARN)
-            s.health = {**Verdicts.LIVE,
-                        "push": {"enabled": True, "state": "WebUI answered HTTP 500"}}
+                        "push": {"enabled": True, "state": "receiver answered HTTP 500"}}
             s.check_webui_push()
             self.assertEqual(s.results[-1].status, smoke.FAIL)
             self.assertIn("HTTP 500", s.results[-1].detail)

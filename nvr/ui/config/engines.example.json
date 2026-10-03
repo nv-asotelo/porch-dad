@@ -8,19 +8,5 @@
     "backend_port": 8001,
     "path": "/home/jetson/porch-dad-demo/engines/v3/reasoning",
     "profile": "Current Cosmos3-Edge engine"
-  },
-  "brockone": {
-    "kind": "service",
-    "protocol": "brockone",
-    "name": "brockone",
-    "model_id": "brockone",
-    "service": "brockone-edge.service",
-    "backend_port": 8092,
-    "path": "/home/jetson/brockone/engines/rtn168-head-fp16",
-    "profile": "Pokémon identification · INT4 with FP16 language head",
-    "enabled": false,
-    "unavailable_reason": "Orin engine build and validation in progress",
-    "readiness_receipt": "/home/jetson/brockone/provenance/orin-engine-validation.json",
-    "readiness_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   }
 }

@@ -790,8 +790,13 @@ bash nvr/demo-mode.sh status
 bash nvr/demo-mode.sh off                     # full stack back
 ```
 
-The WebUI needs exactly two units - `cosmos3-edge-shim.service` (holds the engine) and
-`live-vlm-webui.service`. Everything else stops. Measured effect:
+Demo mode keeps three units - `cosmos3-edge-shim.service` (holds the engine),
+`cosmos-edge-ui.service` (Live Vision, the default Live UI since 2026-10-03) and
+`reachy-mjpeg-bridge.service` (its Reachy source). The containers and services the script lists
+stop; `porch-dad.service`, in the boot set since the same day, is not on that list and keeps
+running. Before that day demo mode kept the shim and `live-vlm-webui.service` instead, and the
+effect below was measured that way; with Live Vision and the bridge in its place it has not been
+re-measured:
 
 | | Full stack | Demo mode |
 |---|---|---|
@@ -1020,15 +1025,23 @@ is no userspace OOM protection — the kernel OOM killer is the only backstop.
 
 ### What survives a reboot, and the one thing that does not
 
-Verified before a planned restart:
+Verified before a planned restart, then updated for the boot set of 2026-10-03, in which Live
+Vision replaces the Live VLM WebUI as the Live UI that comes back. That boot set was applied on
+the board that day and has not yet been through a reboot:
 
 | | |
 |---|---|
 | `MemorySwapMax=0` drop-in | present in `/etc/systemd/system/cosmos3-edge-shim.service.d/` |
 | `vm.swappiness=10` | present in `/etc/sysctl.d/99-porchdad-swap.conf` |
-| shim, WebUI, porch-feed, frigate-notify | all `boot=enabled` |
-| frigate, ring-mqtt, mosquitto, homeassistant | all `restart=unless-stopped` |
+| cosmos3-edge-shim, porch-feed, porch-dad, frigate-notify, reachy-mjpeg-bridge, cosmos-edge-ui (Live Vision) | all `boot=enabled`, as are docker and containerd ([deploy/07 §8](../deploy/07-reachy-homeassistant-and-orin-changes.md)) |
+| live-vlm-webui-fork (Live VLM WebUI) | `boot=disabled` and stopped: still installed, started on demand ("Live Vision" below) |
+| frigate, ring-mqtt, mosquitto, scout-bridge, scout-bridge-first-floor | all `restart=unless-stopped` |
+| homeassistant | stopped, `restart=no`: not part of the boot set (deploy/07 §8) |
 | camera on/off state | persisted by Frigate in `/config/.runtime_state.json` — `front_entryway` ON, `front_driveway` ON, `office` OFF, `pinky` OFF |
+
+The two Live UIs' boot state follows the command centre (deploy/07 §8): ON or OFF there also
+enables or disables the unit. So their two rows are the default until someone changes it there,
+and the intent it records should match them ("Live Vision" below).
 
 **The exception: `gdm` comes back.** It is `boot=static`, pulled in by the default target:
 
@@ -1048,3 +1061,159 @@ sudo systemctl set-default multi-user.target   # revert: set-default graphical.t
 
 Left unset here rather than changed silently, because it removes the local GUI entirely and that
 should be a deliberate choice, not a side effect of a memory fix.
+
+
+## Live Vision: Reachy Mini control and Piper speech
+
+Live Vision (`nvr/ui`, `cosmos-edge-ui.service`) captions a browser camera, or the Reachy Mini's
+through the bridge (deploy/07 §5), with the shim. The unit binds loopback `:8092`; with the LAN
+drop-in from `enable_lan_ui.sh` it serves the LAN on `:8092` and `:8443`, and a LAN request for
+`/` on `:8092` is redirected to HTTPS, the only place a browser grants a camera (deploy/07 §3).
+Since 2026-10-03 it is the Live UI the board starts at boot, in place of the Live VLM WebUI, and it
+also drives the robot: motors, head pose, antennas, onboard apps, volume, and speech through the
+robot's speaker.
+
+Its code is the [live-vision-cosmos-demo](https://github.com/nv-asotelo/live-vision-cosmos-demo)
+repo at `e84cd37`, the build the Orin runs. `nvr/ui/web/app.js` and `style.css`,
+`nvr/ui/scripts/engine_backends.py`, `nvr/reachy/reachy.py` and `nvr/reachy/reachy_mjpeg_bridge.py`
+are byte-identical to it. Two files differ, only where the demo names its own layout:
+
+| File | Changed from `e84cd37` | Why |
+|---|---|---|
+| `nvr/ui/scripts/serve_ui.py` | `--shim-service` defaults to `cosmos3-edge-shim`, and its help names `systemd/cosmos3-edge-shim.service` | The demo's shim unit is `live-vision-cosmos-demo-shim`. Read only with `--engine-link` |
+| `nvr/ui/scripts/serve_ui.py` | The module docstring, which `--help` prints, the comment on the `reachy.py` import and `EngineSwitcher`'s docstring: `nvr/` paths, a bridge that listens on loopback and the Docker gateway (deploy/07 §1), no `setup-orin.sh` | The demo's paths, its loopback-only bridge and its setup script are not this repo's |
+| `nvr/ui/web/index.html` | The image-token help names `max_image_tokens_per_image` in the engine's `visual/config.json`, read when the shim starts (deploy/05 §5). The clocks help names `jetson_clocks` (deploy/02) | The demo fixes the budget at 512 when its `setup-orin.sh` builds the engine, and pins clocks with a unit that script installs |
+
+Compared with the UI this repo carried before (`b3f069c`):
+
+* **Auto-speak keeps the selected rate.** It no longer switches to 2x when turned on (`b3f069c`),
+  or to 2.5x when captions arrive under 1.5 s apart (`ab7508a`). A caption that lands while the
+  last one is still being spoken is still skipped, not queued.
+* **Each Reachy capture fetches a fresh `/reachy/still.jpg`** instead of drawing the
+  `/reachy/mjpeg` preview, whose decoded picture can stop advancing in the browser while new frames
+  keep arriving.
+* **Device metrics update 4 times a second**, and GPU load is the peak of 50 ms readings since the
+  last update: one reading a second missed inference bursts and showed a busy GPU near 0%.
+* **No engine switching to brockone.** [deploy/10](../deploy/10-brockone-live-vision.md) is
+  superseded. The registry example keeps only its `cosmos` entry, because a `brockone` entry now
+  stops the UI at startup.
+* **The bridge changed only in wording, and in one default.** Its push states say "receiver" where
+  they said "WebUI" (deploy/07 §5), and `--robot-host` now defaults to `$REACHY_MINI_IP` and refuses
+  to start without an address, where it used to default to a fixed one. The unit passes
+  `--robot-host`, so nothing changes on the Orin. The bridge's comment on that option, about
+  `reachy.env`, describes the demo's unit.
+
+### Robot control and speech: the drop-in
+
+The unit starts without robot flags, and `lan.conf` adds only the listeners. Robot control, speech
+and a larger memory cap come from
+[`systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf`](systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf),
+which repeats `lan.conf`'s command and adds:
+
+| Flags | What they do |
+|---|---|
+| `--reachy-daemon-url http://<reachy-ip>:8000` | The robot daemon's REST API: motors, pose, apps, volume, sound upload and play. Not the camera: video and audio come from the bridge, relayed under `/reachy/` (`--reachy-url`, default `http://127.0.0.1:8099`) with or without this flag. Needs `requests`, which this interpreter has: porch-feed runs on it too |
+| `--piper-bin`, `--piper-model` | Speech: Piper synthesizes on the Orin and the robot's speaker plays it ("Piper" below). Refused without `--reachy-daemon-url`, so with no robot leave out all three |
+
+Not used on this board: `--engine-link` and `--engines-config`. The command centre switches the
+shim's engine (`switch_engine` in `nvr/feed/porch_feed.py`), so Live Vision reports model switching
+as not configured. Without `--reachy-daemon-url` the robot panel is not shown at all, which is also
+what a drop-in that never took effect looks like.
+
+Install it on the Orin from a copy of this repo, after `enable_lan_ui.sh` has issued the cert and
+written `lan.conf` (deploy/07 §3):
+
+```bash
+read -rp "Reachy Mini address: " REACHY_IP     # its LAN IP or hostname - never commit it
+sudo install -d /etc/systemd/system/cosmos-edge-ui.service.d
+sed "s/<reachy-ip>/$REACHY_IP/g" nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf \
+  | sudo tee /etc/systemd/system/cosmos-edge-ui.service.d/zz-live-vision-demo.conf >/dev/null
+sudo systemctl daemon-reload
+systemctl cat cosmos-edge-ui | grep -c '<reachy-ip>'   # must print 0
+sudo systemctl restart cosmos-edge-ui
+```
+
+The `grep` matters: `serve_ui.py` does not check the address at startup, so a drop-in installed
+with the placeholder starts normally, and its robot panel just reads "Robot daemon unreachable".
+
+**Why `zz-`.** `lan.conf` and this file both reset `ExecStart=`, systemd applies a unit's drop-ins
+in file-name order, and the last command wins. `zz-` sorts after `lan.conf`. The numeric prefix the
+other drop-ins here use would sort before it, and then `lan.conf`'s command, which has no robot or
+speech flags, wins without an error. A reset replaces the whole command, so this file repeats the
+listener flags: change ports here. Re-running `enable_lan_ui.sh` is harmless (it rewrites
+`lan.conf` and keeps an existing cert), but its ports have no effect while this file exists.
+
+**Why `MemoryMax=1G`, when the unit says a UI must never compete with the shim.** Piper runs as a
+child of `serve_ui.py`, so it lives in the UI's cgroup from the first speak until the UI stops. It
+was measured there at 105-135 MB RSS, and with the UI's own memory that is more than the unit's
+256M, which the kernel enforces by OOM-killing inside the unit. The tradeoff, stated plainly: 1G is
+a ceiling, not a reservation, but it is more than the ~800 MB of headroom measured above, so the cap
+no longer guarantees the shim outlives a runaway UI. What the board runs by default changed with it:
+this UI instead of the Live VLM WebUI, which measured 212 MB idle to 622 MB peak RSS ("What was
+pinned" above). This UI with Piper beside the full NVR has not been measured. Read it while Piper
+is warm before tightening the cap: `systemctl show cosmos-edge-ui -p MemoryCurrent`.
+
+**What reaches the LAN.** The `/reachy/` camera and microphone routes need the page's token
+(deploy/07 §5), but robot control (`POST /api/reachy/*`) checks only that a request is not
+cross-origin, so any LAN client can move the robot or make it speak through Live Vision. The robot's
+daemon answers on the LAN at `:8000` anyway, which is how this UI reaches it: this adds a browser
+route to the robot, not new reach.
+
+### Piper
+
+Live Vision's Piper is separate from porch-feed's, which
+[deploy/07 §9](../deploy/07-reachy-homeassistant-and-orin-changes.md) covers along with why Piper at
+all. It is an older release (v1.2.0 against porch-feed's 2023.11.14-2), with another voice and its
+own directory, kept warm by `serve_ui.py` the same way (`--json-input`, `--length_scale 0.85`).
+v1.2.0 is the release the demo pins; its aarch64 asset is `piper_arm64.tar.gz`, and
+`piper_linux_aarch64.tar.gz` is a 404 under that tag. Neither file is in git (a 25 MB bundle, a
+63 MB voice). As `orin`, on the Orin:
+
+```bash
+curl -fsSL -o /tmp/piper_arm64.tar.gz \
+  https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_arm64.tar.gz
+echo "34b298f6b3e55b55e81f05c6157310f9ec4df3fdd3d73e4c85eb80e218c54d2c  /tmp/piper_arm64.tar.gz" | sha256sum -c
+tar -xzf /tmp/piper_arm64.tar.gz -C /home/orin/nvr   # -> /home/orin/nvr/piper/piper, own onnxruntime + espeak-ng
+for ext in onnx onnx.json; do
+  curl -fsSL -o /home/orin/nvr/piper/en_US-ljspeech-medium.$ext \
+    https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.$ext
+done
+```
+
+Rates other than 1x run the WAV through `sox tempo`; without sox every rate quietly plays at 1x
+(`sudo apt install sox`). `en_US-ljspeech-medium` is the voice the rates were tuned against by ear:
+intelligible up to 2.5x, mumbling at 3x (`cb9cdfd`). Its model card says it was trained from
+scratch on the public-domain LJ Speech dataset; read a substitute voice's model card first, because
+some Piper voices carry non-commercial licenses.
+
+### At boot, and on demand
+
+Since 2026-10-03 Live Vision starts at boot and the Live VLM WebUI does not ("What survives a
+reboot" above has the whole set). Both are boot-follows-intent services in the command centre
+(deploy/07 §8): ON there also enables the unit at boot, and OFF disables it. Setting the two there,
+Live Vision ON and the WebUI OFF, makes the recorded intent agree with the boot state; OFF is
+offered only while a service is running. Set with `systemctl` instead, the boot state is the same,
+but where an older recorded intent says otherwise the command centre's cards show the disagreement,
+and `scripts/reachy_smoke.py` warns on the boot state and, while the WebUI's recorded intent is
+still ON, fails `webui push (reachy)`, until it is set there.
+
+The WebUI is still installed. `sudo systemctl start live-vlm-webui-fork` runs it until the next
+reboot; ON in the command centre also brings it back at every boot until it is turned OFF there.
+`reachy-mjpeg-bridge` keeps its `--push-url` to the WebUI's `reachy` session: with the WebUI off
+that target is usually down, which the bridge treats as a state, not an error (`push.state`
+`receiver not reachable (stopped?)`, probed every 10 s), and it resumes by itself once the WebUI
+accepts frames again (deploy/07 §5).
+
+### Verified, and what was not
+
+Checked 2026-10-03 on the Orin, through Live Vision's own API with the drop-in installed:
+`POST /api/reachy/action/center` answered `{"ok": true, "message": "centred"}`, and
+`POST /api/reachy/speak` answered `spoke in 3.21s (synth 2.77s, play 0.45s)`, the first utterance
+after a start, so the synthesis time includes Piper's cold load. Piper ran at 105-135 MB RSS in the
+unit's cgroup. The Orin keeps the UI it ran before (branch reachy-feed's) as
+`/home/orin/nvr/ui.bak-reachy-feed-82775ab`, and the bridge it ran before as
+`/home/orin/nvr/reachy/reachy_mjpeg_bridge.py.bak-d86c1ba`.
+
+**Not verified:** a caption through this build on the Orin; speech at rates other than 1x, and
+whether sox is installed there; the 2026-10-03 boot set across a reboot; and this UI with Piper
+beside the full NVR, or beside the WebUI.

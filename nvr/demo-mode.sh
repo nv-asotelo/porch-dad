@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Quiesce the board down to just the Live VLM WebUI, or put the full stack back.
+# Quiesce the board down to just Live Vision, or put the full stack back.
 #
 # Why this exists: the Orin Nano has 8 GB and 6 cores, and the NVR stack (Frigate CPU detection,
 # ring-mqtt, Home Assistant) uses most of both. With everything running, memory sat at 6.73 GB used
-# with 0.80 GB available and load average 7.56 on 6 cores. Demoing the WebUI in that state measures
+# with 0.80 GB available and load average 7.56 on 6 cores. Demoing a Live UI in that state measures
 # the NVR, not the model.
 #
-#   ./demo-mode.sh on     stop everything the WebUI does not need
+#   ./demo-mode.sh on     stop everything Live Vision does not need
 #   ./demo-mode.sh off    bring the full stack back
 #   ./demo-mode.sh status what is up right now
 #
-# The WebUI needs exactly two units: cosmos3-edge-shim.service (holds the engine) and
-# live-vlm-webui.service. Everything below is stopped in `on` and restored in `off`.
+# It keeps three units: cosmos3-edge-shim (holds the engine), cosmos-edge-ui (Live Vision) and
+# reachy-mjpeg-bridge (its Reachy source). Everything below is stopped in `on`, restored in `off`.
 set -uo pipefail
 
 CONTAINERS=(frigate ring-mqtt homeassistant mosquitto)
@@ -21,7 +21,7 @@ SERVICES=(frigate-notify porch-feed)
 DESKTOP=(x11vnc gnome-remote-desktop jetson-oled)
 # Not required by anything here; they just add noise to a CPU measurement.
 NOISE=(iperf3 kerneloops fwupd)
-KEEP=(cosmos3-edge-shim live-vlm-webui)
+KEEP=(cosmos3-edge-shim cosmos-edge-ui reachy-mjpeg-bridge)
 
 usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
@@ -58,10 +58,10 @@ off)
   for c in mosquitto ring-mqtt frigate homeassistant; do
     docker start "$c" >/dev/null 2>&1 && printf '  container %-21s started\n' "$c"
   done
-  # KEEP is started too, not just restored-alongside. A reboot between `on` and `off` leaves the
-  # WebUI down if its unit is not enabled, and `on` never stopped it so `off` would never think to
-  # start it. Measured that exact gap: the board rebooted, every enabled unit came back, and
-  # live-vlm-webui did not because it was `disabled`.
+  # KEEP is started too, not just restored-alongside. A reboot between `on` and `off` leaves a KEEP
+  # unit down if it is not enabled, and `on` never stopped it so `off` would never think to start
+  # it. Measured that exact gap when KEEP was the WebUI: the board rebooted, every enabled unit came
+  # back, and live-vlm-webui did not because it was `disabled`.
   sudo -n systemctl enable --now "${KEEP[@]}" 2>/dev/null
   sudo -n systemctl start "${DESKTOP[@]}" "${SERVICES[@]}" 2>/dev/null
   for s in "${KEEP[@]}" "${SERVICES[@]}" "${DESKTOP[@]}"; do
@@ -73,7 +73,7 @@ off)
   ;;
 
 status)
-  echo "== required for the WebUI =="
+  echo "== required for Live Vision =="
   for s in "${KEEP[@]}"; do
     printf '  %-22s %-9s (boot: %s)\n' "$s" "$(systemctl is-active "$s")" \
       "$(systemctl is-enabled "$s" 2>/dev/null)"

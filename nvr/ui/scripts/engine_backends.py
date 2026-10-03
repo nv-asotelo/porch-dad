@@ -5,7 +5,6 @@ commands. Selecting a model drains inference, stops the previous service, then
 checks the new service's identity. A failed start restores the previous service.
 """
 
-import hashlib
 import http.client
 import json
 import re
@@ -14,13 +13,6 @@ import threading
 import time
 from pathlib import Path
 
-BROCKONE_PROMPT = (
-    "Identify the Pokémon shown in the image. Reply with one short sentence: "
-    "This is <Pokémon name>. If no Pokémon is recognizable, reply: "
-    "I cannot identify a Pokémon."
-)
-BROCKONE_POLICY = {"prompt": BROCKONE_PROMPT, "max_tokens": 64,
-                   "temperature": 0, "image_tokens": 512, "stream": False}
 ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\Z")
 UNIT = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,127}(?:\.service)?\Z")
 
@@ -32,8 +24,8 @@ def validate_registry(entries):
     for key, entry in entries.items():
         if not isinstance(key, str) or not ID.fullmatch(key) or not isinstance(entry, dict):
             raise ValueError("Invalid engine identifier")
-        if entry.get("kind") != "service" or entry.get("protocol") not in {"cosmos", "brockone"}:
-            raise ValueError("Service engines need an explicit cosmos or brockone protocol")
+        if entry.get("kind") != "service" or entry.get("protocol") != "cosmos":
+            raise ValueError("Service engines need an explicit cosmos protocol")
         if not isinstance(entry.get("name"), str) or not entry["name"].strip():
             raise ValueError("Engine name is required")
         if not isinstance(entry.get("model_id"), str) or not entry["model_id"].strip():
@@ -50,16 +42,6 @@ def validate_registry(entries):
         path = entry.get("path")
         if not isinstance(path, str) or not Path(path).is_absolute() or ".." in Path(path).parts:
             raise ValueError("Engine path must be absolute")
-        if entry["protocol"] == "brockone":
-            if entry["model_id"] != "brockone":
-                raise ValueError("The brockone protocol requires model_id brockone")
-            mode = entry.get("validation_mode", "validated")
-            if mode not in {"validated", "live_trial"}:
-                raise ValueError("Unknown brockone validation mode")
-            proof, sha = entry.get("readiness_receipt"), entry.get("readiness_sha256")
-            if (not isinstance(proof, str) or not Path(proof).is_absolute()
-                    or not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{64}", sha)):
-                raise ValueError("brockone requires a pinned target readiness receipt")
         ports.add(port)
         units.add(service)
     return entries
@@ -92,45 +74,13 @@ class ServiceEngineSwitcher:
             return False, entry.get("unavailable_reason", "Not installed yet")
         if not (Path(entry["path"]) / "llm.engine").is_file():
             return False, "Engine has not been built on this device"
-        if entry["protocol"] == "brockone":
-            try:
-                proof = Path(entry["readiness_receipt"]).read_bytes()
-                if hashlib.sha256(proof).hexdigest() != entry["readiness_sha256"]:
-                    return False, "Target validation receipt differs from the installed configuration"
-                value = json.loads(proof)
-                if not isinstance(value, dict):
-                    return False, "Target admission receipt must be an object"
-                if entry.get("validation_mode", "validated") == "live_trial":
-                    if (value.get("state") != "orin_engine_live_trial"
-                            or value.get("model_id") != "brockone"
-                            or value.get("engine_root") != entry["path"]
-                            or value.get("user_authorized_validation_bypass") is not True
-                            or value.get("validation_performed") is not False
-                            or value.get("validation_passed") is not False):
-                        return False, "Unvalidated live trial authorization is incomplete"
-                    return True, ""
-                if (value.get("state") != "orin_engine_validated" or value.get("model_id") != "brockone"
-                        or value.get("engine_root") != entry["path"]
-                        or value.get("engine_load_passed") is not True
-                        or value.get("finite_predictions_passed") is not True
-                        or value.get("prepared_pixels_passed") is not True):
-                    return False, "Target engine validation is incomplete"
-            except (OSError, ValueError, TypeError):
-                return False, "Target engine validation is pending"
         return True, ""
 
     def descriptor(self, key):
         entry = self.engines[key]
         available, reason = self.availability(key)
-        trial = entry["protocol"] == "brockone" and entry.get("validation_mode") == "live_trial"
-        name = entry["name"] + " (unvalidated trial)" if trial else entry["name"]
-        profile = entry.get("profile", "")
-        if trial:
-            profile = "Unvalidated live trial" + (" · " + profile if profile else "")
-        return {"id": key, "name": name, "model_id": entry["model_id"],
-                "profile": profile, "available": available, "reason": reason,
-                "validation_status": "unvalidated_live_trial" if trial else "standard",
-                "request_policy": BROCKONE_POLICY.copy() if entry["protocol"] == "brockone" else None}
+        return {"id": key, "name": entry["name"], "model_id": entry["model_id"],
+                "profile": entry.get("profile", ""), "available": available, "reason": reason}
 
     def active(self):
         with self.state_lock:
@@ -168,7 +118,7 @@ class ServiceEngineSwitcher:
             response.close()
             connection.close()
             connection = http.client.HTTPConnection("127.0.0.1", entry["backend_port"], timeout=2)
-            connection.request("GET", "/health" if entry["protocol"] == "brockone" else "/health/ready")
+            connection.request("GET", "/health/ready")
             response = connection.getresponse()
             raw = response.read(65537)
             return response.status == 200 and len(raw) <= 65536 and json.loads(raw).get("status") == "ready"
@@ -234,35 +184,3 @@ class ServiceEngineSwitcher:
             self.switch_target = None
             self.switch_started_at = None
             self.lock.release()
-
-
-def brockone_request(payload):
-    """Fail on stale browser settings, rather than silently changing a user's prompt."""
-    if payload.get("model") != "brockone":
-        raise ValueError("The model changed; refresh Live Vision before submitting another image")
-    content = payload["messages"][0]["content"]
-    texts = [part.get("text") for part in content if part.get("type") == "text"]
-    if (texts != [BROCKONE_PROMPT] or payload.get("max_tokens") != 64
-            or payload.get("temperature") != 0 or payload.get("max_image_tokens_per_image") != 512):
-        raise ValueError("brockone uses its fixed Pokémon prompt, 64 output tokens and 512 image tokens")
-    return {"model": "brockone", "messages": payload["messages"], "max_tokens": 64,
-            "temperature": 0, "image_tokens": 512, "stream": False}
-
-
-def brockone_sse(value):
-    """Frame one completed caption for the UI, without inventing token timings."""
-    if not isinstance(value, dict) or value.get("model") != "brockone":
-        raise ValueError("Backend returned the wrong model")
-    choices = value.get("choices")
-    if (not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict)
-            or not isinstance(choices[0].get("message"), dict)):
-        raise ValueError("Invalid brockone response")
-    text = choices[0].get("message", {}).get("content")
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError("brockone returned no caption")
-    chunk = {"id": value.get("id"), "model": "brockone", "object": "chat.completion.chunk",
-             "choices": [{"index": 0, "delta": {"content": text},
-                          "finish_reason": choices[0].get("finish_reason", "stop")}],
-             "usage": value.get("usage", {}),
-             "live_vision": {"streaming": False, "token_timing_available": False}}
-    return ("data: " + json.dumps(chunk, ensure_ascii=False) + "\n\ndata: [DONE]\n\n").encode()

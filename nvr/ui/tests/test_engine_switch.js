@@ -10,7 +10,7 @@ const policy = {prompt: "Synthetic fixed identification prompt.", max_tokens: 64
 const data = () => ({configured: true, switching: false,
   active: {id: "cosmos", name: "Cosmos3-Edge", model_id: "nvidia/Cosmos3-Edge", request_policy: null},
   engines: [{id: "cosmos", name: "Cosmos3-Edge", available: true},
-    {id: "brockone", name: "brockone", available: true, request_policy: policy}]});
+    {id: "alt", name: "Alt model", available: true, request_policy: policy}]});
 
 test("switch invalidates pending inference and health responses", () => {
   const scope = new EngineRequestScope();
@@ -55,16 +55,16 @@ test("switch retains no implicit readiness while the request is pending", async 
   complete(); await action; assert.deepEqual(calls, ["paused", "done", "refresh"]);
 });
 
-test("fixed policy requires every actual brockone constraint", () => {
+test("a fixed policy, if present, must be internally consistent", () => {
   assert.equal(enginePolicy({id: "cosmos", request_policy: null}), null);
-  assert.deepEqual(enginePolicy({model_id: "brockone", request_policy: policy}), policy);
-  assert.throws(() => enginePolicy({id: "brockone"}));
-  for (const [key, value] of Object.entries({prompt: "", max_tokens: 512, temperature: 0.7, image_tokens: 320, stream: true})) {
-    assert.throws(() => enginePolicy({id: "brockone", request_policy: {...policy, [key]: value}}));
+  assert.equal(enginePolicy({id: "cosmos"}), null);
+  assert.deepEqual(enginePolicy({id: "alt", request_policy: policy}), policy);
+  for (const [key, value] of Object.entries({prompt: "", max_tokens: "64", temperature: "0", image_tokens: "512", stream: true})) {
+    assert.throws(() => enginePolicy({id: "alt", request_policy: {...policy, [key]: value}}));
   }
 });
 
-test("Cosmos settings survive repeated policy refreshes and switch back", () => {
+test("engine settings survive repeated policy refreshes and switch back", () => {
   const settings = new EnginePolicySettings();
   const original = {prompt: "My own scene prompt", maxTokens: "123", imageTokenPreset: "custom", customImageTokens: "444", topP: ".87"};
   const fixed = settings.apply(policy, original);
@@ -74,14 +74,12 @@ test("Cosmos settings survive repeated policy refreshes and switch back", () => 
   assert.equal(settings.apply(null, original), null);
 });
 
-test("one configured brockone entry and only absent models get placeholders", () => {
+test("only the configured engines are offered - no placeholders for unconfigured ones", () => {
   const choices = engineChoices(data());
-  assert.deepEqual(choices.map(x => x.id), ["cosmos", "brockone", "brocktwo"]);
-  assert.equal(choices[2].available, false);
-  const configured = data(); configured.engines.push({id: "brocktwo", name: "brocktwo", available: false, reason: "Not qualified"});
-  assert.equal(engineChoices(configured).length, 3);
-  configured.engines.push(configured.engines[0]);
-  assert.throws(() => engineChoices(configured), /Invalid/);
+  assert.deepEqual(choices.map(x => x.id), ["cosmos", "alt"]);
+  const duplicated = data();
+  duplicated.engines.push(duplicated.engines[0]);
+  assert.throws(() => engineChoices(duplicated), /Invalid/);
 });
 
 function element(tag, document) {
@@ -104,14 +102,14 @@ test("buttons use safe text, visible reasons, active state and availability", ()
   unavailable.events.click(); assert.deepEqual(calls, []);
   engines.engines[1].available = true;
   renderEngineChoices(container, engines, false, id => calls.push(id));
-  container.children[1].children[0].events.click(); assert.deepEqual(calls, ["brockone"]);
+  container.children[1].children[0].events.click(); assert.deepEqual(calls, ["alt"]);
   renderEngineChoices(container, engines, true, id => calls.push(id));
   assert.ok(container.children.every(c => c.children[0].disabled));
 });
 
 test("complete-answer SSE is compatible without fabricating token metrics", () => {
   const events = [], parser = new SSEParser(event => events.push(readCompletionEvent(event)));
-  parser.feed('data: {"model":"brockone","choices":[{"delta":{"content":"This is Pikachu."},"finish_reason":"stop"}],"live_vision":{"streaming":false,"token_timing_available":false}}\n\ndata: [DONE]\n\n');
-  assert.deepEqual(events, [{text: "This is Pikachu.", finishReason: "stop"}, {done: true}]);
+  parser.feed('data: {"model":"nvidia/Cosmos3-Edge","choices":[{"delta":{"content":"A scene."},"finish_reason":"stop"}],"live_vision":{"streaming":false,"token_timing_available":false}}\n\ndata: [DONE]\n\n');
+  assert.deepEqual(events, [{text: "A scene.", finishReason: "stop"}, {done: true}]);
   assert.ok(events.every(e => !Object.hasOwn(e, "metrics")));
 });

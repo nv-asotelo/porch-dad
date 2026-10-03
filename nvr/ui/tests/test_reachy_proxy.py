@@ -439,8 +439,8 @@ class ReachyRelayTest(unittest.TestCase):
     def test_access_hands_the_token_only_to_this_servers_own_names(self):
         self.ui.https_port = 8443
         expected = {"https_port": 8443, "reachy_token": serve_ui.RELAY_TOKEN}
-        for host in (f"127.0.0.1:{self.port}", "192.168.6.252:8092", "192.168.6.252", "[::1]:8092",
-                     "[fe80::1]:8443", "localhost:8092", "LocalHost", "reachy.localhost:8092", "localhost."):
+        for host in (f"127.0.0.1:{self.port}", "192.0.2.10:8092", "192.0.2.10", "[::1]:8092", "LocalHost",
+                     "[2001:db8::1]:8443", "localhost:8092", "reachy.localhost:8092", "localhost."):
             self.assertEqual(self.get_json("/api/access", {"Host": host})[::2], (200, expected), host)
         # Any other name only once the operator lists it with --allowed-host.
         self.assertEqual(self.get_json("/api/access", {"Host": "orin.local:8092"})[0], 421)
@@ -455,10 +455,10 @@ class ReachyRelayTest(unittest.TestCase):
     def test_reachy_link_is_served_without_the_camera_upgrade(self):
         # As a LAN browser asks: loopback is already a secure context and never upgraded.
         self.ui.https_port = 8443
-        lan = {"Host": "192.168.6.252:8092"}
+        lan = {"Host": "192.0.2.10:8092"}
         _, response = self.get("/", lan)
         self.assertEqual(response.status, 302)
-        self.assertEqual(response.getheader("Location"), "https://192.168.6.252:8443/")
+        self.assertEqual(response.getheader("Location"), "https://192.0.2.10:8443/")
         _, response = self.get("/?source=reachy", lan)
         self.assertEqual(response.status, 200)
         self.assertEqual(response.getheader("Content-Type"), "text/html; charset=utf-8")
@@ -468,7 +468,7 @@ class ReachyRelayTest(unittest.TestCase):
 class BridgeAddressTest(unittest.TestCase):
     def test_accepts_plain_http(self):
         self.assertEqual(serve_ui.bridge_address("http://127.0.0.1:8099"), ("127.0.0.1", 8099))
-        self.assertEqual(serve_ui.bridge_address("http://172.17.0.1:8099/"), ("172.17.0.1", 8099))
+        self.assertEqual(serve_ui.bridge_address("http://192.0.2.1:8099/"), ("192.0.2.1", 8099))
         self.assertEqual(serve_ui.bridge_address("http://localhost"), ("localhost", 80))
 
     def test_rejects_anything_else(self):
@@ -482,21 +482,21 @@ class BridgeAddressTest(unittest.TestCase):
 class HostTest(unittest.TestCase):
     def test_camera_redirect_is_unchanged(self):
         # camera_redirect_url now shares parse_host() with host_allowed().
-        cases = {("192.168.6.252:8092", 8443): "https://192.168.6.252:8443/",
+        cases = {("192.0.2.10:8092", 8443): "https://192.0.2.10:8443/",
                  ("orin.local", 8443): "https://orin.local:8443/",
-                 ("[fe80::1]:8092", 8443): "https://[fe80::1]:8443/",
+                 ("[2001:db8::1]:8092", 8443): "https://[2001:db8::1]:8443/",
                  ("localhost:8092", 8443): None, ("app.localhost", 8443): None,
                  ("127.0.0.1:8092", 8443): None, ("[::1]:8092", 8443): None,
                  ("bad host", None): None}
         for (host, port), expected in cases.items():
             self.assertEqual(serve_ui.camera_redirect_url(host, port), expected, host)
-        for host in (None, "", "bad host", "a\\b", "user@192.168.6.252", "192.168.6.252:99999", "-x.example"):
+        for host in (None, "", "bad host", "a\\b", "user@192.0.2.10", "192.0.2.10:99999", "-x.example"):
             with self.assertRaises(ValueError, msg=host):
                 serve_ui.camera_redirect_url(host, 8443)
 
     def test_only_names_that_cannot_be_rebound_are_allowed(self):
         listed = frozenset({"orin.local"})
-        for host in ("192.168.6.252", "192.168.6.252:8092", "[::1]:8092", "localhost", "a.localhost:1",
+        for host in ("192.0.2.10", "192.0.2.10:8092", "[::1]:8092", "localhost", "a.localhost:1",
                      "orin.local", "Orin.Local.:8443"):
             self.assertTrue(serve_ui.host_allowed(host, listed), host)
         for host in (None, "", "evil.example", "orin.local.evil.example", "localhost.evil.example",

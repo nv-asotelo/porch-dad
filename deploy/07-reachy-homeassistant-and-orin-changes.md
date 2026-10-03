@@ -220,17 +220,20 @@ These leave no trace in any repo file.
 |---|---|
 | `apt install nvidia-container-toolkit` + `nvidia-ctk runtime configure --runtime=docker` | Docker had no `nvidia` runtime, a prerequisite for any GPU container. Needed before Frigate can ever use a GPU detector. |
 | `systemctl disable live-vlm-webui.service` | The fork's unit carries `Conflicts=live-vlm-webui.service`. With the original still enabled, it could stop the fork. |
-| `systemctl enable live-vlm-webui-fork.service` | So the fork, not the original, comes back after a reboot. Its boot state now follows the command centre's recorded intent (§8). |
+| `systemctl enable live-vlm-webui-fork.service` | So the fork, not the original, comes back after a reboot. Its boot state now follows the command centre's recorded intent (§8). Since 2026-10-03 it is disabled (last row). |
 | `systemctl enable reachy-mjpeg-bridge.service` | The camera bridge should come back on boot. Lost on the SD-card clone (§8). |
 | `systemctl enable docker.service containerd.service porch-feed.service` | Found disabled on the SD-card clone (§8). Without docker, nothing in `docker-compose.yml` starts and `172.17.0.1` never appears, so the bridge cannot serve Frigate. |
 | `docker update --restart unless-stopped frigate mosquitto ring-mqtt` | The clone had them on `restart=no` (§8). `docker-compose.yml` sets `unless-stopped`; a container created or restored any other way does not inherit it. |
 | `nvr/ui/scripts/enable_lan_ui.sh` → `/etc/systemd/system/cosmos-edge-ui.service.d/lan.conf` | Live Vision on `0.0.0.0:8092` (HTTP; LAN requests for `/` are redirected) and `:8443` (HTTPS, self-signed cert in `/home/orin/nvr/ui/deployment/tls/`). Browsers grant cameras only in a secure context. The unit in the repo binds loopback only; this drop-in is the deliberate exception. |
+| [`../nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf`](../nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf) → `/etc/systemd/system/cosmos-edge-ui.service.d/zz-live-vision-demo.conf`, with the robot's address filled in | Live Vision's Reachy Mini control and Piper speech, and `MemoryMax=1G` because Piper runs in the UI's cgroup. It replaces `lan.conf`'s command by sorting after it ([`../nvr/README.md`](../nvr/README.md), "Live Vision"). |
+| Piper v1.2.0 and the `en_US-ljspeech-medium` voice in `/home/orin/nvr/piper` | Live Vision's speech. Separate from porch-feed's Piper (§9). |
+| `systemctl enable porch-dad.service frigate-notify.service cosmos-edge-ui.service` and `systemctl disable live-vlm-webui-fork.service` (for the two Live UIs, ON and OFF in the command centre do the same and also record the intent, §8) | The boot set of 2026-10-03: Live Vision, not the Live VLM WebUI, is the Live UI that comes back, and event captions and phone notifications come back too (§8). |
 
-**Live VLM WebUI is deliberately kept off** much of the time: it serves Cosmos optimisation work,
-not the NVR, and costs load. The command centre records that intent
-(`/home/orin/nvr/feed/service_intent.json`) and shows a "stopped by user" badge, so neither a human
-nor an automation silently restarts it. Nothing in the NVR path depends on it: when it is off, the
-bridge notes it in `/healthz` and keeps serving everything else (§5).
+**Live VLM WebUI is off by default** since 2026-10-03, and was kept off much of the time before
+that: it serves Cosmos optimisation work, not the NVR, and costs load. The command centre records
+that intent (`/home/orin/nvr/feed/service_intent.json`) and shows a "stopped by user" badge, so
+neither a human nor an automation silently restarts it. Nothing in the NVR path depends on it: when
+it is off, the bridge notes it in `/healthz` and keeps serving everything else (§5).
 
 ---
 
@@ -273,16 +276,16 @@ repo). It is watched at `https://<orin>:8090/?session=reachy`, the command centr
 feed" link. TLS is not verified on that hop: the WebUI's certificate is self-signed, and the hop is
 loopback.
 
-The WebUI is off much of the time on purpose (§3), so its absence is a state in `/healthz`
-`push.state`, not an error:
+The WebUI is off by default (§3), so its absence is a state in `/healthz` `push.state`, not an
+error. The bridge names the push target "receiver"; before 2026-10-03 these states said "WebUI":
 
 | `push.state` | Meaning | What the bridge does |
 |---|---|---|
 | `pushing` | Frames accepted | One POST per new frame |
 | `waiting for video` | No fresh frame: the bridge is not live | Waits for one |
-| `WebUI not reachable (stopped?)` | Refused or timed out | Probes every 10 s |
-| `stopped in the WebUI; press Start there to resume` | HTTP 409: someone pressed Stop on the `reachy` session | Waits, retrying every 5 s. Re-creating the session behind their back would silently keep the VLM running |
-| `WebUI answered HTTP n` | Anything else; the body is in `push.detail` | Retries every 5 s |
+| `receiver not reachable (stopped?)` | Refused or timed out | Probes every 10 s |
+| `stopped at the receiver; press Start there` | HTTP 409: someone pressed Stop on the `reachy` session | Waits, retrying every 5 s. Re-creating the session behind their back would silently keep the VLM running |
+| `receiver answered HTTP n` | Anything else; the body is in `push.detail` | Retries every 5 s |
 
 The WebUI's side of it: `GET https://127.0.0.1:8090/api/push/status` lists `streams[]` with
 `session_id`, `connected` and `frames_received`. Healthy is `reachy` connected with
@@ -315,6 +318,10 @@ bridge, is specified as:
 * `/reachy/healthz` carries `X-Reachy-Slots: <open>/<max>`, the streams open against the
   server-wide cap of 4.
 * `?source=reachy` on the page selects the robot instead of a local camera.
+* Since 2026-10-03 each inference capture fetches a fresh `/reachy/still.jpg`, and
+  `/reachy/mjpeg` only feeds the preview a human watches: the browser's decoded picture of that
+  long-lived stream can stop advancing while new frames keep arriving
+  ([`../nvr/README.md`](../nvr/README.md), "Live Vision").
 
 Whatever the source, inference goes through the same `/v1/chat/completions` rules
 (`validate_request` in `serve_ui.py`): `stream: true`; exactly one user message holding one text
@@ -443,7 +450,7 @@ go2rtc's and Frigate's reconnect logic, not measured here.
 The Orin boots from an SD-card clone, and a clone carries files, not guarantees. On this one
 **docker, containerd, reachy-mjpeg-bridge, porch-feed and live-vlm-webui-fork were not enabled at
 boot, and frigate, mosquitto and ring-mqtt were on `restart=no`**, although
-[`../nvr/README.md`](../nvr/README.md) ("What survives a reboot") records the shim, WebUI,
+[`../nvr/README.md`](../nvr/README.md) ("What survives a reboot") recorded the shim, WebUI,
 porch-feed and frigate-notify as `boot=enabled` and the containers as `restart=unless-stopped`.
 That table was verified before a planned restart of the original board; the clone did not inherit
 it. While everything was running nothing looked wrong. The next reboot would have come back without
@@ -457,24 +464,25 @@ lost these states was not established, which is why the check is a script rather
 | `cosmos3-edge-shim.service` | enabled | The model: every caption and both Live UIs |
 | `reachy-mjpeg-bridge.service` | enabled | The robot's camera and microphone, for everything else |
 | `porch-feed.service` | enabled | The command centre, including the Reachy preview and anomaly watch |
-| `cosmos-edge-ui.service`, `live-vlm-webui-fork.service` | **follows intent** | Below |
+| `porch-dad.service`, `frigate-notify.service` | enabled | Event captions and the `:8095` feed, and phone notifications. In the boot set since 2026-10-03 |
+| `cosmos-edge-ui.service`, `live-vlm-webui-fork.service` | **follows intent** | Below. Since 2026-10-03: Live Vision on, the WebUI off |
 
 If a clone comes up without them:
 
 ```bash
 sudo systemctl enable docker.service containerd.service cosmos3-edge-shim.service \
-  reachy-mjpeg-bridge.service porch-feed.service
+  reachy-mjpeg-bridge.service porch-feed.service porch-dad.service frigate-notify.service
 sudo docker update --restart unless-stopped frigate mosquitto ring-mqtt
 ```
 
-On 2026-09-24 the device had been put right: the smoke check reported every row above as enabled
-or `unless-stopped`. It was then rebooted cold from the SD clone to prove it. SSH was back in
-91 s; the shim answered 25 s later on the default Fast (v2) engine; the bridge bound both addresses
-and went straight to its correct state (dormant, a robot app held the camera); the command centre,
-both Live UIs, Frigate, MQTT and ring-mqtt all came back unattended; every Frigate camera's runtime
-state was the same as before; and the smoke check read exactly as it had before the reboot
+On 2026-09-24 the device had been put right: the smoke check reported every row the table then had
+as enabled or `unless-stopped`. It was then rebooted cold from the SD clone to prove it. SSH was
+back in 91 s; the shim answered 25 s later on the default Fast (v2) engine; the bridge bound both
+addresses and went straight to its correct state (dormant, a robot app held the camera); the command
+centre, both Live UIs, Frigate, MQTT and ring-mqtt all came back unattended; every Frigate camera's
+runtime state was the same as before; and the smoke check read exactly as it had before the reboot
 (16 PASS, 0 FAIL). `porch-dad.service`, running but deliberately not enabled, stayed down as its
-boot state says and was started again by hand.
+boot state says and was started again by hand. Since 2026-10-03 it is enabled (the table).
 
 **Boot follows intent for the two Live UIs.** Both are switched off on purpose at times (§3), so
 "always enabled" would be as wrong as "always disabled". The command centre records every start and
@@ -484,7 +492,9 @@ OFF runs `disable` (also when the stop worked but something still holds the port
 disabled while a service is stopped so it cannot quietly turn a deliberately stopped UI back on at
 boot. Each such service card shows "starts at boot" or "off at boot", and says so when that
 disagrees with the recorded intent. The smoke check reports `is-enabled` beside the recorded
-intent too. On 2026-09-24 both were `enabled` with a recorded intent of `running`.
+intent too. On 2026-09-24 both were `enabled` with a recorded intent of `running`. Since
+2026-10-03 the intended state is Live Vision ON and the WebUI OFF: Live Vision replaced the WebUI as
+the Live UI that comes back at boot ([`../nvr/README.md`](../nvr/README.md), "Live Vision").
 
 `homeassistant` is deliberately not in the table: it is not in `docker-compose.yml`, it was stopped
 with `restart=no` when this was written, and while its Reachy camera entity is enabled it is a
@@ -600,6 +610,11 @@ Expected at `/home/orin/nvr/tts/piper/piper` and `/home/orin/nvr/tts/en_US-lessa
 (overridable via `piper_bin`/`piper_model`/`piper_out_dir` in `config.yaml` - see `PIPER_BIN` etc.
 in `porch_feed.py`). Nothing to enable at boot: it is a subprocess porch-feed starts lazily on the
 first "Look & describe" after each restart, not its own service.
+
+**Live Vision has its own Piper.** `serve_ui.py` runs v1.2.0 with `en_US-ljspeech-medium` from
+`/home/orin/nvr/piper`, inside `cosmos-edge-ui`'s cgroup: the same warm `--json-input` design and
+`--length_scale 0.85`, with another release and voice. Its install and memory cap are in
+[`../nvr/README.md`](../nvr/README.md), "Live Vision".
 
 **How it reaches the speaker.** The robot daemon has no play-from-bytes call - only
 `POST /api/media/sounds/upload` (multipart, lands in `/tmp/reachy_mini_sounds/` on the robot) then

@@ -1,5 +1,12 @@
 # Switch Live Vision between Cosmos3-Edge and brockone
 
+> **Superseded on 2026-10-03: Live Vision no longer switches to brockone.** `nvr/ui` now carries
+> the live-vision-cosmos-demo `e84cd37` build the Orin runs ([`../nvr/README.md`](../nvr/README.md),
+> "Live Vision"). Its engine registry accepts only the `cosmos` protocol, so an entry with
+> `"protocol": "brockone"` stops the UI at startup, and the brockone request policy, receipt check
+> and complete-answer framing below are gone. This page describes `nvr/ui` as of `b3f069c`, the
+> last commit with them. `nvr/shim/brockone_*.py` are unchanged.
+
 Live Vision can proxy separate local model services while keeping only one
 model resident. The model buttons show actual installation availability.
 Switching pauses automatic capture, cancels the browser's old request and

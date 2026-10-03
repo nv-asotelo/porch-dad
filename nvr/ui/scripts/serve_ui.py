@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Serve the original camera UI and proxy only the loopback Edge-LLM API.
+"""Serve the camera UI and proxy only the loopback Edge-LLM API.
 
 No model, cloud fallback, downloaded dependency or synthetic inference lives here.
-Run on the Jetson alongside tensorrt-edgellm-serve. See research/ui-feasibility.md.
+Run on the Jetson alongside the Cosmos3-Edge shim (nvr/shim/cosmos3_shim_v1.py).
 
 It also relays the Reachy Mini bridge (nvr/reachy/reachy_mjpeg_bridge.py) under /reachy/.
 The bridge listens on loopback and the Docker gateway only, and a same-origin relay is what
@@ -34,11 +34,11 @@ import uuid
 from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from engine_backends import ServiceEngineSwitcher, brockone_request, brockone_sse
+from engine_backends import ServiceEngineSwitcher
 
 ROOT = Path(__file__).resolve().parents[1] / "web"
-# nvr/reachy/reachy.py: the robot daemon client. Path-inserted rather than duplicated so there is
-# one copy, not two that can drift - same reasoning as porch-feed's roller_eye_srv import on main.
+# nvr/reachy/reachy.py: the robot daemon client. Path-inserted rather than vendored so there is one
+# copy, not two that can drift.
 # Import is best-effort: motor/app/volume control is optional (--reachy-daemon-url, empty by
 # default) and reachy.py's only dependency is `requests` - not installed everywhere this UI's own
 # stdlib-only camera/mic proxy already runs. A missing `requests` should not crash the whole UI
@@ -63,8 +63,8 @@ REACHY_STREAMS = {"/reachy/mjpeg": ("/mjpeg", "multipart/x-mixed-replace"),
                   "/reachy/audio.mp3": ("/audio.mp3", "audio/mpeg")}
 REACHY_SECONDS = 3
 # Each open stream pins a handler thread (and a disconnect watcher) for as long as a tab
-# watches or listens, in a process capped at MemoryMax=256M with a listen queue of 8. The cap
-# is per process, so the HTTP and HTTPS listeners share it, and inference never waits on it.
+# watches or listens, in a process with a listen queue of 8 (request_queue_size). The cap is
+# per process, so the HTTP and HTTPS listeners share it, and inference never waits on it.
 MAX_REACHY_STREAMS = 4
 REACHY_STREAM_SLOTS = threading.BoundedSemaphore(MAX_REACHY_STREAMS)
 # Replacing an <img> src closes the old stream and opens the new one at once, but the old
@@ -89,8 +89,8 @@ OPEN_REACHY_STREAMS = 0
 # The relay's key, new in every process. The robot's camera and microphone must not be open to
 # every page a LAN browser visits: an <img> or <audio> on another site carries no Origin, and a
 # DNS-rebound name looks same-origin to the browser. /api/access hands this to the page, which
-# only a same-origin page can read, and every /reachy/ URL must carry it as ?token=. As with the
-# command centre's control token, this stops drive-by pages, not a determined LAN attacker.
+# only a same-origin page can read, and every /reachy/ URL must carry it as ?token=. This stops
+# drive-by pages, not a determined LAN attacker.
 RELAY_TOKEN = secrets.token_urlsafe(24)
 HOSTNAME = re.compile(r"[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.?")
 
@@ -98,9 +98,18 @@ HOSTNAME = re.compile(r"[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.?")
 class DeviceTelemetry:
     """One cheap, shared sampler; HTTP requests never trigger hardware probes.
 
-    CPU is aggregate busy time across all cores (0–100%, not per-core summed).
-    Orin's GPU load node is in thousandths. Memory is system RAM unavailable,
-    including CPU/GPU/OS use, not a CUDA allocator or dedicated VRAM counter.
+    CPU is aggregate busy time across all cores (0–100%, not per-core summed),
+    correct at any read cadence since /proc/stat's counters are cumulative and
+    only the delta between reads matters. GPU is not: Orin's devfreq load node
+    (thousandths) is an instantaneous reading, not a counter, and inference is
+    bursty relative to a 1-per-second read of it - a single sample can easily
+    land in the idle gap between bursts and read near zero right as the GPU
+    was busy, making a live demo look like the GPU isn't doing anything. A
+    second thread samples that node every gpu_sample_interval (much faster
+    than the publish interval) and collect() reports the peak seen since the
+    previous publish, not a single point-in-time read. Memory is system RAM
+    unavailable, including CPU/GPU/OS use, not a CUDA allocator or dedicated
+    VRAM counter.
     """
 
     GPU_LOAD_PATHS = (
@@ -109,14 +118,18 @@ class DeviceTelemetry:
         "/sys/class/devfreq/17000000.gpu/device/load",
     )
 
-    def __init__(self, proc_root=Path("/proc"), gpu_paths=None, interval=1.0):
+    def __init__(self, proc_root=Path("/proc"), gpu_paths=None, interval=0.25, gpu_sample_interval=0.05):
         self.proc_root = Path(proc_root)
         self.gpu_paths = tuple(Path(p) for p in (self.GPU_LOAD_PATHS if gpu_paths is None else gpu_paths))
         self.interval = interval
+        self.gpu_sample_interval = gpu_sample_interval
         self.previous_cpu = None
         self.lock = threading.Lock()
+        self.gpu_lock = threading.Lock()
+        self.gpu_peak = None
         self.stopped = threading.Event()
         self.thread = None
+        self.gpu_thread = None
         self.sample_time = None
         self.sample = self.empty_sample()
 
@@ -154,15 +167,10 @@ class DeviceTelemetry:
         except (OSError, ValueError, IndexError, UnicodeError):
             self.previous_cpu = None
 
-        for path in self.gpu_paths:
-            try:
-                load = int(self.read_small(path).strip())
-                if not 0 <= load <= 1000:
-                    raise ValueError("GPU load outside permille range")
-                sample["gpu"]["utilization_percent"] = load / 10
-                break
-            except (OSError, ValueError, UnicodeError):
-                continue
+        with self.gpu_lock:
+            load, self.gpu_peak = self.gpu_peak, None
+        if load is not None:
+            sample["gpu"]["utilization_percent"] = load / 10
 
         try:
             values = {}
@@ -186,6 +194,24 @@ class DeviceTelemetry:
         with self.lock:
             self.sample, self.sample_time = sample, time.monotonic()
 
+    def sample_gpu_peak(self):
+        """Take one fast, cheap GPU load reading and fold it into the running peak.
+
+        Runs on its own thread at gpu_sample_interval, much faster than the publish
+        interval, so collect() has several readings to take the peak of rather than
+        one point-in-time snapshot that can miss a burst entirely.
+        """
+        for path in self.gpu_paths:
+            try:
+                load = int(self.read_small(path).strip())
+                if not 0 <= load <= 1000:
+                    raise ValueError("GPU load outside permille range")
+            except (OSError, ValueError, UnicodeError):
+                continue
+            with self.gpu_lock:
+                self.gpu_peak = load if self.gpu_peak is None else max(self.gpu_peak, load)
+            return
+
     def snapshot(self):
         with self.lock:
             # Nested data is never mutated after publication by the sampler.
@@ -199,14 +225,23 @@ class DeviceTelemetry:
                 self.collect()
                 if self.stopped.wait(self.interval):
                     break
+        def run_gpu():
+            while not self.stopped.is_set():
+                self.sample_gpu_peak()
+                if self.stopped.wait(self.gpu_sample_interval):
+                    break
         self.thread = threading.Thread(target=run, name="device-telemetry", daemon=True)
+        self.gpu_thread = threading.Thread(target=run_gpu, name="device-telemetry-gpu", daemon=True)
         self.thread.start()
+        self.gpu_thread.start()
         return self
 
     def close(self):
         self.stopped.set()
         if self.thread:
             self.thread.join(timeout=2)
+        if self.gpu_thread:
+            self.gpu_thread.join(timeout=2)
 
 
 def validate_request(payload):
@@ -464,11 +499,13 @@ def media_type(response):
 class EngineSwitcher:
     """Swap the TensorRT engine the local shim serves, and restart it to load the swap.
 
-    Ported from porch-feed's switch_engine (main, nvr/feed/porch_feed.py) - same recipe: an atomic
-    symlink swap the shim's own launch config always reads the same path from, then a systemctl
-    restart, then poll the shim's own /v1/models until it answers again. Requires passwordless
-    sudo for exactly `ln -sfn` on --engine-link and `systemctl restart` on --shim-service - this
-    class does not configure that; deploy/03 on main documents the sudoers line it needs.
+    The recipe: an atomic symlink swap the shim's own launch config always reads the same path
+    from, then a systemctl restart, then poll the shim's own /v1/models until it answers again.
+    Requires passwordless sudo for exactly `ln -sfn` on --engine-link and `systemctl restart` on
+    --shim-service, which this class does not configure: a sudoers line like `USER ALL=(root)
+    NOPASSWD: /usr/bin/ln -sfn * <engine-link>, /usr/bin/systemctl restart <shim-service>`.
+    ServiceEngineSwitcher, for a "kind": "service" registry, needs only `systemctl start` and
+    `stop` on its units instead.
     """
 
     switch_timeout = 120
@@ -552,8 +589,7 @@ class Piper:
 
     A fresh process per utterance would pay Piper's ~1-3 s cold model load every time, which alone
     misses any reasonable speak-after-caption latency target. Keeping one process warm (--json-input
-    mode) means only the first call after startup pays that cost. See deploy/07 section 9 on main
-    for the full latency writeup this port carries forward.
+    mode) means only the first call after startup pays that cost.
     """
 
     def __init__(self, binary: Path, model: Path, out_dir: Path):
@@ -938,12 +974,6 @@ class Handler(BaseHTTPRequestHandler):
                 if switcher.switching or payload["model"] != backend["model_id"]:
                     self.json_error(409, "The model changed; refresh Live Vision before sending another image.")
                     return
-                if backend["protocol"] == "brockone":
-                    try:
-                        body = json.dumps(brockone_request(payload)).encode()
-                    except ValueError as exc:
-                        self.json_error(400, str(exc))
-                        return
             self.proxy(self.path, body)
         finally:
             GENERATION_LOCK.release()
@@ -985,10 +1015,6 @@ class Handler(BaseHTTPRequestHandler):
         if managed and not switcher.active()["available"]:
             self.json_error(503, switcher.active()["reason"] or "The selected model is not qualified on this device.")
             return
-        brockone = backend is not None and backend["protocol"] == "brockone"
-        original_path = path
-        if brockone and path in {"/health/ready", "/api/runtime"}:
-            path = "/health"
         connection = http.client.HTTPConnection("127.0.0.1", backend["backend_port"] if managed else self.server.backend_port,
                                                timeout=MAX_SECONDS if body else 3)
         finished = threading.Event()
@@ -1023,7 +1049,7 @@ class Handler(BaseHTTPRequestHandler):
                 watcher = threading.Thread(target=watch_disconnect, daemon=True)
                 watcher.start()
             connection.request("POST" if body else "GET", path, body=body,
-                headers={"Content-Type": "application/json", "Accept": "text/event-stream" if body and not brockone else "application/json"})
+                headers={"Content-Type": "application/json", "Accept": "text/event-stream" if body else "application/json"})
             response = connection.getresponse()
             if response.status != 200:
                 raw = response.read(MAX_RESPONSE + 1)
@@ -1034,16 +1060,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_error(response.status, message)
                 return
             if body:
-                if brockone:
-                    raw = response.read(MAX_RESPONSE + 1)
-                    if len(raw) > MAX_RESPONSE or expired.is_set():
-                        raise ValueError("brockone response exceeded its size or time limit")
-                    data = brockone_sse(json.loads(raw))
-                    self.send_headers(200, "text/event-stream; charset=utf-8", len(data))
-                    stream_started = True
-                    self.wfile.write(data)
-                    self.wfile.flush()
-                    return
                 if "text/event-stream" not in response.getheader("Content-Type", ""):
                     raise ValueError("Backend did not return SSE token streaming.")
                 self.send_headers(200, "text/event-stream; charset=utf-8")
@@ -1064,13 +1080,6 @@ class Handler(BaseHTTPRequestHandler):
                 data = response.read(MAX_RESPONSE + 1)
                 if len(data) > MAX_RESPONSE:
                     raise ValueError("Backend response exceeded the size limit.")
-                if brockone and original_path == "/api/runtime":
-                    # Do not invent clock/cache settings or native token timings.
-                    health = json.loads(data)
-                    data = json.dumps({"engine_id": switcher.active()["id"],
-                                       "request_policy": switcher.active()["request_policy"],
-                                       "configuration": health.get("configuration", {}),
-                                       "streaming": False}).encode()
                 self.send_headers(200, "application/json", len(data))
                 self.wfile.write(data)
         except (OSError, http.client.HTTPException, ValueError) as exc:
@@ -1410,16 +1419,18 @@ def main():
     parser.add_argument("--piper-out-dir", type=Path, default=Path("/tmp/reachy_tts"),
                         help="Scratch directory for synthesized WAV files.")
     parser.add_argument("--engine-link", type=Path, default=None,
-                        help="Symlink the shim reads its engine directory from. Required with "
-                             "--engines-config; needs passwordless `sudo ln -sfn` on this path.")
+                        help='Symlink the shim reads its engine directory from. Only for a '
+                             'registry whose entries are not "kind": "service", where it is '
+                             'required; needs passwordless `sudo ln -sfn` on this path.')
     parser.add_argument("--engines-config", type=Path, default=None,
                         help='JSON file: {"id": {"name": "...", "path": "...", "profile": "..."}, '
                              '...}. Empty disables /api/engines.')
     parser.add_argument("--default-engine", default=None,
                         help="Initial engine ID for a registry of separate model services.")
     parser.add_argument("--shim-service", default="cosmos3-edge-shim",
-                        help="systemd unit restarted after an engine swap - needs passwordless "
-                             "`sudo systemctl restart` on this unit. Default matches main's shim.")
+                        help='With --engine-link: systemd unit restarted after an engine swap - '
+                             'needs passwordless `sudo systemctl restart` on this unit. Default '
+                             'matches systemd/cosmos3-edge-shim.service.')
     parser.add_argument("--services-config", type=Path, default=None,
                         help='JSON file: {"Display Name": {"cmdline_match": "substring to find '
                              'in /proc/*/cmdline", "path": "/dir/to/report/size/and/disk/for"}, '
@@ -1439,7 +1450,8 @@ def main():
     except ValueError as exc:
         parser.error(str(exc))
     if args.reachy_daemon_url and Reachy is None:
-        parser.error("--reachy-daemon-url needs the `requests` package (pip install requests).")
+        parser.error("--reachy-daemon-url needs the `requests` package "
+                     "(sudo apt install python3-requests).")
     if bool(args.piper_bin) != bool(args.piper_model):
         parser.error("Provide both --piper-bin and --piper-model.")
     if args.piper_bin and not args.reachy_daemon_url:
