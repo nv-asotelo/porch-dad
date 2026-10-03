@@ -12,6 +12,9 @@ venv/
 *.safetensors
 *.plan
 models/
+# Except the classifiers' meta.json (preprocessing and label maps: configuration, not an artifact).
+# Their ONNX files and engines stay ignored by *.onnx and *.plan above.
+!nvr/classifier/models/
 engines/
 onnx/
 

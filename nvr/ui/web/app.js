@@ -497,7 +497,79 @@ function startDeviceTelemetry() {
   resume();
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, runEngineSwitch};
+// Classifiers ("kind": "classifier" models) answer with a ranking and an optional saliency grid,
+// not text. Species are canonical lowercase names ("mr-mime"); null is a label the model has that
+// maps to no species, shown by its raw label.
+function speciesName(species, label = "") {
+  if (typeof species !== "string" || !species) return label || "Unknown";
+  return species.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+function readClassification(value) {
+  if (!value || typeof value !== "object" || !Array.isArray(value.topk) || !value.topk.length) {
+    throw new Error("The classifier sent no ranking.");
+  }
+  const score = x => {
+    if (typeof x !== "number" || !Number.isFinite(x) || x < 0 || x > 1) throw new Error("The classifier sent an invalid score.");
+    return x;
+  };
+  const topk = value.topk.map(item => ({species: typeof item?.species === "string" ? item.species : null,
+    label: typeof item?.label === "string" ? item.label : "", score: score(item?.score)}));
+  let saliency = null;
+  if (value.saliency) {
+    const {w, h, cells, method} = value.saliency;
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 64 || h > 64 ||
+        !Array.isArray(cells) || cells.length !== w * h) throw new Error("The classifier sent an invalid saliency map.");
+    saliency = {w, h, cells: cells.map(score), method: typeof method === "string" ? method : ""};
+  }
+  const inference = value.timing_ms?.inference;
+  return {species: topk[0].species, label: topk[0].label, score: topk[0].score, topk, saliency,
+    boxes: Array.isArray(value.boxes) ? value.boxes : [],
+    inferenceMs: typeof inference === "number" && Number.isFinite(inference) ? inference : null};
+}
+
+function describeClassification(result) {
+  const percent = p => `${p >= 0.1 ? Math.round(p * 100) : (p * 100).toFixed(1)}%`;
+  const [best, ...rest] = result.topk;
+  const runnersUp = rest.map((r, i) => `${i + 2}. ${speciesName(r.species, r.label)} ${percent(r.score)}`).join(" · ");
+  return `${speciesName(best.species, best.label)} · ${percent(best.score)}${runnersUp ? `\n${runnersUp}` : ""}`;
+}
+
+// Where a saliency grid lands in the preview. The grid covers the whole image the classifier was
+// sent: the capture canvas, with the source drawn at (x, y, w, h) inside it. The preview shows the
+// source with object-fit: contain in a boxWidth × boxHeight box. Returns that visible picture
+// (clip) and the rectangle the full grid stretches over (grid), both in box pixels.
+function overlayPlacement(sent, natural, boxWidth, boxHeight) {
+  const scale = Math.min(boxWidth / natural.width, boxHeight / natural.height);
+  const clip = {width: natural.width * scale, height: natural.height * scale};
+  clip.x = (boxWidth - clip.width) / 2; clip.y = (boxHeight - clip.height) / 2;
+  const perX = clip.width / sent.w, perY = clip.height / sent.h;
+  return {clip, grid: {x: clip.x - sent.x * perX, y: clip.y - sent.y * perY,
+    width: sent.canvasWidth * perX, height: sent.canvasHeight * perY}};
+}
+
+// A sequential dark-to-bright ramp (inferno-like), so more evidence always reads brighter; the
+// overlay's alpha also rises with the value, so low-evidence areas leave the picture visible.
+const HEAT_STOPS = [[0, 0, 4], [87, 16, 110], [188, 55, 84], [249, 142, 9], [252, 255, 164]];
+function heatColor(value) {
+  const v = Math.min(1, Math.max(0, value)) * (HEAT_STOPS.length - 1);
+  const i = Math.min(HEAT_STOPS.length - 2, Math.floor(v)), t = v - i;
+  return HEAT_STOPS[i].map((c, k) => Math.round(c + (HEAT_STOPS[i + 1][k] - c) * t));
+}
+
+// Score of a sample run: rows of {truth, covered (false when the model cannot name that species
+// at all), ranked: [species, ...] best first}.
+function scoreSamples(rows) {
+  const score = {n: 0, top1: 0, top5: 0, coveredN: 0, coveredTop1: 0};
+  for (const row of rows) {
+    const top1 = row.ranked[0] === row.truth, top5 = row.ranked.slice(0, 5).includes(row.truth);
+    score.n += 1; score.top1 += top1; score.top5 += top5;
+    if (row.covered !== false) { score.coveredN += 1; score.coveredTop1 += top1; }
+  }
+  return score;
+}
+
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -506,9 +578,15 @@ if (typeof document !== "undefined") {
     preset: "lightweight", frameCallback: null, sampled: 0, skipped: 0,
     liveStreaming: true, activeTrigger: null, engineId: null, timingGroup: 0,
     advanced: {...ADVANCED_DEFAULTS}, advancedValid: true, source: "camera",
-    policy: null, activeEngineId: null, remoteSwitching: false};
+    policy: null, activeEngineId: null, remoteSwitching: false,
+    kind: "cosmos", overlays: true, sampleId: null};
   const engineRequests = new EngineRequestScope(), policySettings = new EnginePolicySettings();
   let engineSwitching = false, engineData = null, switchProgressTimer = null;
+  // The latest classifier saliency and where it was captured, redrawn over the preview on resize.
+  let overlay = null;
+  // The sample set (/api/samples): its images, coverage for the selected classifier, and that
+  // classifier's results so far. A run is cancelled by Stop, a model switch or a new run.
+  const samples = {list: [], byId: new Map(), results: new Map(), model: null, run: null};
   // ?model=<id> (a bookmarkable/kiosk link) requests a switch once the backend is confirmed
   // ready, the same one-shot pattern as ?source=reachy below - honoured once, and only if
   // nothing else was chosen while the page was loading.
@@ -681,9 +759,15 @@ if (typeof document !== "undefined") {
       ? (state.source === "reachy" ? reachyFrameReady() : Boolean(state.media && $("video").readyState >= 2))
       : Boolean(state.imageURL);
     $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid || switchingEngine();
-    for (const id of ["prompt", "promptPreset", "maxTokens", "imageTokenPreset", "customImageTokens", "topP", "lightweightPreset", "liveVlmPreset"]) {
-      $(id).disabled = Boolean(state.policy) || switchingEngine();
+    for (const id of ["prompt", "promptPreset", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"]) {
+      $(id).disabled = Boolean(state.policy) || state.kind === "classifier" || switchingEngine();
     }
+    for (const id of ["lightweightPreset", "liveVlmPreset"]) $(id).disabled = Boolean(state.policy) || switchingEngine();
+    $("overlayToggleButton").hidden = state.kind !== "classifier";
+    $("overlayToggleButton").setAttribute("aria-pressed", String(state.overlays));
+    $("overlayToggleButton").textContent = `Saliency overlay: ${state.overlays ? "On" : "Off"}`;
+    $("sampleRunAll").disabled = state.kind !== "classifier" || !state.ready || state.busy || switchingEngine() || !samples.list.length;
+    $("sampleStop").hidden = !samples.run;
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
     $("listenButton").hidden = !reachyActive();
@@ -701,6 +785,10 @@ if (typeof document !== "undefined") {
     $("runStatus").textContent = message; $("requestCount").textContent = "0 completed";
     for (const id of ["ttft", "totalTime", "frameAge"]) $(id).textContent = "—";
     $("captureStatus").textContent = "No frame sent";
+    // Saliency and sample results belong to the model that produced them.
+    overlay = null; drawOverlay();
+    if (samples.run) samples.run.cancelled = true;
+    samples.results.clear(); samples.model = null; renderSampleTiles();
   }
   function modelSettings() {
     return Object.fromEntries(["prompt", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"].map(id => [id, $(id).value]));
@@ -746,31 +834,51 @@ if (typeof document !== "undefined") {
       if (state.activeEngineId !== null && active?.id !== state.activeEngineId) {
         retireEngineAnswer("Model changed · waiting for a new answer");
       }
+      const changed = (active?.id ?? null) !== state.activeEngineId;
       state.activeEngineId = active?.id ?? null;
-      const policy = enginePolicy(active);
-      if (active?.available === false) throw new Error(active.reason || "Selected model is not qualified for inference");
-      const model = modelsData?.data?.[0]?.id;
-      if (healthData?.status !== "ready" || !model || (active?.model_id && model !== active.model_id)) throw new Error("Selected model is not ready");
-      if (policy && ["prompt", "max_tokens", "temperature", "image_tokens", "stream"].some(key => runtime?.request_policy?.[key] !== policy[key])) throw new Error("Model policy and runtime do not match");
-      const restored = policySettings.apply(policy, modelSettings());
-      state.ready = true; state.model = model;
-      $("backendStatus").textContent = "Local backend ready";
-      $("backendStatus").className = "badge ready";
-      $("modelName").textContent = model;
-      try { applyRuntime(runtime); } catch (_) {
-        $("staticClocksValue").textContent = "Unavailable";
-        $("encoderCacheValue").textContent = "Unavailable";
-        $("runtimeStatus").textContent = policy
-          ? "This model uses its own fixed request policy. Device clocks and cache sizes are not reported by this endpoint."
-          : "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified.";
+      state.kind = active?.kind === "classifier" ? "classifier" : "cosmos";
+      if (changed) loadSamples(state.kind === "classifier" ? active.model_id : null);
+      if (state.kind === "classifier") {
+        // Served by the classifier service, not the shim: the shim's health does not gate it.
+        if (active.available === false) throw new Error(active.reason || "The selected classifier is not available");
+        const restored = policySettings.apply(null, modelSettings());
+        state.ready = true; state.model = active.model_id;
+        $("backendStatus").textContent = "Classifier ready";
+        $("backendStatus").className = "badge ready";
+        $("modelName").textContent = active.name;
+        $("staticClocksValue").textContent = "Not applicable"; $("encoderCacheValue").textContent = "Not applicable";
+        $("runtimeStatus").textContent = "A classifier has no engine settings: prompt, token limits and sampling do not apply to it.";
+        applyModelPolicy(null, restored);
+        $("modelPolicyStatus").hidden = false;
+        $("modelPolicyStatus").textContent = "A Pokémon classifier is selected. It takes no prompt and has no token or sampling settings: each image gets its most likely species, the next four, and a saliency overlay.";
+        $("firstTextLabel").textContent = "Token timing unavailable";
+        $("serverTtftHelp").textContent = "A classifier answers in one step: Latency is its inference time on the server, and TTFT does not apply.";
+      } else {
+        const policy = enginePolicy(active);
+        if (active?.available === false) throw new Error(active.reason || "Selected model is not qualified for inference");
+        const model = modelsData?.data?.[0]?.id;
+        if (healthData?.status !== "ready" || !model || (active?.model_id && model !== active.model_id)) throw new Error("Selected model is not ready");
+        if (policy && ["prompt", "max_tokens", "temperature", "image_tokens", "stream"].some(key => runtime?.request_policy?.[key] !== policy[key])) throw new Error("Model policy and runtime do not match");
+        const restored = policySettings.apply(policy, modelSettings());
+        state.ready = true; state.model = model;
+        $("backendStatus").textContent = "Local backend ready";
+        $("backendStatus").className = "badge ready";
+        $("modelName").textContent = model;
+        try { applyRuntime(runtime); } catch (_) {
+          $("staticClocksValue").textContent = "Unavailable";
+          $("encoderCacheValue").textContent = "Unavailable";
+          $("runtimeStatus").textContent = policy
+            ? "This model uses its own fixed request policy. Device clocks and cache sizes are not reported by this endpoint."
+            : "Engine settings unavailable. Input controls keep their current values; clocks and cache cannot be verified.";
+        }
+        applyModelPolicy(policy, restored);
       }
-      applyModelPolicy(policy, restored);
     } catch (err) {
       if (!engineRequests.current(ticket) || state.checking !== ticket) return;
       state.ready = false;
       $("backendStatus").textContent = state.remoteSwitching ? "Switching model…" : "Backend not ready";
       $("backendStatus").className = "badge unavailable";
-      $("modelName").textContent = "Waiting for local TensorRT-Edge-LLM";
+      $("modelName").textContent = state.kind === "classifier" ? "Waiting for the classifier service" : "Waiting for local TensorRT-Edge-LLM";
       $("staticClocksValue").textContent = "Unavailable"; $("encoderCacheValue").textContent = "Unavailable";
       $("runtimeStatus").textContent = "Waiting for the backend to report active engine settings. Load defaults are shown above.";
       if (!state.busy) $("runStatus").textContent = err.message || "Waiting for local backend";
@@ -813,16 +921,23 @@ if (typeof document !== "undefined") {
     const context = canvas.getContext("2d", {alpha: false});
     context.fillStyle = "#000";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(source, Math.floor((canvas.width - imageWidth) / 2),
-      Math.floor((canvas.height - imageHeight) / 2), imageWidth, imageHeight);
+    const x = Math.floor((canvas.width - imageWidth) / 2), y = Math.floor((canvas.height - imageHeight) / 2);
+    context.drawImage(source, x, y, imageWidth, imageHeight);
     const capturedAt = performance.now();
     const url = canvas.toDataURL("image/jpeg", preset.jpegQuality);
     if (url.length > 1900000) throw new Error("This full-size frame exceeds the image request limit. Choose a smaller source or the Lightweight preset.");
     $("captureStatus").textContent = `Sent ${canvas.width}×${canvas.height} · ${state.preset === "live-vlm" ? "Live VLM WebUI" : "Lightweight"}`;
-    return {url, capturedAt};
+    // Where the picture sits in what was sent, for drawing a classifier's saliency back over it.
+    return {url, capturedAt, natural: {width, height},
+      sent: {canvasWidth: canvas.width, canvasHeight: canvas.height, x, y, w: imageWidth, h: imageHeight}};
   }
   async function analyze(source, trigger = "manual") {
     if (state.busy || !state.ready || !state.advancedValid || switchingEngine()) return;
+    if (state.kind === "classifier") {
+      const sample = source === $("uploadedImage") ? state.sampleId : null;
+      await classify(source, trigger, sample);
+      return;
+    }
     // Never send the robot's last picture as if it were current; the status says why not.
     if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return; }
     // A live Reachy sample never ends the source: the robot's video and microphone stay open
@@ -954,6 +1069,232 @@ if (typeof document !== "undefined") {
       }
     }
   }
+  // One frame, or one sample by id, through the selected classifier: the same request rules as
+  // analyze() (one at a time, a model switch retires it, a bad live sample is skipped), but one
+  // complete JSON answer. A sample is sent by id so the server classifies its own copy of the file,
+  // exactly as a sample-set run does, rather than a re-encoded capture of it.
+  async function classify(source, trigger = "manual", sampleId = null) {
+    if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return null; }
+    const keepSource = trigger === "live" && state.source === "reachy";
+    const timingGroup = state.timingGroup;
+    const ticket = engineRequests.begin(), controller = ticket.controller;
+    state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
+    $("ttft").textContent = "—"; $("totalTime").textContent = "—";
+    $("runStatus").textContent = "Reading frame…";
+    let counted = false;
+    const network = err => { if (err?.name === "TypeError") err.network = true; throw err; };
+    try {
+      let request, placement;
+      if (sampleId) {
+        const shown = $("uploadedImage"), width = shown.naturalWidth, height = shown.naturalHeight;
+        placement = {natural: {width, height}, sent: {canvasWidth: width, canvasHeight: height, x: 0, y: 0, w: width, h: height}};
+        request = {model: state.model, sample: sampleId, saliency: state.overlays, topk: 5};
+        state.captureAt = performance.now();
+        $("captureStatus").textContent = `Sample ${width}×${height} · the server's copy`;
+      } else {
+        const image = capture(source === $("reachyImage") ? await fetchReachyStill() : source);
+        state.captureAt = image.capturedAt; placement = {natural: image.natural, sent: image.sent};
+        counted = state.running && source === liveSource();
+        if (counted) state.sampled += 1;
+        request = {model: state.model, image: image.url, saliency: state.overlays, topk: 5};
+      }
+      $("runStatus").textContent = "Classifying…";
+      const started = performance.now();
+      const response = await fetch("/api/classify", {
+        method: "POST", headers: {"Content-Type": "application/json"}, signal: controller.signal,
+        body: JSON.stringify(request)
+      }).catch(network);
+      const body = await response.json().catch(() => null);
+      controller.signal.throwIfAborted();
+      if (state.abort !== controller || !engineRequests.current(ticket)) return null;
+      if (!response.ok) {
+        throw Object.assign(new Error(body?.error?.message || `Classifier returned HTTP ${response.status}.`),
+          {status: response.status});
+      }
+      const result = readClassification(body);
+      $("totalTime").textContent = duration(performance.now() - started);
+      $("answer").textContent = describeClassification(result);
+      if (timingGroup === state.timingGroup) {
+        serverFirstTextMs = null;
+        if (result.inferenceMs === null) latency.lastMs = null; else latency.add(result.inferenceMs);
+        $("timingStatus").textContent = "Classifier inference on the server · excludes image decoding and preprocessing.";
+        renderLatency();
+      }
+      overlay = result.saliency ? {...placement, saliency: result.saliency} : null;
+      drawOverlay();
+      if (sampleId && samples.byId.has(sampleId) && (samples.model === null || samples.model === state.model)) {
+        samples.model = state.model; samples.results.set(sampleId, result); renderSampleTiles();
+      }
+      state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
+      $("runStatus").textContent = "Classified";
+      if (autoSpeak && result.species) speakText(speciesName(result.species));
+      return result;
+    } catch (err) {
+      if (state.abort !== controller) return null;
+      const skipped = trigger === "live" ? skippedSampleReason(err) : null;
+      if (err.name === "AbortError" || controller.signal.aborted) $("runStatus").textContent = "Stopped";
+      else if (skipped) {
+        if (counted) state.sampled -= 1;
+        state.skipped += 1;
+        $("runStatus").textContent = `Skipped · ${skipped}`;
+        renderLiveCounts();
+      } else {
+        error(err.message); $("runStatus").textContent = "Request failed";
+        if (!keepSource) state.running = false;
+      }
+      return null;
+    } finally {
+      engineRequests.release(ticket);
+      if (state.abort === controller) {
+        state.abort = null; state.busy = false; state.activeTrigger = null;
+        if (!state.running) releaseCamera();
+        controls();
+      }
+    }
+  }
+  // The latest saliency over the preview: the grid stretched over the picture the classifier was
+  // sent (overlayPlacement), clipped to the visible picture, smoothed by the browser's scaling.
+  function drawOverlay() {
+    const layer = $("overlayCanvas"), box = layer.parentElement;
+    const show = Boolean(state.overlays && state.kind === "classifier" && overlay?.saliency &&
+      overlay.natural.width && overlay.natural.height);
+    layer.hidden = !show;
+    $("overlayHelp").hidden = state.kind !== "classifier";
+    if (state.kind === "classifier") {
+      $("overlayHelp").textContent = (overlay?.saliency?.method ? `Saliency: ${overlay.saliency.method}. ` : "") +
+        "The heatmap shows where the classifier's evidence came from: brighter is more. It is not a detection. " +
+        "None of these classifiers outputs boxes, points or masks, so a saliency map is the only 2D grounding there is to draw.";
+    }
+    if (!show) return;
+    const width = box.clientWidth, height = box.clientHeight, ratio = window.devicePixelRatio || 1;
+    layer.width = Math.max(1, Math.round(width * ratio)); layer.height = Math.max(1, Math.round(height * ratio));
+    const context = layer.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    const {clip, grid} = overlayPlacement(overlay.sent, overlay.natural, width, height);
+    const {w, h, cells} = overlay.saliency;
+    const tile = document.createElement("canvas"); tile.width = w; tile.height = h;
+    const pixels = tile.getContext("2d").createImageData(w, h);
+    cells.forEach((value, i) => pixels.data.set([...heatColor(value), Math.round(200 * value ** 1.3)], i * 4));
+    tile.getContext("2d").putImageData(pixels, 0, 0);
+    context.save();
+    context.beginPath(); context.rect(clip.x, clip.y, clip.width, clip.height); context.clip();
+    context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
+    context.drawImage(tile, grid.x, grid.y, grid.width, grid.height);
+    context.restore();
+  }
+  new ResizeObserver(drawOverlay).observe($("overlayCanvas").parentElement);
+  $("overlayToggleButton").addEventListener("click", () => {
+    state.overlays = !state.overlays; drawOverlay(); controls();
+  });
+
+  // The sample set: thumbnails anyone can open in the preview, and - with a classifier selected -
+  // a run over every image, scored against its label as each answer lands.
+  // model: the selected classifier's id, for which species it can name; null for a Cosmos engine.
+  // Only the latest request lands: a quick second switch must not get the first one's coverage.
+  let samplesRequest = 0;
+  async function loadSamples(model) {
+    const request = ++samplesRequest;
+    try {
+      const response = await fetch(`/api/samples${model ? `?model=${encodeURIComponent(model)}` : ""}`, {cache: "no-store"});
+      const data = await response.json();
+      if (request !== samplesRequest) return;
+      if (!response.ok || !Array.isArray(data?.images)) throw new Error("Sample set unavailable");
+      samples.list = data.images.filter(item => typeof item?.id === "string" && typeof item.species === "string");
+      samples.byId = new Map(samples.list.map(item => [item.id, item]));
+      $("samplePanel").hidden = !data.configured;
+      $("sampleGrid").replaceChildren(...samples.list.map(sampleTile));
+      renderSampleTiles();
+    } catch (_) { /* keep what was shown; the next model change asks again */ }
+    controls();
+  }
+  function sampleTile(item) {
+    const tile = document.createElement("button");
+    tile.type = "button"; tile.className = "sample-tile"; tile.dataset.sampleId = item.id;
+    tile.title = [item.credit, item.license].filter(Boolean).join(" · ");
+    const image = document.createElement("img");
+    image.loading = "lazy"; image.alt = ""; image.src = `/api/samples/${encodeURIComponent(item.id)}`;
+    const truth = document.createElement("span"); truth.className = "truth"; truth.textContent = speciesName(item.species);
+    const verdict = document.createElement("span"); verdict.className = "verdict";
+    tile.append(image, truth, verdict);
+    tile.addEventListener("click", () => showSample(item.id));
+    return tile;
+  }
+  function renderSampleTiles() {
+    const rows = [];
+    for (const tile of $("sampleGrid").children) {
+      const item = samples.byId.get(tile.dataset.sampleId), result = samples.results.get(tile.dataset.sampleId);
+      if (!item) continue;
+      const verdict = tile.querySelector(".verdict");
+      const uncovered = state.kind === "classifier" && item.covered === false;
+      tile.classList.toggle("selected", item.id === state.sampleId);
+      tile.classList.toggle("uncovered", uncovered);
+      tile.classList.toggle("correct", Boolean(result) && result.species === item.species);
+      tile.classList.toggle("wrong", Boolean(result) && result.species !== item.species);
+      if (result) {
+        rows.push({truth: item.species, covered: item.covered, ranked: result.topk.map(r => r.species)});
+        verdict.textContent = `${result.species === item.species ? "✓" : "✗"} ${speciesName(result.species, result.label)} ${Math.round(result.score * 100)}%`;
+      } else verdict.textContent = uncovered ? "Not a species it knows" : "";
+      tile.hidden = $("sampleMistakes").checked && !(result && result.species !== item.species);
+    }
+    const score = scoreSamples(rows), pct = (a, b) => b ? ` (${(100 * a / b).toFixed(1)}%)` : "";
+    const name = engineData?.active?.name || "the selected classifier";
+    $("sampleScore").hidden = !score.n;
+    $("sampleScore").textContent = !score.n ? "" :
+      `${name}: top-1 ${score.top1}/${score.n}${pct(score.top1, score.n)} · top-5 ${score.top5}/${score.n}${pct(score.top5, score.n)}` +
+      (score.coveredN < score.n ? ` · on the ${score.coveredN} images of species it can name: top-1 ${score.coveredTop1}/${score.coveredN}${pct(score.coveredTop1, score.coveredN)}` : "");
+    const covered = samples.list.filter(item => item.covered !== false).length;
+    $("sampleStatus").textContent = samples.run ? `Running ${samples.results.size} of ${samples.list.length}…`
+      : `${samples.list.length} images · ${new Set(samples.list.map(item => item.species)).size} species` +
+        (state.kind === "classifier" && covered < samples.list.length ? ` · ${covered} of a species this classifier can name` : "");
+  }
+  async function showSample(id) {
+    const item = samples.byId.get(id);
+    if (!item || state.busy) return;
+    reachyRequested = false;
+    stop(); error();
+    if (state.imageURL?.startsWith("blob:")) URL.revokeObjectURL(state.imageURL);
+    state.imageURL = `/api/samples/${encodeURIComponent(id)}`; state.sampleId = id;
+    overlay = null; drawOverlay(); renderSampleTiles();
+    $("uploadedImage").src = state.imageURL;
+    try { await $("uploadedImage").decode(); } catch (_) { error("This sample could not be decoded."); return; }
+    if (state.sampleId !== id) return;
+    $("uploadedImage").hidden = false; $("video").hidden = true; $("placeholder").hidden = true;
+    $("sourceStatus").textContent = `Sample · ${speciesName(item.species)}`; controls();
+    if (state.ready && !switchingEngine()) await analyze($("uploadedImage"));
+  }
+  async function runSamples() {
+    if (state.kind !== "classifier" || !state.ready || state.busy || samples.run || switchingEngine()) return;
+    stop(); error();
+    const run = samples.run = {cancelled: false, model: state.model};
+    const ticket = engineRequests.begin();
+    samples.results.clear(); samples.model = run.model;
+    state.busy = true; renderSampleTiles(); controls();
+    try {
+      for (const item of samples.list) {
+        if (run.cancelled || !engineRequests.current(ticket)) break;
+        const response = await fetch("/api/classify", {
+          method: "POST", headers: {"Content-Type": "application/json"}, signal: ticket.controller.signal,
+          body: JSON.stringify({model: run.model, sample: item.id, saliency: false, topk: 5})
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(body?.error?.message || `Classifier returned HTTP ${response.status}.`);
+        if (run.cancelled || !engineRequests.current(ticket)) break;
+        samples.results.set(item.id, readClassification(body));
+        renderSampleTiles();
+      }
+    } catch (err) {
+      if (err.name !== "AbortError" && !run.cancelled) error(`Sample run stopped: ${err.message}`);
+    } finally {
+      engineRequests.release(ticket);
+      if (samples.run === run) samples.run = null;
+      state.busy = false; renderSampleTiles(); controls();
+    }
+  }
+  $("sampleRunAll").addEventListener("click", runSamples);
+  $("sampleStop").addEventListener("click", () => { if (samples.run) samples.run.cancelled = true; });
+  $("sampleMistakes").addEventListener("change", renderSampleTiles);
+
   // Lightweight cadence for either live source: capture after each answer, at most once
   // per interval. A Reachy frame only counts as ready while the bridge reports live.
   async function cameraLoop(generation) {
@@ -1150,6 +1491,7 @@ if (typeof document !== "undefined") {
     // MediaStream tracks were never being stopped when switching straight to Reachy, which could
     // leave the camera hardware held (and on some browsers, unavailable to reacquire later).
     releaseCamera();
+    overlay = null; drawOverlay();
     state.running = true; state.source = "reachy";
     const generation = ++state.cameraGeneration;
     Object.assign(reachy, {polling: null, live: false, wasLive: false, healthAt: 0, audioLive: false,
@@ -1186,7 +1528,11 @@ if (typeof document !== "undefined") {
     $("sourceStatus").textContent = state.imageURL ? "Selected image"
       : state.source === "reachy" ? "Reachy Mini stopped" : "Camera stopped";
   }
-  function stop() { state.running = false; state.cameraGeneration += 1; state.abort?.abort(); releaseCamera(); controls(); }
+  function stop() {
+    state.running = false; state.cameraGeneration += 1; state.abort?.abort();
+    if (samples.run) samples.run.cancelled = true;
+    releaseCamera(); controls();
+  }
   function applyPreset(name, reset = true) {
     if (!CAPTURE_PRESETS[name]) return;
     if (reset) {
@@ -1229,6 +1575,7 @@ if (typeof document !== "undefined") {
     }
     releaseCamera();  // drop any existing stream first - flipping cameras while one is open can
                        // otherwise ask a phone to hold two camera handles at once and fail.
+    overlay = null; drawOverlay();
     state.running = true; state.source = "camera"; const generation = ++state.cameraGeneration; controls();
     // Visible right next to the preview the user is looking at - not just the catch block's
     // error() below, which renders far away in the output panel and is easy to miss entirely
@@ -1328,8 +1675,9 @@ if (typeof document !== "undefined") {
     reachyRequested = false;
     stop(); error();
     if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 12 * 1024 * 1024) { error("Choose a JPEG, PNG or WebP image smaller than 12 MiB."); return; }
-    if (state.imageURL) URL.revokeObjectURL(state.imageURL);
-    state.imageURL = URL.createObjectURL(file);
+    if (state.imageURL?.startsWith("blob:")) URL.revokeObjectURL(state.imageURL);
+    state.imageURL = URL.createObjectURL(file); state.sampleId = null;
+    overlay = null; drawOverlay(); renderSampleTiles();
     $("uploadedImage").src = state.imageURL;
     try {
       await $("uploadedImage").decode();
@@ -1701,9 +2049,10 @@ if (typeof document !== "undefined") {
     $("engineSwitchStatus").textContent = switchingEngine()
       ? "Switching model… Preview stays connected; inference is paused."
       : `Current model: ${engineData.active?.name || "Unavailable"}`;
-    $("engineSwitchHint").textContent = engineData.configured
-      ? "Only one model is resident at a time. Switching pauses inference while the new model loads; a failed switch attempts to restore the previous model."
-      : "Model switching is not configured on this device.";
+    const classifiers = engineData.engines?.some(engine => engine.kind === "classifier");
+    $("engineSwitchHint").textContent = !engineData.configured ? "Model switching is not configured on this device."
+      : "Only one vision-language engine is resident at a time. Switching pauses inference while the new model loads; a failed switch attempts to restore the previous model." +
+        (classifiers ? " Classifiers load beside it in seconds and leave it running." : "");
     updateSwitchProgress();
   }
   async function switchToEngine(id) {

@@ -115,6 +115,92 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(switcher.selected, 'cosmos')
 
 
+class SymlinkSwitcherTests(unittest.TestCase):
+    """The legacy switcher: one shim, an engine symlink, `sudo ln -sfn` and a restart."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name)
+        for name in ('v3', 'v2', 'fp16'):
+            (root / name).mkdir()
+            (root / name / 'llm.engine').write_bytes(b'synthetic engine fixture')
+        self.link = root / 'default'
+        self.link.symlink_to(root / 'v3')
+        self.entries = {
+            'v3': {'name': 'Slow', 'path': str(root / 'v3')},
+            'v2': {'name': 'Fast', 'path': str(root / 'v2')},
+            'fp16': {'name': 'FP16', 'path': str(root / 'fp16'), 'enabled': False,
+                     'unavailable_reason': 'Does not fit beside the NVR'}}
+        self.switcher = ui.EngineSwitcher(self.link, self.entries, 'shim', 1)
+        self.calls = []
+
+    def fake_sudo(self, cmd, timeout=180):
+        """Stands in for sudo: records each command line and performs the relink."""
+        self.calls.append(cmd)
+        if cmd[2] == 'ln':
+            self.link.unlink()
+            self.link.symlink_to(cmd[4])
+        return True, ''
+
+    def switch(self, eid, ready):
+        with mock.patch.object(self.switcher, '_run', side_effect=self.fake_sudo), \
+             mock.patch.object(self.switcher, 'wait_ready', side_effect=ready):
+            return self.switcher.switch(eid)
+
+    def test_switch_runs_exactly_the_sudoers_command_lines(self):
+        ok, message = self.switch('v2', [True])
+        self.assertTrue(ok, message)
+        self.assertEqual(self.calls, [['sudo', '-n', 'ln', '-sfn', self.entries['v2']['path'], str(self.link)],
+                                      ['sudo', '-n', 'systemctl', 'restart', 'shim']])
+        self.assertEqual(self.switcher.active()['id'], 'v2')
+        self.assertFalse(self.switcher.switching)
+
+    def test_disabled_or_unbuilt_build_is_refused_without_a_command(self):
+        self.assertEqual(self.switcher.availability('fp16'), (False, 'Does not fit beside the NVR'))
+        self.assertEqual(self.switch('fp16', [True]), (False, 'Does not fit beside the NVR'))
+        (Path(self.entries['v2']['path']) / 'llm.engine').unlink()
+        ok, reason = self.switch('v2', [True])
+        self.assertFalse(ok)
+        self.assertIn('not been built', reason)
+        self.assertEqual(self.calls, [])
+
+    def test_build_that_never_answers_is_swapped_back(self):
+        ok, message = self.switch('v2', [False, True])
+        self.assertFalse(ok)
+        self.assertIn('restored Slow', message)
+        self.assertEqual(self.switcher.active()['id'], 'v3')
+        self.assertEqual([call[4] for call in self.calls if call[2] == 'ln'],
+                         [self.entries['v2']['path'], self.entries['v3']['path']])
+
+    def test_active_answering_build_is_not_restarted(self):
+        ok, message = self.switch('v3', [True])
+        self.assertTrue(ok)
+        self.assertIn('already active', message)
+        self.assertEqual(self.calls, [])
+
+    def test_engine_list_reports_refused_builds(self):
+        class Quiet(ui.Handler):
+            def log_message(self, *args): pass
+        class Telemetry:
+            def snapshot(self): return {}
+            def close(self): pass
+        server = ui.Server(('127.0.0.1', 0), Quiet, telemetry=Telemetry())
+        server.engine_switcher = self.switcher
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+        connection.request('GET', '/api/engines')
+        data = json.loads(connection.getresponse().read())
+        connection.close()
+        self.assertEqual(data['active']['id'], 'v3')
+        engines_by_id = {engine['id']: engine for engine in data['engines']}
+        self.assertEqual((engines_by_id['v2']['available'], engines_by_id['v2']['reason']), (True, ''))
+        self.assertEqual((engines_by_id['fp16']['available'], engines_by_id['fp16']['reason']),
+                         (False, 'Does not fit beside the NVR'))
+
+
 class FakeModel(BaseHTTPRequestHandler):
     """A real OpenAI-shaped SSE backend - proxy() (serve_ui.py) requires an actual
     text/event-stream response for a managed engine, not a plain JSON object."""

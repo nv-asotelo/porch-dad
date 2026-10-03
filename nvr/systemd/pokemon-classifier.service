@@ -1,0 +1,24 @@
+[Unit]
+Description=Pokemon classifiers for Live Vision (loopback :8094)
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=orin
+Group=orin
+WorkingDirectory=/home/orin/nvr/classifier
+# Loopback only: Live Vision relays to it (--classifier-url). A model is resident only while a
+# classifier is selected there; otherwise the service holds no engine and no CUDA context.
+ExecStart=/home/orin/TensorRT-Edge-LLM/.venv/bin/python /home/orin/nvr/classifier/classifier_service.py --host 127.0.0.1 --port 8094 --models-dir /home/orin/nvr/classifier/models
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+# A ceiling, not a reservation. On the Orin an engine's GPU memory is charged to this cgroup too,
+# as kernel memory: Skshmjn holds 267 MB of it while loaded (nvmap's ledger), and under 512M every
+# load ran into the limit and crawled through reclaim. Unloaded, the service holds ~45 MB.
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

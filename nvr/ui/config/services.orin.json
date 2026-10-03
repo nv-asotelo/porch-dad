@@ -1,0 +1,6 @@
+{
+  "Pokémon classifiers": {
+    "cmdline_match": "classifier_service.py",
+    "path": "/home/orin/nvr/classifier/models"
+  }
+}

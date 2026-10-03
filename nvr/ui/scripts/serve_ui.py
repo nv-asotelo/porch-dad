@@ -496,21 +496,153 @@ def media_type(response):
     return response.getheader("Content-Type", "").split(";")[0].strip().lower()
 
 
+# --------------------------------------------------------------------------- classifiers
+# "kind": "classifier" registry entries run on a separate loopback service (nvr/classifier):
+# selecting one leaves the shim and its engine alone, and /api/classify relays one image to it.
+# A sample set (--samples-dir) lets the page run the selected classifier over labelled images
+# the server already holds, by manifest id: a request never names a path.
+
+SAMPLE_ID = re.compile(r"[a-z0-9][a-z0-9_.-]{0,95}\Z")
+SAMPLE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+
+def classifier_call(base, method, path, body=None, timeout=10):
+    """One JSON request to the classifier service; its error text on a non-200 answer."""
+    host, port = bridge_address(base)
+    connection = http.client.HTTPConnection(host, port, timeout=timeout)
+    try:
+        data = json.dumps(body).encode() if body is not None else None
+        connection.request(method, path, data, {"Content-Type": "application/json"} if data else {})
+        response = connection.getresponse()
+        raw = response.read(MAX_RESPONSE + 1)
+    finally:
+        connection.close()
+    if len(raw) > MAX_RESPONSE:
+        raise ValueError("The classifier service sent too large an answer.")
+    value = json.loads(raw)
+    if response.status != 200:
+        detail = value.get("error") if isinstance(value, dict) else None
+        raise ValueError(detail if isinstance(detail, str) else f"classifier service answered HTTP {response.status}")
+    return value
+
+
+def classify_request(payload, samples):
+    """The page's classify request -> the service's: one embedded JPEG or one sample id."""
+    if not isinstance(payload, dict) or set(payload) - {"model", "image", "sample", "saliency", "topk"}:
+        raise ValueError("Send model, image or sample, saliency and topk only.")
+    if not isinstance(payload.get("model"), str) or not 1 <= len(payload["model"]) <= 64:
+        raise ValueError("A classifier id is required.")
+    if ("image" in payload) == ("sample" in payload):
+        raise ValueError("Send one image or one sample id.")
+    saliency, topk = payload.get("saliency", False), payload.get("topk", 5)
+    if not isinstance(saliency, bool) or type(topk) is not int or not 1 <= topk <= 10:
+        raise ValueError("saliency must be true or false, topk 1 to 10.")
+    if "sample" in payload:
+        sample = samples.get(payload["sample"]) if isinstance(payload["sample"], str) else None
+        if sample is None:
+            raise ValueError("Unknown sample image.")
+        raw = sample["path"].read_bytes()
+    else:
+        url = payload["image"]
+        prefix = "data:image/jpeg;base64,"
+        if not isinstance(url, str) or not url.startswith(prefix):
+            raise ValueError("Send an embedded JPEG.")
+        raw = base64.b64decode(url[len(prefix):], validate=True)
+        if not raw.startswith(b"\xff\xd8\xff") or len(raw) > MAX_BODY * 3 // 4:
+            raise ValueError("Invalid or oversized JPEG image.")
+    return {"model": payload["model"], "image": base64.b64encode(raw).decode(),
+            "saliency": saliency, "topk": topk}
+
+
+def classifier_result(value):
+    """Only well-formed, bounded numbers reach the page: it draws them on a canvas."""
+    def score(x):
+        if type(x) not in (int, float) or not math.isfinite(x) or not 0 <= x <= 1:
+            raise ValueError("The classifier sent an invalid score.")
+        return float(x)
+
+    def name(x, limit):
+        if x is not None and (not isinstance(x, str) or len(x) > limit):
+            raise ValueError("The classifier sent an invalid label.")
+        return x
+
+    if not isinstance(value, dict) or not isinstance(value.get("topk"), list) or not 1 <= len(value["topk"]) <= 10:
+        raise ValueError("The classifier sent no ranking.")
+    topk = []
+    for item in value["topk"]:
+        if not isinstance(item, dict):
+            raise ValueError("The classifier sent an invalid ranking.")
+        topk.append({"species": name(item.get("species"), 64), "label": name(item.get("label"), 128) or "",
+                     "score": score(item.get("score"))})
+    saliency = value.get("saliency")
+    if saliency is not None:
+        w, h, cells = (saliency.get(k) for k in ("w", "h", "cells")) if isinstance(saliency, dict) else (0, 0, None)
+        if type(w) is not int or type(h) is not int or not (1 <= w <= 64 and 1 <= h <= 64) or \
+                not isinstance(cells, list) or len(cells) != w * h:
+            raise ValueError("The classifier sent an invalid saliency map.")
+        saliency = {"w": w, "h": h, "cells": [score(c) for c in cells],
+                    "method": name(saliency.get("method"), 80) or ""}
+    boxes = value.get("boxes", [])
+    if not isinstance(boxes, list) or len(boxes) > 16 or not all(
+            isinstance(b, list) and len(b) == 4 for b in boxes):
+        raise ValueError("The classifier sent invalid boxes.")
+    timing = value.get("timing_ms") if isinstance(value.get("timing_ms"), dict) else {}
+    return {"model": name(value.get("model"), 64), "species": topk[0]["species"], "label": topk[0]["label"],
+            "score": topk[0]["score"], "topk": topk, "saliency": saliency,
+            "boxes": [[score(x) for x in b] for b in boxes],
+            "timing_ms": {k: float(v) for k, v in timing.items()
+                          if k in {"preprocess", "inference", "total"} and type(v) in (int, float)
+                          and math.isfinite(v) and 0 <= v < 600000}}
+
+
+def load_samples(directory):
+    """manifest.json beside the images: {"images": [{id, file, species, credit?, license?, source?}]}."""
+    root = directory.resolve()
+    manifest = json.loads((root / "manifest.json").read_text())
+    images = manifest.get("images") if isinstance(manifest, dict) else None
+    if not isinstance(images, list) or not images:
+        raise ValueError("manifest.json lists no images")
+    samples = {}
+    for item in images:
+        sid = item.get("id") if isinstance(item, dict) else None
+        if not isinstance(sid, str) or not SAMPLE_ID.fullmatch(sid) or sid in samples:
+            raise ValueError(f"invalid or repeated sample id {sid!r}")
+        file, species = item.get("file"), item.get("species")
+        if not isinstance(file, str) or "/" in file or file.startswith(".") or \
+                Path(file).suffix.lower() not in SAMPLE_TYPES:
+            raise ValueError(f"{sid}: file must be a JPEG, PNG or WebP name beside manifest.json")
+        path = (root / file).resolve()
+        if path.parent != root or not path.is_file():
+            raise ValueError(f"{sid}: {file} is missing")
+        if not isinstance(species, str) or not species or len(species) > 64:
+            raise ValueError(f"{sid}: species is required")
+        samples[sid] = {"id": sid, "path": path, "species": species,
+                        **{k: str(item.get(k) or "")[:300] for k in ("credit", "license", "source")}}
+    return samples
+
+
 class EngineSwitcher:
     """Swap the TensorRT engine the local shim serves, and restart it to load the swap.
 
     The recipe: an atomic symlink swap the shim's own launch config always reads the same path
     from, then a systemctl restart, then poll the shim's own /v1/models until it answers again.
-    Requires passwordless sudo for exactly `ln -sfn` on --engine-link and `systemctl restart` on
-    --shim-service, which this class does not configure: a sudoers line like `USER ALL=(root)
-    NOPASSWD: /usr/bin/ln -sfn * <engine-link>, /usr/bin/systemctl restart <shim-service>`.
+    A build that is not answering within switch_timeout is swapped back out: the previous target
+    is relinked and the shim restarted on it, so a failed switch leaves the old model serving
+    rather than none.
+
+    Requires passwordless sudo for exactly these command lines, which this class does not
+    configure: `ln -sfn <path> <engine-link>` for each registry path, and `systemctl restart
+    <shim-service>` - written out one per line, as in nvr/ui/config/sudoers-live-vision-engines.
+    Not `ln -sfn * <engine-link>`: sudoers matches a wildcard across arguments, so that line also
+    admits extra options such as `-t <dir>`, and with them a root-owned link anywhere.
     ServiceEngineSwitcher, for a "kind": "service" registry, needs only `systemctl start` and
     `stop` on its units instead.
     """
 
     switch_timeout = 120
 
-    def __init__(self, engine_link: Path, engines: dict, shim_service: str, backend_port: int):
+    def __init__(self, engine_link: Path, engines: dict, shim_service: str, backend_port: int,
+                 classifier_url: str = ""):
         self.engine_link = engine_link
         self.engines = engines
         self.shim_service = shim_service
@@ -519,6 +651,33 @@ class EngineSwitcher:
         self.switching = False
         self.switch_target = None
         self.switch_started_at = None
+        # "kind": "classifier" entries: selecting one leaves the shim and its engine running.
+        self.classifier_url = classifier_url
+        self.classifier = None
+        self._models = (-math.inf, None)
+
+    def classifier_models(self):
+        """The classifier service's models by id, at most 3 s old; None while it is unreachable."""
+        at, models = self._models
+        if time.monotonic() - at < 3:
+            return models
+        try:
+            listed = classifier_call(self.classifier_url, "GET", "/models", timeout=3)["models"]
+            models = {m["id"]: m for m in listed if isinstance(m, dict) and isinstance(m.get("id"), str)}
+        except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
+            models = None
+        self._models = (time.monotonic(), models)
+        return models
+
+    def leave_classifier(self):
+        """Back to Cosmos3-Edge: drop the selection and free the classifier's memory."""
+        if self.classifier is None:
+            return
+        self.classifier = None
+        try:
+            classifier_call(self.classifier_url, "POST", "/unload", {})
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
 
     def _run(self, cmd, timeout=180):
         try:
@@ -527,13 +686,36 @@ class EngineSwitcher:
         except (OSError, subprocess.SubprocessError) as exc:
             return False, f"{type(exc).__name__}: {exc}"
 
+    def availability(self, eid: str) -> tuple[bool, str]:
+        """An entry can be listed and still refused: "enabled": false with an
+        "unavailable_reason" is a build that exists but must not be loaded here, such as one
+        that does not fit in memory beside everything else on the board."""
+        e = self.engines[eid]
+        if e.get("enabled") is False:
+            return False, e.get("unavailable_reason") or "Disabled on this device"
+        if e.get("kind") == "classifier":
+            models = self.classifier_models()
+            if models is None:
+                return False, "The classifier service is not running"
+            if not (models.get(e["model_id"]) or {}).get("installed"):
+                return False, "Not installed in the classifier service"
+            return True, ""
+        if not os.path.isfile(os.path.join(e["path"], "llm.engine")):
+            return False, "Engine has not been built on this device"
+        return True, ""
+
     def active(self) -> dict:
+        if self.classifier is not None:
+            return {"id": self.classifier, **self.engines[self.classifier]}
+        return self.cosmos_active()
+
+    def cosmos_active(self) -> dict:
         try:
             target = os.path.realpath(self.engine_link)
         except OSError:
             target = ""
         for eid, e in self.engines.items():
-            if os.path.realpath(e["path"]) == target:
+            if e.get("kind") != "classifier" and os.path.realpath(e["path"]) == target:
                 return {"id": eid, **e}
         return {"id": "unknown", "name": "Unknown", "path": target,
                "profile": "", "notes": "active engine does not match any configured build"}
@@ -558,27 +740,61 @@ class EngineSwitcher:
     def _switch(self, eid: str) -> tuple[bool, str]:
         if eid not in self.engines:
             return False, f"unknown engine {eid}"
-        path = self.engines[eid]["path"]
-        if not os.path.isfile(os.path.join(path, "llm.engine")):
-            return False, f"engine not built at {path}"
+        ok, reason = self.availability(eid)
+        if not ok:
+            return False, reason
+        entry = self.engines[eid]
+        name = entry["name"]
+        if entry.get("kind") == "classifier":
+            try:
+                classifier_call(self.classifier_url, "POST", "/load", {"model": entry["model_id"]}, timeout=180)
+            except (OSError, ValueError, http.client.HTTPException) as exc:
+                return False, f"the classifier service could not load {name}: {exc}"
+            self.classifier = eid
+            return True, f"switched to {name}"
+        previous = self.cosmos_active()
+        if previous["id"] == eid and self.wait_ready(0):
+            message = f"{name} is already active" if self.classifier is None else f"switched to {name}"
+            self.leave_classifier()
+            return True, message
+        ok, msg = self._load(entry["path"])
+        if ok:
+            self.leave_classifier()
+            return True, f"switched to {name}"
+        if previous["id"] not in self.engines or previous["id"] == eid:
+            return False, msg
+        back, back_msg = self._load(self.engines[previous["id"]]["path"])
+        if back:
+            return False, f"{msg}; restored {previous['name']}"
+        return False, f"{msg}; restoring {previous['name']} failed too: {back_msg}"
+
+    def _load(self, path: str) -> tuple[bool, str]:
         ok, msg = self._run(["sudo", "-n", "ln", "-sfn", path, str(self.engine_link)])
         if not ok:
             return False, f"symlink failed: {msg}"
         ok, msg = self._run(["sudo", "-n", "systemctl", "restart", self.shim_service])
         if not ok:
             return False, f"restart failed: {msg}"
-        for _ in range(60):
+        if not self.wait_ready(self.switch_timeout):
+            return False, f"the shim did not become ready in {self.switch_timeout}s"
+        return True, ""
+
+    def wait_ready(self, seconds: float) -> bool:
+        # The shim loads its engine before it listens, so any answer here means a loaded model.
+        deadline = time.monotonic() + seconds
+        while True:
             conn = http.client.HTTPConnection("127.0.0.1", self.backend_port, timeout=2)
             try:
                 conn.request("GET", "/v1/models")
                 if conn.getresponse().status == 200:
-                    return True, f"switched to {self.engines[eid]['name']}"
+                    return True
             except (OSError, http.client.HTTPException):
                 pass
             finally:
                 conn.close()
+            if time.monotonic() >= deadline:
+                return False
             time.sleep(2)
-        return False, "engine swapped but the shim did not become ready in 120s"
 
 
 SPEECH_RATES = (0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5)
@@ -718,6 +934,8 @@ class Server(ThreadingHTTPServer):
         # Populated in main(): {name: {"cmdline_match": str, "path": str}} for services this
         # process does not itself manage (the shim, the Reachy bridge) - see --services-config.
         self.services_config = {}
+        # Populated in main() from --samples-dir: {id: {"path", "species", ...}} - see load_samples.
+        self.samples = {}
 
     def server_close(self):
         if getattr(self, "owns_telemetry", False):
@@ -884,6 +1102,12 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/reachy/state":
             self.reachy_state()
             return
+        if route == "/api/samples":
+            self.samples_list(query)
+            return
+        if route.startswith("/api/samples/"):
+            self.sample_image(route[len("/api/samples/"):])
+            return
         if route == "/api/reachy/apps":
             self.reachy_apps()
             return
@@ -894,10 +1118,7 @@ class Handler(BaseHTTPRequestHandler):
             elif getattr(switcher, "managed", False):
                 body = json.dumps(switcher.status()).encode()
             else:
-                available = [{"id": eid, **e,
-                              "available": (Path(e["path"]) / "llm.engine").is_file(),
-                              "reason": "" if (Path(e["path"]) / "llm.engine").is_file()
-                              else "Engine has not been built on this device"}
+                available = [{"id": eid, **e, **dict(zip(("available", "reason"), switcher.availability(eid)))}
                              for eid, e in switcher.engines.items()]
                 progress = ({"target": switcher.switch_target, "started_at": switcher.switch_started_at,
                             "timeout": switcher.switch_timeout} if switcher.switching else None)
@@ -936,6 +1157,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/engines/"):
             self.engine_switch(self.path[len("/api/engines/"):])
+            return
+        if self.path == "/api/classify":
+            self.classify()
             return
         if self.path != "/v1/chat/completions":
             self.json_error(404, "Not found.")
@@ -977,6 +1201,82 @@ class Handler(BaseHTTPRequestHandler):
             self.proxy(self.path, body)
         finally:
             GENERATION_LOCK.release()
+
+    def samples_list(self, query):
+        """The sample set, by id; ?model=<classifier id> adds whether each species is one that
+        model can name at all, so a score can be read against what it was trained on."""
+        switcher = self.server.engine_switcher
+        model = (parse_qs(query).get("model") or [None])[0]
+        known = None
+        if model and getattr(switcher, "classifier_url", ""):
+            listed = (switcher.classifier_models() or {}).get(model) or {}
+            if isinstance(listed.get("species"), list):
+                known = set(listed["species"])
+        images = [{"id": s["id"], "species": s["species"], "credit": s["credit"], "license": s["license"],
+                   "source": s["source"], **({"covered": s["species"] in known} if known is not None else {})}
+                  for s in self.server.samples.values()]
+        body = json.dumps({"configured": bool(self.server.samples), "images": images}).encode()
+        self.send_headers(200, "application/json", len(body))
+        self.wfile.write(body)
+
+    def sample_image(self, sid):
+        sample = self.server.samples.get(sid)
+        if sample is None:
+            self.json_error(404, "Unknown sample image.")
+            return
+        data = sample["path"].read_bytes()
+        self.send_headers(200, SAMPLE_TYPES[sample["path"].suffix.lower()], len(data))
+        self.wfile.write(data)
+
+    def classify(self):
+        """One image, or one sample by id, through the selected classifier. A complete JSON answer,
+        not a stream: a classifier has no tokens to time."""
+        switcher = self.server.engine_switcher
+        try:
+            if self.headers.get("Transfer-Encoding"):
+                raise ValueError("Chunked uploads are disabled.")
+            if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                raise ValueError("Content-Type must be application/json.")
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= MAX_BODY:
+                self.json_error(413, "The image request must be smaller than 2 MiB.")
+                return
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError("Incomplete request body.")
+            request = classify_request(json.loads(body), self.server.samples)
+        except socket.timeout:
+            self.json_error(408, "Request upload timed out.")
+            return
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            self.json_error(400, str(exc)[:300])
+            return
+        active = switcher.active() if getattr(switcher, "classifier_url", "") and not switcher.switching else {}
+        if active.get("kind") != "classifier" or active.get("model_id") != request["model"]:
+            self.json_error(409, "The model changed; refresh Live Vision before sending another image.")
+            return
+        if not self.acquire_generation():
+            if self.client_disconnected():
+                return
+            self.json_error(429, "One inference is already active. Retry after it finishes.")
+            return
+        try:
+            if self.client_disconnected():
+                return
+            try:
+                result = classifier_result(classifier_call(switcher.classifier_url, "POST", "/classify",
+                                                           request, timeout=60))
+            except (OSError, http.client.HTTPException):
+                self.json_error(503, "The classifier service is not reachable.")
+                return
+            except ValueError as exc:
+                self.json_error(502, str(exc)[:300])
+                return
+        finally:
+            GENERATION_LOCK.release()
+        data = json.dumps(result).encode()
+        self.send_headers(200, "application/json", len(data))
+        self.wfile.write(data)
 
     def client_disconnected(self):
         # The complete body has been consumed and responses close the connection;
@@ -1421,7 +1721,8 @@ def main():
     parser.add_argument("--engine-link", type=Path, default=None,
                         help='Symlink the shim reads its engine directory from. Only for a '
                              'registry whose entries are not "kind": "service", where it is '
-                             'required; needs passwordless `sudo ln -sfn` on this path.')
+                             'required; needs passwordless `sudo ln -sfn <path> <this link>` for '
+                             'each registry path, each written out (see EngineSwitcher).')
     parser.add_argument("--engines-config", type=Path, default=None,
                         help='JSON file: {"id": {"name": "...", "path": "...", "profile": "..."}, '
                              '...}. Empty disables /api/engines.')
@@ -1431,6 +1732,12 @@ def main():
                         help='With --engine-link: systemd unit restarted after an engine swap - '
                              'needs passwordless `sudo systemctl restart` on this unit. Default '
                              'matches systemd/cosmos3-edge-shim.service.')
+    parser.add_argument("--classifier-url", default="",
+                        help='Loopback classifier service (nvr/classifier), such as '
+                             'http://127.0.0.1:8094. Required by "kind": "classifier" registry entries.')
+    parser.add_argument("--samples-dir", type=Path, default=None,
+                        help="Directory holding manifest.json and the labelled images it lists, which "
+                             "the page can run the selected classifier over (/api/samples).")
     parser.add_argument("--services-config", type=Path, default=None,
                         help='JSON file: {"Display Name": {"cmdline_match": "substring to find '
                              'in /proc/*/cmdline", "path": "/dir/to/report/size/and/disk/for"}, '
@@ -1464,6 +1771,13 @@ def main():
             if not isinstance(engines, dict) or not all(
                     isinstance(e, dict) and "name" in e and "path" in e for e in engines.values()):
                 raise ValueError("expected {id: {name, path, ...}}")
+            if any(e.get("kind") not in {None, "service", "classifier"} for e in engines.values()):
+                raise ValueError('"kind" must be "service", "classifier" or absent')
+            classifiers = [e for e in engines.values() if e.get("kind") == "classifier"]
+            if any(not isinstance(e.get("model_id"), str) or not e["model_id"] for e in classifiers):
+                raise ValueError("Classifier entries need a model_id")
+            if classifiers and not args.classifier_url:
+                raise ValueError("Classifier entries require --classifier-url")
             managed_engines = bool(engines) and all(e.get("kind") == "service" for e in engines.values())
             if any(e.get("kind") == "service" for e in engines.values()) and not managed_engines:
                 raise ValueError("Do not mix symlink and separate-service engines")
@@ -1475,6 +1789,17 @@ def main():
             parser.error(f"--engines-config: {exc}")
     elif args.engine_link:
         parser.error("--engine-link requires --engines-config")
+    if args.classifier_url:
+        try:
+            bridge_address(args.classifier_url)
+        except ValueError:
+            parser.error("--classifier-url must look like http://127.0.0.1:8094")
+    samples = {}
+    if args.samples_dir:
+        try:
+            samples = load_samples(args.samples_dir)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"--samples-dir: {exc}")
     services_config = {}
     if args.services_config:
         try:
@@ -1510,8 +1835,8 @@ def main():
         if managed_engines:
             engine_switcher = ServiceEngineSwitcher(engines, args.default_engine, GENERATION_LOCK)
         else:
-            engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port)
-                               if engines else None)
+            engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port,
+                                              args.classifier_url) if engines else None)
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
@@ -1519,6 +1844,7 @@ def main():
         server.reachy_client = reachy_client
         server.piper = piper
         server.engine_switcher = engine_switcher
+        server.samples = samples
         server.services_config = services_config
         server.https_port = args.https_port
         server.allowed_hosts = allowed_hosts
@@ -1532,6 +1858,7 @@ def main():
             secure.reachy_client = reachy_client
             secure.piper = piper
             secure.engine_switcher = engine_switcher
+            secure.samples = samples
             secure.services_config = services_config
             secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
@@ -1546,6 +1873,7 @@ def main():
               f"{args.reachy_daemon_url or 'not configured'}", flush=True)
         print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)
         print(f"Engines: {', '.join(engines) if engines else 'not configured'}", flush=True)
+        print(f"Sample set: {f'{len(samples)} images' if samples else 'not configured'}", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:

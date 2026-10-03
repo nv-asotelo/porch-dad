@@ -1033,7 +1033,7 @@ the board that day and has not yet been through a reboot:
 |---|---|
 | `MemorySwapMax=0` drop-in | present in `/etc/systemd/system/cosmos3-edge-shim.service.d/` |
 | `vm.swappiness=10` | present in `/etc/sysctl.d/99-porchdad-swap.conf` |
-| cosmos3-edge-shim, porch-feed, porch-dad, frigate-notify, reachy-mjpeg-bridge, cosmos-edge-ui (Live Vision) | all `boot=enabled`, as are docker and containerd ([deploy/07 §8](../deploy/07-reachy-homeassistant-and-orin-changes.md)) |
+| cosmos3-edge-shim, porch-feed, porch-dad, frigate-notify, reachy-mjpeg-bridge, cosmos-edge-ui (Live Vision), pokemon-classifier (its classifiers) | all `boot=enabled`, as are docker and containerd ([deploy/07 §8](../deploy/07-reachy-homeassistant-and-orin-changes.md)) |
 | live-vlm-webui-fork (Live VLM WebUI) | `boot=disabled` and stopped: still installed, started on demand ("Live Vision" below) |
 | frigate, ring-mqtt, mosquitto, scout-bridge, scout-bridge-first-floor | all `restart=unless-stopped` |
 | homeassistant | stopped, `restart=no`: not part of the boot set (deploy/07 §8) |
@@ -1063,7 +1063,7 @@ Left unset here rather than changed silently, because it removes the local GUI e
 should be a deliberate choice, not a side effect of a memory fix.
 
 
-## Live Vision: Reachy Mini control and Piper speech
+## Live Vision: models, Pokémon classifiers, Reachy Mini control and Piper speech
 
 Live Vision (`nvr/ui`, `cosmos-edge-ui.service`) captions a browser camera, or the Reachy Mini's
 through the bridge (deploy/07 §5), with the shim. The unit binds loopback `:8092`; with the LAN
@@ -1071,12 +1071,15 @@ drop-in from `enable_lan_ui.sh` it serves the LAN on `:8092` and `:8443`, and a 
 `/` on `:8092` is redirected to HTTPS, the only place a browser grants a camera (deploy/07 §3).
 Since 2026-10-03 it is the Live UI the board starts at boot, in place of the Live VLM WebUI, and it
 also drives the robot: motors, head pose, antennas, onboard apps, volume, and speech through the
-robot's speaker.
+robot's speaker. Its model buttons switch the shim between the board's Cosmos3-Edge engines, or pick
+one of two Pokémon classifiers, which draw a saliency overlay over the picture and can be scored on a
+labelled sample set ("Models" below).
 
 Its code is the [live-vision-cosmos-demo](https://github.com/nv-asotelo/live-vision-cosmos-demo)
-repo at `e84cd37`, the build the Orin runs. `nvr/ui/web/app.js` and `style.css`,
-`nvr/ui/scripts/engine_backends.py`, `nvr/reachy/reachy.py` and `nvr/reachy/reachy_mjpeg_bridge.py`
-are byte-identical to it. Two files differ, only where the demo names its own layout:
+repo at `e84cd37`, plus this repo's model switching and classifiers. `nvr/ui/scripts/engine_backends.py`,
+`nvr/reachy/reachy.py` and `nvr/reachy/reachy_mjpeg_bridge.py` are byte-identical to the demo.
+`serve_ui.py`, `app.js`, `index.html` and `style.css` carry the additions in "Models"; beyond those,
+two files differ only where the demo names its own layout:
 
 | File | Changed from `e84cd37` | Why |
 |---|---|---|
@@ -1114,16 +1117,19 @@ which repeats `lan.conf`'s command and adds:
 |---|---|
 | `--reachy-daemon-url http://<reachy-ip>:8000` | The robot daemon's REST API: motors, pose, apps, volume, sound upload and play. Not the camera: video and audio come from the bridge, relayed under `/reachy/` (`--reachy-url`, default `http://127.0.0.1:8099`) with or without this flag. Needs `requests`, which this interpreter has: porch-feed runs on it too |
 | `--piper-bin`, `--piper-model` | Speech: Piper synthesizes on the Orin and the robot's speaker plays it ("Piper" below). Refused without `--reachy-daemon-url`, so with no robot leave out all three |
+| `--engine-link /opt/tensorrt-edgellm/models/default`, `--engines-config /home/orin/nvr/ui/config/engines.json` | The model buttons, from [`ui/config/engines.orin.json`](ui/config/engines.orin.json) ("Models" below) |
+| `--classifier-url http://127.0.0.1:8094`, `--samples-dir /home/orin/nvr/classifier/samples` | The Pokémon classifiers' service and the labelled sample set ([`classifier/README.md`](classifier/README.md)) |
+| `--services-config /home/orin/nvr/ui/config/services.json` | Adds the classifier service to the page's status bar, from [`ui/config/services.orin.json`](ui/config/services.orin.json) |
 
-Not used on this board: `--engine-link` and `--engines-config`. The command centre switches the
-shim's engine (`switch_engine` in `nvr/feed/porch_feed.py`), so Live Vision reports model switching
-as not configured. Without `--reachy-daemon-url` the robot panel is not shown at all, which is also
-what a drop-in that never took effect looks like.
+Without `--reachy-daemon-url` the robot panel is not shown at all, which is also what a drop-in that
+never took effect looks like.
 
 Install it on the Orin from a copy of this repo, after `enable_lan_ui.sh` has issued the cert and
-written `lan.conf` (deploy/07 §3):
+written `lan.conf` (deploy/07 §3), and after the classifiers (`classifier/README.md`):
 
 ```bash
+install -D -m 0644 nvr/ui/config/engines.orin.json /home/orin/nvr/ui/config/engines.json
+install -m 0644 nvr/ui/config/services.orin.json /home/orin/nvr/ui/config/services.json
 read -rp "Reachy Mini address: " REACHY_IP     # its LAN IP or hostname - never commit it
 sudo install -d /etc/systemd/system/cosmos-edge-ui.service.d
 sed "s/<reachy-ip>/$REACHY_IP/g" nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf \
@@ -1158,6 +1164,47 @@ is warm before tightening the cap: `systemctl show cosmos-edge-ui -p MemoryCurre
 cross-origin, so any LAN client can move the robot or make it speak through Live Vision. The robot's
 daemon answers on the LAN at `:8000` anyway, which is how this UI reaches it: this adds a browser
 route to the robot, not new reach.
+
+### Models: Cosmos3-Edge engines and Pokémon classifiers
+
+The model buttons come from `engines.json`. Its Cosmos entries are the command centre's engines
+under the command centre's names, and switching one does what the command centre's switch does:
+relink `/opt/tensorrt-edgellm/models/default` and restart `cosmos3-edge-shim`. That restart also
+restarts `porch-dad.service` (`Requires=`), and both UIs read the same link, so either shows the
+other's switch. Live Vision waits up to 120 s for the shim to answer, and puts the previous engine
+back if the new one does not. Measured through Live Vision on 2026-10-03, beside the full NVR:
+
+| Button | Engine | Load | First answer, a new image | Free memory after load |
+|---|---|---:|---:|---:|
+| Cosmos v2 · Fast | Cosmos3-Edge-INT4-v2 | 37-40 s | 1.10 s | ~0.9 GB |
+| Cosmos v1 · Medium | Cosmos3-Edge-INT4 | 47 s | 1.12 s | ~1.2 GB |
+| Cosmos v3 · Slow (the default) | Cosmos3-Edge-INT4-v3 | 37-48 s | 1.15 s | ~0.65-1.4 GB |
+| Cosmos MLP-INT4 | Cosmos3-Edge-RTN-MLP-INT4, weight-stripped: refits from its `model/` | 64 s | 1.58 s | **~0.33 GB** |
+| Cosmos FP16 | Cosmos3-Edge | shown, refused | | |
+
+FP16 is listed with `"enabled": false`, so its button says why it cannot be chosen: its engine
+files are 4.8 GB and the board had 3.6 GB free with the shim stopped. Answers were a 48-token
+description of the same frame, and the free memory moves by hundreds of MB with Frigate's load.
+
+**sudo.** The switch runs `sudo -n ln -sfn <engine path> /opt/tensorrt-edgellm/models/default` and
+`sudo -n systemctl restart cosmos3-edge-shim`. On this board `orin` has `NOPASSWD: ALL` from the
+image's cloud-init, so nothing more is needed. Elsewhere, install
+[`ui/config/sudoers-live-vision-engines`](ui/config/sudoers-live-vision-engines), which allows
+exactly those command lines and no others: a wildcard such as `ln -sfn * <link>` also admits extra
+options like `-t <dir>`, and with them a root-owned link anywhere. A new engine is a new line there.
+
+**Classifiers** are the registry's `"kind": "classifier"` entries, served by
+`pokemon-classifier.service` (loopback `:8094`, [`classifier/README.md`](classifier/README.md)).
+Choosing one asks that service to load it, in seconds, and leaves the shim and its engine running,
+so porch-dad keeps captioning; choosing a Cosmos engine again frees the classifier's memory, and
+returns to the engine the shim still holds without a restart. With a classifier selected, every
+frame, upload or sample gets its species, the next four, and a saliency overlay, which **Saliency
+overlay** turns off. None of the classifiers outputs boxes, points or masks: the overlay is
+saliency, where the evidence came from, and the page says so under the picture. The **Sample Pokémon
+set** panel lists 189 labelled photos: choose one to show it and run the selected model on it, or run
+the selected classifier over all of them and read its top-1 and top-5 score as the answers land.
+Samples are classified from the server's copy of each file, so the score does not depend on the
+browser's capture settings.
 
 ### Piper
 
@@ -1214,6 +1261,9 @@ unit's cgroup. The Orin keeps the UI it ran before (branch reachy-feed's) as
 `/home/orin/nvr/ui.bak-reachy-feed-82775ab`, and the bridge it ran before as
 `/home/orin/nvr/reachy/reachy_mjpeg_bridge.py.bak-d86c1ba`.
 
-**Not verified:** a caption through this build on the Orin; speech at rates other than 1x, and
-whether sox is installed there; the 2026-10-03 boot set across a reboot; and this UI with Piper
-beside the full NVR, or beside the WebUI.
+Model switching was checked through the same API: FP16 refused at once with its reason; v3 to v2
+in 39.7 s and back in 37.2 s, each followed by a caption of a test frame through
+`/v1/chat/completions`, with `porch-dad` restarted and active after each.
+
+**Not verified:** speech at rates other than 1x, and whether sox is installed there; the 2026-10-03
+boot set across a reboot; and this UI with Piper beside the full NVR, or beside the WebUI.

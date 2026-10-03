@@ -1,0 +1,43 @@
+{
+  "v2": {
+    "name": "Cosmos v2 · Fast",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v2/engines/reasoning",
+    "profile": "INT4 · 208 ms · 3.692 GB RAM · 170 tokens/frame · 3072 ctx"
+  },
+  "v1": {
+    "name": "Cosmos v1 · Medium",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4/engines/reasoning",
+    "profile": "INT4 · 443 ms · 3.410 GB RAM · 200 tokens/frame · 1536 ctx"
+  },
+  "v3": {
+    "name": "Cosmos v3 · Slow",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v3/engines/reasoning",
+    "profile": "INT4 · 482 ms · 3.395 GB RAM · 320 tokens/frame · 1024 ctx"
+  },
+  "mlp": {
+    "name": "Cosmos MLP-INT4",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-RTN-MLP-INT4/engines/reasoning",
+    "profile": "RTN INT4 on the MLP layers only · weight-stripped, refits from its model/ directory at load (~65 s) · the tightest fit: ~0.3 GB left beside the NVR"
+  },
+  "fp16": {
+    "name": "Cosmos FP16",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge/engines/reasoning",
+    "profile": "FP16 · 4.8 GB of engine files",
+    "enabled": false,
+    "unavailable_reason": "Does not fit beside the NVR: 4.8 GB of engine files, 3.6 GB free with the shim stopped"
+  },
+  "skshmjn": {
+    "kind": "classifier",
+    "name": "Pokémon · Skshmjn ViT-B/16",
+    "model_id": "skshmjn",
+    "path": "/home/orin/nvr/classifier/models/skshmjn",
+    "profile": "Classifier · 1,025 species · 67.7% top-1, 82.0% top-5 on the 189-image sample set · Apache-2.0 · saliency: attention rollout"
+  },
+  "bierny": {
+    "kind": "classifier",
+    "name": "Pokémon · Bierny DenseNet121",
+    "model_id": "bierny",
+    "path": "/home/orin/nvr/classifier/models/bierny",
+    "profile": "Classifier · the 151 Gen-1 species only · 64.2% top-1 on the sample set's Gen-1 images, 40.7% on all · MIT, but its card also says non-commercial · saliency: Grad-CAM"
+  }
+}

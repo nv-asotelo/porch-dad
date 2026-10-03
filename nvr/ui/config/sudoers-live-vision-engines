@@ -1,0 +1,14 @@
+# Live Vision engine switching: install as /etc/sudoers.d/live-vision-engines (root:root 0440)
+#   sudo visudo -cf nvr/ui/config/sudoers-live-vision-engines
+#   sudo install -m 0440 nvr/ui/config/sudoers-live-vision-engines /etc/sudoers.d/live-vision-engines
+#
+# Lets cosmos-edge-ui (User=orin) relink the shim's engine and restart the shim, and nothing else:
+# one line per enabled path in engines.orin.json, which must match it exactly, and the restart.
+# Never `ln -sfn * <link>`: sudoers matches a wildcard across arguments, so that also admits extra
+# options such as `-t <dir>` - a root-owned link anywhere. A new engine is a new line here.
+# Not needed where orin already has `NOPASSWD: ALL` (the Orin image's cloud-init default).
+orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v2/engines/reasoning /opt/tensorrt-edgellm/models/default
+orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4/engines/reasoning /opt/tensorrt-edgellm/models/default
+orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v3/engines/reasoning /opt/tensorrt-edgellm/models/default
+orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-RTN-MLP-INT4/engines/reasoning /opt/tensorrt-edgellm/models/default
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl restart cosmos3-edge-shim
