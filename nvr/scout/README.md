@@ -289,6 +289,30 @@ under a name that nothing resolves - not the robot's own `/etc/hosts`, not the b
 `/etc/hostname`, as does `hostname linaro-alip` followed by the restart, which is what fixed the
 first-floor unit.
 
+## 1F-wheeled: the third unit joins the fleet (2026-10-04)
+
+The test-bench decision below was reversed deliberately: the third unit - the wheeled (mecanum) one,
+now on the first floor - is "1F-wheeled" in the command centre, with the same controls as the 2F
+robot (drive pad, rotate, gamepad, dock and audio).
+
+- **Orin side only:** `scout-bridge-1f-wheeled` on port 8102 (its address comes from the untracked
+  `nvr/.env`, `SCOUT_1F_WHEELED_IP=...`), a `scouts:` entry `first_floor_wheeled` in
+  `feed/config.yaml` (ssh address set on the box only), and a Frigate camera `scout_1f_wheeled`,
+  off by default like the tracked unit - enable it from the command centre's Camera power.
+- **Nothing in the robot's `roller_eye` install was touched.** The bridge only subscribes to the
+  stock ROS master, which still advertises `linaro-alip`, so the same `extra_hosts` pin applies.
+  Checked on the robot after integration: build `01_HW32_MO200A_020150`; `app_node`, `cloud_node`,
+  `s3_node` and `upgrader_node` present; `app_node` and `cloud_node` running; `dpkg -V roller-eye`
+  lists only `/etc/iqfiles/ps5268_default_default.xml` and `/etc/rc.local`, both already different
+  before integration.
+- **The one change on the robot:** this unit's factory image left `/home/linaro/.ssh` owned by
+  root, so it was chowned to `linaro` and the Orin's Scout key appended to `authorized_keys` - the
+  layout the 2F unit already has - so the audio controls can ssh in.
+- **Back to native-app-only:** the vendor app stack runs alongside the bridge throughout. To take
+  the unit out of porch-dad, `docker compose --profile scout stop scout-bridge-1f-wheeled` and
+  delete its `scouts:` entry; nothing on the robot needs restoring. The pre-integration backup
+  (`/home/orin/backups/scout/new-unit-*`, also on the NVMe) remains the reference copy.
+
 ## Recovering a used (eBay) unit to factory defaults, and its role: test bench, not a third feed
 
 This third Scout is **not** going into the fleet as a third live camera - that would mean a third

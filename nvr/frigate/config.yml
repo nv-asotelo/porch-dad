@@ -119,6 +119,9 @@ go2rtc:
     # Second Scout (first floor, tracked). Same passthrough, different bridge port (8100).
     scout_first_floor:
       - "ffmpeg:http://host.docker.internal:8100/h264#video=copy"
+    # Third Scout, 1F-wheeled (mecanum, first floor): scout-bridge-1f-wheeled on port 8102.
+    scout_1f_wheeled:
+      - "ffmpeg:http://host.docker.internal:8102/h264#video=copy"
     front_entryway:
       - rtsp://ring-mqtt:8554/343ea4e653f3_live?video
     front_driveway:
@@ -317,6 +320,29 @@ cameras:
     ffmpeg:
       inputs:
         - path: rtsp://127.0.0.1:8554/scout_first_floor
+          input_args: preset-rtsp-generic
+          roles:
+            - detect
+    detect:
+      enabled: true
+      width: 640
+      height: 360
+      fps: 2
+    objects:
+      track:
+        - person
+        - dog
+        - cat
+  scout_1f_wheeled:
+    # Wheeled (mecanum) Scout on the first floor, "1F-wheeled" in the command centre, fed by
+    # scout-bridge-1f-wheeled (port 8102). OFF by default like the tracked unit: a third detect
+    # camera is a CPU budget decision - flip it from the command centre's Camera power.
+    enabled: false
+    record:
+      enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/scout_1f_wheeled
           input_args: preset-rtsp-generic
           roles:
             - detect

@@ -34,3 +34,10 @@ nvr/feed/snapshots/
 
 # Python wheels: these land here from ad-hoc pip download runs and are not part of the repo.
 *.whl
+
+# VLM benchmark: frames show the household and stay on the LAN; results quote them
+nvr/vlmbench/data/
+nvr/vlmbench/results/
+
+# Per-box values compose reads (e.g. SCOUT_1F_WHEELED_IP) - LAN addresses stay off this public repo
+nvr/.env

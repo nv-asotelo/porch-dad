@@ -103,6 +103,26 @@ services:
       - "linaro-alip:192.168.7.7"
     command: ["--listen", "172.17.0.1", "--listen-port", "8100", "--fps", "12"]
 
+  # Third Scout: the wheeled (mecanum) unit on the first floor, "1F-wheeled" in the command centre.
+  # Same firmware and topics as the other two, so the same image; port 8102. Its address is not in
+  # this public file: it comes from nvr/.env on the box (SCOUT_1F_WHEELED_IP=...), which is not
+  # committed. Nothing about this bridge touches the robot - it subscribes to the stock ROS master,
+  # so the vendor app stack (app_node, cloud_node) keeps running and the native app keeps working.
+  scout-bridge-1f-wheeled:
+    profiles: ["scout"]
+    build: ./scout
+    image: porch-scout-bridge:latest
+    container_name: scout-bridge-1f-wheeled
+    restart: unless-stopped
+    mem_limit: 128m
+    network_mode: host
+    environment:
+      - ROS_MASTER_URI=http://${SCOUT_1F_WHEELED_IP:-unset}:11311
+      - ROS_IP=192.168.6.252                        # this Jetson, as the robot sees it
+    extra_hosts:
+      - "linaro-alip:${SCOUT_1F_WHEELED_IP:-127.0.0.1}"
+    command: ["--listen", "172.17.0.1", "--listen-port", "8102", "--fps", "12"]
+
   frigate:
     image: ghcr.io/blakeblackshear/frigate:stable
     container_name: frigate

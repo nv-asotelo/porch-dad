@@ -135,6 +135,14 @@ scouts:
     ssh: "linaro@192.168.7.7"
     container: scout-bridge-first-floor
     kinematics: tracked
+  # The wheeled (mecanum) unit on the first floor; same controls as the 2F robot. ssh is
+  # linaro@<its address>, set on the box only - LAN addresses stay off this public repo.
+  - id: first_floor_wheeled
+    name: "1F-wheeled"
+    bridge_url: "http://172.17.0.1:8102"
+    ssh: ""
+    container: scout-bridge-1f-wheeled
+    kinematics: mecanum
 # Shared audio defaults (same rk809 codec on every Scout).
 scout_ssh_key: "/home/orin/.ssh/scout_ed25519"
 # No scout_mic_device: mic capture goes through PulseAudio's alsa_input.1mic_loopback source
