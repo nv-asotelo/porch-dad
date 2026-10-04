@@ -174,7 +174,16 @@ def score_run(meta, answers, labels, boxes, judgments):
                      "prompt_tokens_p50": statistics.median([(a.get("usage") or {}).get("prompt_tokens") or 0 for a in ok]) if ok else None}
     out["latency"] = lat
     mb, ma = meta.get("memory_before") or {}, meta.get("memory_after") or {}
-    out["memory"] = {"peak_mib": round(ma["shim_peak"] / 2**20) if ma.get("shim_peak") else None,
+
+    def resident(m):
+        # What the model actually holds: anonymous + kernel (where nvmap charges the GPU's buffers on
+        # Jetson) + shmem. memory.peak also counts page cache from reading the engine files, which
+        # simply fills to whatever cap the cgroup has, so it says more about the cap than the model.
+        st = (m or {}).get("stat") or {}
+        return round((st.get("anon", 0) + st.get("kernel", 0) + st.get("shmem", 0)) / 2**20) if st else None
+
+    out["memory"] = {"resident_mib": max(filter(None, [resident(mb), resident(ma)]), default=None),
+                     "peak_mib": round(ma["shim_peak"] / 2**20) if ma.get("shim_peak") else None,
                      "current_mib": round(ma["shim_current"] / 2**20) if ma.get("shim_current") else None,
                      "board_available_mib": round(ma["mem_available"] / 2**20) if ma.get("mem_available") else None,
                      "board_available_before_mib": round(mb["mem_available"] / 2**20) if mb.get("mem_available") else None}
@@ -201,7 +210,7 @@ def main():
     rows = [score_run(*load_run(p), labels, boxes, judgments) for p in args.runs]
 
     head = ("model", "person", "P/R", "vehicle", "animal", "count", "MAE", "ground", "IoU", "caption",
-            "caption p50", "yes/no p50", "TTFT", "ms/tok", "peak MiB")
+            "caption p50", "yes/no p50", "TTFT", "ms/tok", "resident MiB")
     print(" | ".join(head))
     print(" | ".join("---" for _ in head))
     for r in rows:
@@ -215,7 +224,7 @@ def main():
             fmt((r.get("caption") or {}).get("mean"), "f"),
             fmt((lat.get("caption") or {}).get("p50_ms"), "ms"), fmt((lat.get("person") or {}).get("p50_ms"), "ms"),
             fmt((lat.get("caption") or {}).get("ttft_p50_ms"), "ms"), fmt((lat.get("caption") or {}).get("decode_ms_per_tok"), "f"),
-            str(r["memory"]["peak_mib"] or "-")]))
+            str(r["memory"]["resident_mib"] or "-")]))
     if args.json:
         json.dump(rows, open(args.json, "w"), indent=1)
 

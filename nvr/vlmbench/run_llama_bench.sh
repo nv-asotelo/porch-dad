@@ -15,7 +15,7 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 IMAGE=${LLAMA_CPP_IMAGE:-ghcr.io/nvidia-ai-iot/llama_cpp:latest-jetson-orin}
-GGUF_DIR=${GGUF_DIR:-/home/orin/vlm-sweep/gguf}
+GGUF_DIR=${GGUF_DIR:-/home/orin/tensorrt-edgellm-workspace/gguf}
 DATA=${VLMBENCH_DATA:-/home/orin/nvr/vlmbench/data}
 RESULTS=${VLMBENCH_RESULTS:-/home/orin/nvr/vlmbench/results}
 CAP=${LLAMA_MEMORY_MAX:-3300m}

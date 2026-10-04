@@ -646,7 +646,9 @@ class EngineSwitcher:
     `stop` on its units instead.
     """
 
-    switch_timeout = 120
+    # InternVL3.5-2B takes ~100 s to load beside the NVR, and the proxy engines (llama.cpp in a
+    # container, LocateAnything in PyTorch) land in the same range, so 120 s rolled good models back.
+    switch_timeout = 180
 
     def __init__(self, engine_link: Path, engines: dict, shim_service: str, backend_port: int,
                  classifier_url: str = ""):
@@ -707,7 +709,10 @@ class EngineSwitcher:
             if not (models.get(e["model_id"]) or {}).get("installed"):
                 return False, "Not installed in the classifier service"
             return True, ""
-        if not os.path.isfile(os.path.join(e["path"], "llm.engine")):
+        # A proxy engine (proxy.json) is a model the shim serves through its own runtime - llama.cpp
+        # or PyTorch - started and stopped by the same link-and-restart as a TensorRT engine.
+        if not (os.path.isfile(os.path.join(e["path"], "llm.engine"))
+                or os.path.isfile(os.path.join(e["path"], "proxy.json"))):
             return False, "Engine has not been built on this device"
         return True, ""
 

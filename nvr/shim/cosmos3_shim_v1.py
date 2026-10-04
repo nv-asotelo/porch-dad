@@ -26,7 +26,7 @@ from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
 
 MODEL_ID = "nvidia/Cosmos3-Edge"
-ENGINE_DIR = "/opt/tensorrt-edgellm/models/default"
+ENGINE_DIR = os.environ.get("SHIM_ENGINE_DIR", "/opt/tensorrt-edgellm/models/default")
 
 # The checkpoint that v1/v2/v3 all share. Those are W4A16 builds with their weights
 # serialised into llm.engine, so one checkpoint serves all three and this was hardcoded.
@@ -64,6 +64,184 @@ def _checkpoint_for(engine_dir: str) -> str:
     return own if os.path.isdir(own) else SHARED_CHECKPOINT_DIR
 
 
+# ---------------------------------------------------------------------------- proxy engines
+#
+# Some models worth comparing cannot run in this runtime at all: Gemma 4 E2B's per-layer
+# embedding table alone exceeds the board's budget here but not in llama.cpp, Nemotron 3 Nano 4B's
+# projections do not fit the INT4 kernel, and LocateAnything-3B only runs in PyTorch. Rather than
+# teach Live Vision, Frigate and porch-dad a second way to reach a model, an engine directory may
+# hold a proxy.json instead of engines; the link and restart that switch engines then start that
+# model's own server and relay the same OpenAI API to it:
+#
+#   {"model_id": "google/gemma-4-E2B-it",
+#    "url": "http://127.0.0.1:8091",          # the backend's base URL
+#    "ready_path": "/health",                 # 200 once it can answer
+#    "start": ["docker", "run", "--rm", ...], # run in the foreground, as this user
+#    "stop": ["docker", "rm", "-f", "..."],   # optional; also run first, to clear a leftover
+#    "ready_timeout_s": 300,
+#    "text_only": false}                      # true: image parts are dropped before relaying
+#
+# The backend lives exactly as long as the shim: started in startup, stopped in shutdown, so a
+# switch away (a restart of this unit) always frees its memory before the next model loads.
+PROXY_FILE = "proxy.json"
+_proxy = None
+_proxy_proc = None
+_proxy_ready = False
+
+
+def _proxy_config(engine_dir: str):
+    path = os.path.join(os.path.realpath(engine_dir), PROXY_FILE)
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def _model_id(engine_dir: str) -> str:
+    """What /v1/models reports: the proxy's model, an engine's own model_id file, else Cosmos."""
+    if _proxy:
+        return _proxy.get("model_id") or MODEL_ID
+    try:
+        with open(os.path.join(os.path.realpath(engine_dir), "model_id")) as f:
+            return f.read().strip() or MODEL_ID
+    except OSError:
+        return MODEL_ID
+
+
+def _start_backend():
+    global _proxy_proc, _proxy_ready
+    import subprocess
+    import urllib.request
+
+    if _proxy.get("stop"):
+        subprocess.run(_proxy["stop"], capture_output=True, timeout=60)
+    print(f"[shim] proxy     = {_proxy.get('model_id')} at {_proxy['url']}", flush=True)
+    t0 = time.time()
+    _proxy_proc = subprocess.Popen(_proxy["start"], env={**os.environ, **(_proxy.get("env") or {})})
+    deadline = t0 + float(_proxy.get("ready_timeout_s", 300))
+    probe = _proxy["url"].rstrip("/") + _proxy.get("ready_path", "/health")
+    while time.time() < deadline:
+        if _proxy_proc.poll() is not None:
+            raise RuntimeError(f"proxy backend exited with {_proxy_proc.returncode} before it was ready")
+        try:
+            with urllib.request.urlopen(probe, timeout=3) as r:
+                if r.status == 200:
+                    _proxy_ready = True
+                    print(f"[shim] proxy backend ready in {time.time()-t0:.1f}s", flush=True)
+                    print("[shim] ready", flush=True)
+                    return
+        except Exception:
+            pass
+        time.sleep(1)
+    raise RuntimeError(f"proxy backend not ready after {_proxy.get('ready_timeout_s', 300)}s")
+
+
+def _stop_backend():
+    global _proxy_proc
+    import subprocess
+
+    if _proxy and _proxy.get("stop"):
+        subprocess.run(_proxy["stop"], capture_output=True, timeout=60)
+    if _proxy_proc is not None and _proxy_proc.poll() is None:
+        _proxy_proc.terminate()
+        try:
+            _proxy_proc.wait(timeout=20)
+        except Exception:
+            _proxy_proc.kill()
+    _proxy_proc = None
+
+
+def _relay_messages(messages):
+    """Messages as the backend should see them: images dropped for a text-only model."""
+    if not (_proxy or {}).get("text_only"):
+        return messages
+    out = []
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, list):
+            content = [c for c in content if c.get("type") == "text"] or [{"type": "text", "text": ""}]
+        out.append({**m, "content": content})
+    return out
+
+
+async def _proxy_completion(body, t_start):
+    """Relay one chat completion to the backend, with the metrics Live Vision expects."""
+    import httpx
+
+    url = _proxy["url"].rstrip("/") + "/v1/chat/completions"
+    fwd = {**body, "messages": _relay_messages(body.get("messages", []))}
+    if not body.get("stream"):
+        async with _lock:
+            async with httpx.AsyncClient(timeout=None) as client:
+                r = await client.post(url, json={**fwd, "stream": False})
+        if r.status_code != 200:
+            return JSONResponse(status_code=502, content={"error": {"message": f"backend {r.status_code}: {r.text[:300]}"}})
+        out = r.json()
+        out["model"] = MODEL_ID
+        usage = out.get("usage") or {}
+        print(f"[perf] proxy elapsed_ms={(time.time()-t_start)*1000:.0f} prompt_tok={usage.get('prompt_tokens')} "
+              f"gen_tok={usage.get('completion_tokens')}", flush=True)
+        return out
+
+    cid = "chatcmpl-" + uuid.uuid4().hex
+    head = {"id": cid, "object": "chat.completion.chunk", "created": int(time.time()), "model": MODEL_ID}
+    want_usage = bool((body.get("stream_options") or {}).get("include_usage"))
+
+    async def frames():
+        usage, reason, first_text_at = {}, "stop", None
+        async with _lock:
+            yield _sse({**head, "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]})
+            t_native = time.monotonic()
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream("POST", url, json={**fwd, "stream": True,
+                                                               "stream_options": {"include_usage": True}}) as r:
+                        if r.status_code != 200:
+                            detail = (await r.aread()).decode("utf-8", "replace")[:300]
+                            raise RuntimeError(f"backend {r.status_code}: {detail}")
+                        async for line in r.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if data == "[DONE]":
+                                break
+                            chunk = json.loads(data)
+                            usage = chunk.get("usage") or usage
+                            for ch in chunk.get("choices") or []:
+                                reason = ch.get("finish_reason") or reason
+                                text = (ch.get("delta") or {}).get("content")
+                                if text:
+                                    if first_text_at is None:
+                                        first_text_at = time.monotonic()
+                                    yield _sse({**head, "choices": [{"index": 0, "delta": {"content": text},
+                                                                     "finish_reason": None}]})
+            except Exception as e:
+                yield _sse({**head, "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}],
+                            "error": {"message": f"inference failed: {e}"}})
+                yield "data: [DONE]\n\n"
+                return
+            native_ms = (time.monotonic() - t_native) * 1000.0
+            metrics = {"timing_boundary": "native_inference", "timing_source": "server_monotonic",
+                       "request_id": cid, "completion_tokens": int(usage.get("completion_tokens") or 0),
+                       "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+                       "native_inference_ms": round(native_ms, 3)}
+            if first_text_at is not None:
+                metrics["first_text_timing_boundary"] = "native_start_to_server_text"
+                metrics["server_first_text_ms"] = round((first_text_at - t_native) * 1000.0, 3)
+            yield _sse({**head, "cosmos_metrics": metrics,
+                        "choices": [{"index": 0, "delta": {}, "finish_reason": reason}]})
+            if want_usage:
+                yield _sse({**head, "choices": [], "usage": {
+                    "prompt_tokens": metrics["prompt_tokens"], "completion_tokens": metrics["completion_tokens"],
+                    "total_tokens": metrics["prompt_tokens"] + metrics["completion_tokens"]}})
+            yield "data: [DONE]\n\n"
+            print(f"[perf] proxy stream elapsed_ms={(time.time()-t_start)*1000:.0f} "
+                  f"prompt_tok={metrics['prompt_tokens']} gen_tok={metrics['completion_tokens']}", flush=True)
+
+    return StreamingResponse(frames(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 def _init_runtime():
     global _runtime
     checkpoint_dir = _checkpoint_for(ENGINE_DIR)
@@ -91,7 +269,19 @@ def _init_runtime():
 
 @app.on_event("startup")
 def _startup():
-    _init_runtime()
+    global _proxy, MODEL_ID
+    _proxy = _proxy_config(ENGINE_DIR)
+    MODEL_ID = _model_id(ENGINE_DIR)
+    if _proxy:
+        _start_backend()
+    else:
+        _init_runtime()
+
+
+@app.on_event("shutdown")
+def _shutdown():
+    # A proxy backend must not outlive the shim: the next engine's load needs its memory.
+    _stop_backend()
 
 
 @app.get("/health/ready")
@@ -113,7 +303,7 @@ def health_ready():
     rest are not, and inventing them would push wrong limits into the UI's controls. Missing
     endpoint costs only the image-token presets falling back to defaults.
     """
-    if _runtime is None:
+    if (_proxy and not _proxy_ready) or (not _proxy and _runtime is None):
         return JSONResponse({"status": "loading"}, status_code=503)
     return JSONResponse({"status": "ready"})
 
@@ -351,6 +541,8 @@ async def _stream_completion(req, body, t_start, top_logprobs=None):
 async def chat_completions(request: Request):
     _t_start = time.time()
     body = await request.json()
+    if _proxy:
+        return await _proxy_completion(body, _t_start)
     try:
         num_logprobs, top_logprobs = _logprobs_request(body)
         req = _build_request(

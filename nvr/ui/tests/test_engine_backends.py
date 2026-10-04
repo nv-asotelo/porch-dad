@@ -177,6 +177,18 @@ class SymlinkSwitcherTests(unittest.TestCase):
         self.assertIn('not been built', reason)
         self.assertEqual(self.calls, [])
 
+    def test_proxy_engine_is_available_and_switched_like_any_build(self):
+        # A proxy.json in place of llm.engine is a model the shim serves through llama.cpp or
+        # PyTorch; Live Vision switches to it with the same two command lines.
+        v2 = Path(self.entries['v2']['path'])
+        (v2 / 'llm.engine').unlink()
+        self.assertEqual(self.switcher.availability('v2'), (False, 'Engine has not been built on this device'))
+        (v2 / 'proxy.json').write_text('{"url": "http://127.0.0.1:8091", "start": ["true"]}')
+        self.assertEqual(self.switcher.availability('v2'), (True, ''))
+        ok, message = self.switch('v2', [True])
+        self.assertTrue(ok, message)
+        self.assertEqual([call[2] for call in self.calls], ['ln', 'systemctl'])
+
     def test_build_that_never_answers_is_swapped_back(self):
         ok, message = self.switch('v2', [False, True])
         self.assertFalse(ok)
