@@ -44,6 +44,14 @@ LIMITS_RAD = {
 # Antennas are near-continuous: measured tracking to +/-3.0 rad with no complaint.
 ANTENNA_LIMIT_RAD = math.pi
 
+# The panel's head-orientation sliders, ported from the robot's own testbench app
+# (reachy_mini_testbench): roll +/-30 and yaw +/-45 as its sliders allow. Pitch goes further UP
+# than the testbench's -30, because looking up at a monitor is what this panel is used for.
+# Measured 2026-10-04: commanded -40 reaches -35.8 with the head level and -38.4 with it raised
+# (z saturates near +7.5 mm at that pitch) - the highest this camera can face. The head also
+# settles a few degrees above any commanded pitch (0 reads -4.9, -20 reads -23 to -26).
+POSE_LIMITS_DEG = {"roll": (-30.0, 30.0), "pitch": (-40.0, 30.0), "yaw": (-45.0, 45.0)}
+
 # Index 0 is the LEFT antenna and index 1 the RIGHT. Confirmed against the robot's own desktop app,
 # which displayed Left 0.173 / Right 0.175 while the API returned [0.1733, 0.1749]. An earlier note
 # in this project had these the other way round; it was wrong.
@@ -114,6 +122,14 @@ class Reachy:
             # else. Metres, unrounded past mm, because the whole usable range is +/-20 mm.
             out["pos_m"] = {k: round(float(pose.get(k, 0.0)), 4) for k in ("x", "y", "z")}
             out["body_yaw_deg"] = round(math.degrees(float(full.get("body_yaw") or 0.0)), 1)
+            # What this panel last COMMANDED, which is where its sliders should start: seeding
+            # them from the measured pose would bake the head's few-degree settling error into
+            # the next move.
+            if self._last_cmd:
+                out["cmd_deg"] = {k: round(math.degrees(float(self._last_cmd[k])), 1)
+                                  for k in ("roll", "pitch", "yaw") if k in self._last_cmd}
+                out["cmd_pos_m"] = {k: round(float(self._last_cmd[k]), 4)
+                                    for k in ("x", "y", "z") if k in self._last_cmd}
             out["antennas_deg"] = [round(math.degrees(float(a)), 1)
                                    for a in (full.get("antennas_position") or [])]
 
@@ -233,6 +249,40 @@ class Reachy:
             return False, msg
         return True, "; ".join(notes) or "moving"
 
+    def pose(self, roll=0.0, pitch=0.0, yaw=0.0, z=0.0, duration=0.8):
+        """Orient the head the way the robot's own testbench does: degrees in, one smooth goto.
+
+        Absolute, not relative - every axis is sent, so the result never depends on where the head
+        happened to be. Translation is level except z, which the panel's Z slider owns: raising the
+        head while pitching up is what gets the camera highest. Body yaw is left alone. The
+        commanded pose becomes set_target()'s memory, so moving the X/Y pad or the Z slider next
+        holds this orientation instead of snapping back to an older one.
+        """
+        st = self.state()
+        if not st.get("reachable"):
+            return False, "robot unreachable"
+        if (st.get("motor_mode") or "").lower() == "disabled":
+            return False, "motors are disabled - enable them first"
+
+        vals, notes = {"roll": float(roll), "pitch": float(pitch), "yaw": float(yaw)}, []
+        for k, v in vals.items():
+            lo, hi = POSE_LIMITS_DEG[k]
+            c = max(lo, min(hi, v))
+            if c != v:
+                notes.append(f"{k} clamped to {c:g}°")
+            vals[k] = c
+        lo, hi = LIMITS_M["z"]
+        zc = max(lo, min(hi, float(z)))
+        head = {"x": 0.0, "y": 0.0, "z": zc, "roll": math.radians(vals["roll"]),
+                "pitch": math.radians(vals["pitch"]), "yaw": math.radians(vals["yaw"])}
+        ok, msg = self._post("/api/move/goto", {"head_pose": head, "duration": max(0.2, min(3.0, float(duration))),
+                                                 "interpolation": "minjerk"})
+        if not ok:
+            return False, msg
+        self._last_cmd = dict(head)
+        self._last_cmd_at = time.monotonic()
+        return True, "; ".join(notes) or "moving"
+
     def set_target(self, pose: dict | None = None, body_yaw=None, antennas=None):
         """Point the robot at a target and return immediately. The unit for live controls.
 
@@ -339,6 +389,9 @@ class Reachy:
             "interpolation": "minjerk",
         }
         ok, msg = self._post("/api/move/goto", payload)
+        if ok:
+            self._last_cmd = dict(payload["head_pose"])
+            self._last_cmd_at = time.monotonic()
         return ok, ("centred" if ok else msg)
 
     # ------------------------------------------------------------------ apps

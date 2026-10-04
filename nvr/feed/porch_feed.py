@@ -1819,6 +1819,27 @@ def api_reachy_look_axis(axis: str, deg: float, request: Request):
     return _reachy_result(*_reachy.look(**{axis: deg}))
 
 
+@app.post("/api/reachy/pose")
+async def api_reachy_pose(request: Request):
+    """Absolute head orientation, the way the robot's own testbench sets it: degrees, one smooth
+    goto of `duration` seconds. Negative pitch looks UP. `z` is metres, from the panel's Z slider."""
+    require_control(request)
+    if not _reachy:
+        raise HTTPException(503, "reachy_daemon_url is not configured")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(400, "expected a JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "expected a JSON object")
+    try:
+        args = {k: float(body.get(k) or 0.0) for k in ("roll", "pitch", "yaw", "z")}
+        args["duration"] = float(body.get("duration") or 0.8)
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, f"bad pose: {e}")
+    return _reachy_result(*_reachy.pose(**args))
+
+
 @app.post("/api/reachy/target")
 async def api_reachy_target(request: Request):
     """Live pose control, mirroring the sliders and pads in the robot's own desktop app.
@@ -2702,14 +2723,19 @@ button.mini{padding:3px 9px;font-size:11.5px}
         </div>
       </div>
       <div class="ctl">
-        <h4>Pitch / Yaw <b id="pyv">0.000 0.000</b></h4>
-        <div class="pad" id="padPY"><i></i></div>
-      </div>
-    </div>
-    <div class="ctlrow" style="margin-top:8px">
-      <div class="ctl wide">
-        <h4>Roll <b id="rollv">0.000 rad</b></h4>
-        <input type="range" id="roll" min="-0.7" max="0.7" step="0.01" value="0">
+        <h4>Look <b id="lookv" title="Measured pose: pitch / yaw / roll">-</b></h4>
+        <label class="hint">Pitch <b id="lpv">0°</b> <span style="opacity:.7">− looks up</span></label>
+        <input type="range" id="lpitch" min="-40" max="30" step="1" value="0">
+        <label class="hint">Yaw <b id="lyv">0°</b></label>
+        <input type="range" id="lyaw" min="-45" max="45" step="1" value="0">
+        <label class="hint">Roll <b id="lrv">0°</b></label>
+        <input type="range" id="lroll" min="-30" max="30" step="1" value="0">
+        <label class="hint">Move time <b id="ldv">0.8 s</b></label>
+        <input type="range" id="ldur" min="0.3" max="3" step="0.1" value="0.8">
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button onclick="lookPreset('up')" title="Pitch -40° with the head raised: about -38° measured, the highest this camera faces">Look up (max)</button>
+          <button onclick="lookPreset('level')">Level</button>
+        </div>
       </div>
     </div>
 
@@ -2721,10 +2747,13 @@ button.mini{padding:3px 9px;font-size:11.5px}
       </div>
     </div>
     <p class="hint">
-      Live control: these set the target the robot's 50&nbsp;Hz loop is already chasing, so they
-      track your finger rather than queueing moves. Pitch is positive <b>downward</b> — the pad is
-      inverted so dragging up looks up. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in Z; the
-      platform saturates at about +19&nbsp;mm however far you ask.
+      <b>Look</b> works like the robot's own testbench: degrees, one smooth move of the chosen time
+      when you let go of a slider. Negative pitch looks <b>up</b>; the highest the camera faces is
+      about −38°, which <i>Look up (max)</i> sets (pitch −40° with the head raised). The head
+      settles a few degrees above what is asked, so the measured pose beside the title runs a
+      little more negative. X/Y and Z are live: they set the target the robot's 50&nbsp;Hz loop is
+      already chasing and track your finger. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in
+      Z; the platform saturates at about +19&nbsp;mm however far you ask.
     </p>
     <div class="vol">
       <label>Microphone <span id="micVal" class="hint"></span></label>
@@ -3029,24 +3058,76 @@ function bindPad(id, lblId, kx, ky, rx, ry, inv){
 
 // Pull the live pose back into the widgets, but only when the user is not driving them - snapping
 // a slider out from under a finger is worse than a stale reading.
+// The readings seed the controls ONCE, then are only displayed. T rides along with every move, and
+// the platform settles a little off any target (pitch 0 reads -4.9, z 0 reads -1.1 mm), so pulling
+// readings back into T on each poll made every drag push the head further the same way - the
+// robot's own testbench never feeds a reading back into a command either.
+let tSeeded=false;
 function syncCtl(rs){
-  if(Date.now()-tGrabbed < 1500) return;
   const p=rs.pose_deg||{}, m=rs.pos_m||{};
+  lookSeed(rs);
+  const lv=document.getElementById('lookv');
+  if(lv&&p.pitch!=null) lv.textContent=`${p.pitch}° ${p.yaw}° ${p.roll}°`;
+  if(tSeeded||Date.now()-tGrabbed < 1500||m.z==null) return;
   const set=(id,lbl,v,unit)=>{const e=document.getElementById(id);
-    if(e&&document.activeElement!==e&&v!=null){e.value=v;
-      const b=document.getElementById(lbl); if(b) b.textContent=rcNum(v)+(unit||'');}};
-  if(p.roll!=null){ T.roll=p.roll*D2R; set('roll','rollv',T.roll,' rad'); }
-  if(p.pitch!=null) T.pitch=p.pitch*D2R;
-  if(p.yaw!=null)   T.yaw=p.yaw*D2R;
+    if(e&&v!=null){e.value=v; const b=document.getElementById(lbl); if(b) b.textContent=rcNum(v)+(unit||'');}};
   if(rs.body_yaw_deg!=null){ T.body_yaw=rs.body_yaw_deg*D2R; set('byaw','byawv',T.body_yaw,' rad'); }
-  if(m.x!=null) T.x=m.x; if(m.y!=null) T.y=m.y;
-  if(m.z!=null){ T.z=m.z; set('posZ','zv',T.z,''); }
+  // Position from what this panel last commanded when there is a record of it, as for Look.
+  const c=rs.cmd_pos_m;
+  if(c&&c.z!=null){ T.x=c.x||0; T.y=c.y||0; T.z=c.z; }
+  else { T.x=Math.round((m.x||0)*1000)/1000; T.y=Math.round((m.y||0)*1000)/1000; T.z=Math.round(m.z*1000)/1000; }
+  set('posZ','zv',T.z,'');
   const a=rs.antennas_deg;
   if(a&&a.length===2){ T.antennas=[a[0]*D2R,a[1]*D2R];
     set('antL','antLv',T.antennas[0],' rad'); set('antR','antRv',T.antennas[1],' rad'); }
-  const px=document.getElementById('padXY'), pp=document.getElementById('padPY');
+  const px=document.getElementById('padXY');
   if(px&&px._paint) px._paint();
-  if(pp&&pp._paint) pp._paint();
+  tSeeded=true;
+}
+
+// Head orientation, ported from the robot's own testbench app (reachy_mini_testbench): degree
+// sliders, and one smooth goto per move, sent when a slider is let go. The pad this replaces
+// streamed instant setpoints with yaw spread over +/-180 degrees - mostly beyond what the head can
+// do - which is why it felt unresponsive.
+const L = {pitch:0, yaw:0, roll:0, dur:0.8, seeded:false};
+
+function lookPaint(){
+  const put=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  put('lpv', L.pitch+'°'); put('lyv', L.yaw+'°'); put('lrv', L.roll+'°'); put('ldv', L.dur.toFixed(1)+' s');
+  for(const [id,k] of [['lpitch','pitch'],['lyaw','yaw'],['lroll','roll'],['ldur','dur']]){
+    const e=document.getElementById(id); if(e&&document.activeElement!==e) e.value=L[k];
+  }
+}
+
+// Start the sliders where the head was last COMMANDED from here; only when nothing has been
+// (a fresh porch-feed, or another app moved it) fall back to the reading. Once, not every poll.
+function lookSeed(rs){
+  if(L.seeded) return;
+  const src=rs.cmd_deg||rs.pose_deg; if(!src||src.pitch==null) return;
+  L.pitch=Math.round(src.pitch); L.yaw=Math.round(src.yaw||0); L.roll=Math.round(src.roll||0);
+  L.seeded=true; lookPaint();
+}
+
+async function lookSend(){
+  // T rides along with X/Y/Z moves, so it has to carry this orientation too or the next drag of
+  // the pad would turn the head back.
+  T.pitch=L.pitch*D2R; T.yaw=L.yaw*D2R; T.roll=L.roll*D2R; tTouch();
+  await postJSON('/api/reachy/pose', {pitch:L.pitch, yaw:L.yaw, roll:L.roll, z:T.z, duration:L.dur}, true);
+}
+
+function bindLook(id, key){
+  const el=document.getElementById(id); if(!el) return;
+  el.addEventListener('input',  ()=>{ L[key]=parseFloat(el.value); L.seeded=true; lookPaint(); });
+  el.addEventListener('change', ()=>{ L[key]=parseFloat(el.value); L.seeded=true; lookPaint();
+                                       if(key!=='dur') lookSend(); });
+}
+
+function lookPreset(which){
+  if(which==='up'){ L.pitch=-40; L.roll=0; T.z=0.018; }
+  else { L.pitch=0; L.yaw=0; L.roll=0; T.z=0; }
+  const z=document.getElementById('posZ'); if(z) z.value=T.z;
+  const zv=document.getElementById('zv'); if(zv) zv.textContent=rcNum(T.z);
+  L.seeded=true; lookPaint(); lookSend();
 }
 
 // ---------------------------------------------------------------- Moorebot Scouts
@@ -3657,15 +3738,19 @@ async function refreshApps(){
 function initCtl(){
   bindSlider('antL','antLv',null,' rad',0);
   bindSlider('antR','antRv',null,' rad',1);
-  bindSlider('roll','rollv','roll',' rad');
   bindSlider('byaw','byawv','body_yaw',' rad');
   bindSlider('posZ','zv','z','');
   bindPad('padXY','xyv','x','y',0.02,0.02,false);
-  // Pitch is positive downward, so the pad is inverted: drag up, look up.
-  bindPad('padPY','pyv','yaw','pitch',Math.PI,0.7,true);
+  bindLook('lpitch','pitch'); bindLook('lyaw','yaw'); bindLook('lroll','roll'); bindLook('ldur','dur');
+  lookPaint();
 }
 
-async function rq(url){ return post(url); }
+// Wake, Sleep, Centre and the like move the head themselves, so the live controls re-seed from the
+// next poll instead of steering back to where they were before the button.
+async function rq(url){
+  if(url.startsWith('/api/reachy/action/')){ tSeeded=false; L.seeded=false; }
+  return post(url);
+}
 // Tap the photo and/or the caption to select what to delete (feedSelect), then a single per-card
 // "Delete selected" button confirms and fires it. This is deliberately not an always-live button
 // under every card: the same accidental-tap-while-scrolling risk that motivated the Scout Controls
