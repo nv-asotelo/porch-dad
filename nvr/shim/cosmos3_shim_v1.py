@@ -8,6 +8,7 @@ bindings and serves every request against the warm, resident model.
 import asyncio
 import base64
 import json
+import math
 import os
 import re
 import sys
@@ -32,6 +33,11 @@ ENGINE_DIR = "/opt/tensorrt-edgellm/models/default"
 SHARED_CHECKPOINT_DIR = "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge/onnx/reasoning/llm"
 
 DATA_URL_RE = re.compile(r"^data:(?P<mime>[\w/+.-]+);base64,(?P<data>.+)$", re.DOTALL)
+
+# OpenAI's own ceiling for top_logprobs. The runtime would go to kMaxLogprobsK = 50, but its
+# top-K kernel makes one pass over the 131072-entry vocabulary per alternative, on every
+# generated token, so the cost grows with K - and no OpenAI client asks for more than 20.
+MAX_TOP_LOGPROBS = 20
 
 app = FastAPI()
 _lock = asyncio.Lock()
@@ -112,7 +118,30 @@ def health_ready():
     return JSONResponse({"status": "ready"})
 
 
-def _build_request(messages, max_tokens, temperature, top_p, top_k=50):
+def _logprobs_request(body):
+    """OpenAI `logprobs` / `top_logprobs` -> (num_logprobs for the runtime, top_logprobs to return).
+
+    (0, None) unless the client asks, and with 0 the request is built exactly as before: the
+    runtime only runs its per-token log-softmax and top-K pass when num_logprobs > 0, so
+    Frigate, porch-feed and the Live Vision UI keep both their responses and their latency.
+    A client that wants no alternatives still costs K = 1, because the chosen token's own
+    logprob is read out of that list.
+    """
+    want, top = body.get("logprobs"), body.get("top_logprobs")
+    if not want:
+        if top:
+            raise ValueError("top_logprobs needs logprobs: true")
+        return 0, None
+    if want is not True:
+        raise ValueError("logprobs must be true or false")
+    if top is None:
+        top = 0
+    if type(top) is not int or not 0 <= top <= MAX_TOP_LOGPROBS:
+        raise ValueError(f"top_logprobs must be an integer from 0 to {MAX_TOP_LOGPROBS}")
+    return max(1, top), top
+
+
+def _build_request(messages, max_tokens, temperature, top_p, top_k=50, num_logprobs=0):
     """Translate OpenAI-style messages into an LLMGenerationRequest."""
     images = []
     rt_messages = []
@@ -148,7 +177,50 @@ def _build_request(messages, max_tokens, temperature, top_p, top_k=50):
     req.temperature = float(temperature)
     req.top_p = float(top_p)
     req.top_k = int(top_k)
+    if num_logprobs:
+        # Only set when asked, so every other request is the one it always was.
+        req.num_logprobs = int(num_logprobs)
     return req
+
+
+def _lp_entry(e):
+    """One runtime LogprobEntry -> OpenAI's {token, logprob, bytes}, plus its token_id.
+
+    `piece` is the token's raw bytes, and in this byte-level vocabulary a token can be part of
+    a character - "Nidoran♀" tokenizes with the 3-byte "♀" split over two tokens. So `token`
+    is decoded with errors="replace" and is for display only; `bytes` is exact, and anything
+    that lines tokens up with the answer text has to use `bytes`. Special tokens, such as the
+    <|im_end|> that ends every answer, have an empty piece and are told apart by token_id.
+    A non-finite logprob becomes -9999.0, OpenAI's own value for "too unlikely to matter":
+    FastAPI refuses to serialise -inf, turning a good answer into a 500, and the SSE path
+    would write -Infinity, which JSON.parse rejects.
+    """
+    piece = bytes(e.piece)
+    lp = float(e.logprob)
+    return {"token": piece.decode("utf-8", "replace"),
+            "logprob": lp if math.isfinite(lp) else -9999.0,
+            "bytes": list(piece),
+            "token_id": int(e.token_id)}
+
+
+def _lp_content(token_ids, steps, top_logprobs):
+    """Runtime logprobs -> OpenAI logprobs.content, one entry per generated token.
+
+    steps[i] is the runtime's top-K list for token_ids[i], best first. Its values are the
+    log-softmax of the raw logits - temperature 1, before top-k/top-p, the OpenAI convention -
+    so they are the model's own confidence whatever the request decodes with. The chosen token
+    is looked up by id rather than assumed to be first: under greedy decoding (temperature 0
+    or top_k 1) it always is, but a sampled token can fall outside the top K, and then nothing
+    about it is known, so it gets null logprob and null bytes rather than a guess.
+    """
+    content = []
+    for tid, step in zip(token_ids, steps):
+        top = [_lp_entry(e) for e in step]
+        chosen = next((t for t in top if t["token_id"] == tid), None)
+        if chosen is None:
+            chosen = {"token": "", "logprob": None, "bytes": None, "token_id": int(tid)}
+        content.append({**chosen, "top_logprobs": top[:top_logprobs]})
+    return content
 
 
 @app.get("/v1/models")
@@ -160,7 +232,7 @@ def _sse(payload: dict) -> str:
     return "data: " + json.dumps(payload, separators=(",", ":")) + "\n\n"
 
 
-async def _stream_completion(req, body, t_start):
+async def _stream_completion(req, body, t_start, top_logprobs=None):
     """Server-sent events, for clients that will not accept a single JSON body.
 
     The Live Vision UI only ever sends stream=true and refuses anything that is not SSE, so
@@ -172,6 +244,10 @@ async def _stream_completion(req, body, t_start):
     on the same single-slot pool as before, while this coroutine pops chunks as they are
     produced. wait_pop is blocking, so it goes to the default executor rather than the
     inference pool - putting it on _pool would deadlock against the generation it is waiting on.
+
+    With logprobs asked for, each chunk carries the entries for exactly its own tokens: the
+    runtime's chunk.logprobs[i] belongs to chunk.token_ids[i], and a token holding part of a
+    character arrives in the same chunk as the token that completes it.
     """
     channel = rt.StreamChannel.create()
     channel.set_stream_interval(1)
@@ -206,11 +282,22 @@ async def _stream_completion(req, body, t_start):
                     continue
                 if getattr(chunk, "prompt_token_count", 0):
                     prompt_tok = chunk.prompt_token_count
+                lp = None
+                if top_logprobs is not None:
+                    lp = {"content": _lp_content(chunk.token_ids, chunk.logprobs, top_logprobs)}
                 if chunk.text:
                     if first_text_at is None:
                         first_text_at = time.monotonic()
                     gen_tok += len(chunk.token_ids) if chunk.token_ids else 1
-                    yield _sse({**head, "choices": [{"index": 0, "delta": {"content": chunk.text},
+                    choice = {"index": 0, "delta": {"content": chunk.text}, "finish_reason": None}
+                    if lp is not None:
+                        choice["logprobs"] = lp
+                    yield _sse({**head, "choices": [choice]})
+                elif lp and lp["content"]:
+                    # Tokens with no text of their own - the <|im_end|> that ends the answer -
+                    # still ship, on an empty delta, so the stream's entries add up to exactly
+                    # the list a non-streaming request gets.
+                    yield _sse({**head, "choices": [{"index": 0, "delta": {}, "logprobs": lp,
                                                      "finish_reason": None}]})
                 if chunk.finished:
                     if getattr(chunk, "reason", None) == rt.FinishReason.LENGTH:
@@ -246,8 +333,11 @@ async def _stream_completion(req, body, t_start):
             yield "data: [DONE]\n\n"
             elapsed = (time.time() - t_start) * 1000.0
             mspt = (elapsed / gen_tok) if gen_tok else float("nan")
+            # Tagged so logprobs requests, which cost a little more per token, can be told
+            # apart in the journal; untagged lines are exactly what they always were.
+            lp_tag = f" logprobs={req.num_logprobs}" if top_logprobs is not None else ""
             print(f"[perf] stream elapsed_ms={elapsed:.0f} prompt_tok={prompt_tok} "
-                  f"gen_tok={gen_tok} ms_per_tok={mspt:.1f}", flush=True)
+                  f"gen_tok={gen_tok} ms_per_tok={mspt:.1f}{lp_tag}", flush=True)
         finally:
             if not channel.is_finished():
                 channel.cancel()
@@ -262,18 +352,20 @@ async def chat_completions(request: Request):
     _t_start = time.time()
     body = await request.json()
     try:
+        num_logprobs, top_logprobs = _logprobs_request(body)
         req = _build_request(
             body.get("messages", []),
             body.get("max_tokens", 256),
             body.get("temperature", 0.7),
             body.get("top_p", 0.95),
             body.get("top_k", 50),
+            num_logprobs,
         )
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": {"message": f"bad request: {e}"}})
 
     if body.get("stream"):
-        return await _stream_completion(req, body, _t_start)
+        return await _stream_completion(req, body, _t_start, top_logprobs)
 
     loop = asyncio.get_running_loop()
     async with _lock:
@@ -291,8 +383,9 @@ async def chat_completions(request: Request):
     try:
         _elapsed_ms = (time.time() - _t_start) * 1000.0
         _mspt = (_elapsed_ms / _gen) if _gen else float("nan")
+        _lp_tag = f" logprobs={req.num_logprobs}" if top_logprobs is not None else ""
         print(f"[perf] elapsed_ms={_elapsed_ms:.0f} prompt_tok={_prompt} "
-              f"gen_tok={_gen} ms_per_tok={_mspt:.1f}", flush=True)
+              f"gen_tok={_gen} ms_per_tok={_mspt:.1f}{_lp_tag}", flush=True)
     except Exception as _e:
         print(f"[perf] instrumentation error: {_e}", flush=True)
     reason = "stop"
@@ -302,14 +395,20 @@ async def chat_completions(request: Request):
     except Exception:
         pass
 
+    choice = {"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": reason}
+    if top_logprobs is not None:
+        # One entry per generated token, the closing <|im_end|> included. Each property read
+        # copies the whole nested vector out of C++, so each is read once.
+        ids, steps = resp.output_ids, resp.logprobs
+        choice["logprobs"] = {"content": _lp_content(ids[0] if ids else [],
+                                                     steps[0] if steps else [], top_logprobs)}
+
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": MODEL_ID,
-        "choices": [
-            {"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": reason}
-        ],
+        "choices": [choice],
         "usage": {
             "prompt_tokens": _prompt,
             "completion_tokens": _gen,
