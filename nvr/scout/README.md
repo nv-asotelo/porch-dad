@@ -261,6 +261,34 @@ step on the robot itself -
    only way a future loss on another unit stays recoverable - copy the binaries across (matching
    `/var/roller_eye/config/version`) rather than depending on the app a second time.
 
+## Restored 2026-10-03, from a third unit
+
+A third Scout arrived with the official app still working and the same build
+(`01_HW32_MO200A_020150`, package `roller-eye` 1.0). Rule 4 was followed before anything else touched
+it: a read-only backup streamed off it to the Orin, verified file by file against checksums taken on
+the robot (`/home/orin/backups/scout/new-unit-*`). The two deployed units were then backed up the same
+way (`deployed-robot-room-*`, `deployed-first-floor-*`) before any change.
+
+`dpkg -V roller-eye` showed exactly what the earlier incident removed from both, identically: the eight
+binaries `app_node`, `cloud_node`, `s3_node`, `upgrader_node`, `test_aplay`, `test_backup`,
+`test_motor_node` and `test_vendor_storage` in `/opt/ros/melodic/lib/roller_eye/`, and
+`/var/roller_eye/config/p2p_user`. Without `p2p_user`, `app_node` and `cloud_node` exit at start
+(`config[/var/roller_eye/config/p2p_user] not exist`) and respawn forever. `p2p_user` is a package
+file - dpkg records one fixed md5 for it, and the new unit's copy matched it - so it is the same on
+every unit, not a credential. Those nine files were copied from the new unit's backup after each
+matched dpkg's own md5sums, only where the path was absent, owner `1000:1000`, then `roller_eye` was
+restarted. `dpkg -V` on both now lists only `/etc/iqfiles/ps5268_default_default.xml`, which differs
+on the new unit too (camera tuning). `p2p_auth` and `p2p_passwd` are not package files; they are
+each robot's own pairing credentials, so they were not copied - pairing in the app creates them.
+
+**Restart `roller_eye` only right after a boot, or reboot instead.** Once `app_node` runs, the vendor
+stack renames the robot at runtime to its MAC address (`/etc/hostname` keeps `linaro-alip`), and
+`/usr/sbin/roller_eye-start` exports `ROS_HOSTNAME=$(hostname)`. A restart after the rename launches ROS
+under a name that nothing resolves - not the robot's own `/etc/hosts`, not the bridges' `extra_hosts`
+(`linaro-alip`) - and every topic stops (`couldn't resolve publisher host`). A reboot starts from
+`/etc/hostname`, as does `hostname linaro-alip` followed by the restart, which is what fixed the
+first-floor unit.
+
 ## Recovering a used (eBay) unit to factory defaults, and its role: test bench, not a third feed
 
 This third Scout is **not** going into the fleet as a third live camera - that would mean a third
