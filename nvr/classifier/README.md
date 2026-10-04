@@ -51,7 +51,16 @@ found its evidence, and the page says so beside it:
 - **Bierny: Grad-CAM** for the top species at the last convolution (7×7). Its head is global average
   pooling then one linear layer, so the channel weights are that species' row of the linear layer.
 
-Both are computed inside the exported ONNX graph, so the Orin needs no PyTorch. Each map is scaled
+Both are computed inside the exported ONNX graph, so the Orin needs no PyTorch.
+
+With a Name the Pokémon preset selected, the page also turns the map into one dashed box or point
+(`saliencyLocation` in `nvr/ui/web/app.js`): threshold relative to the peak, bilinear upsampling, the
+connected region holding the peak (Skshmjn) or every positive region (Bierny), and that region's
+extent and weighted centre. Its parameters were tuned on the 189 samples against Cosmos3-Edge's own
+boxes, a pseudo-reference: Skshmjn median IoU 0.74 (0.74 held out), point inside the Cosmos box 99%;
+Bierny 0.41 (0.38 held out), point inside 76% - barely better than a centred box (0.31), as a 7x7
+Grad-CAM of a top class that is often wrong would suggest. An estimate of where the evidence is, not
+a detection; the page says so under the picture. Each map is scaled
 to 0-1 and drawn over the picture the classifier was sent, brighter and more opaque where the
 evidence is stronger.
 

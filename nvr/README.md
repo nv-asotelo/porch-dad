@@ -1206,6 +1206,22 @@ the selected classifier over all of them and read its top-1 and top-5 score as t
 Samples are classified from the server's copy of each file, so the score does not depend on the
 browser's capture settings.
 
+**Name the Pokémon presets.** Two quick presets, after the Live VLM WebUI ones, ask for the species
+and a box or a point. Cosmos3-Edge answers with JSON - `{"name": ..., "bbox_2d": [x1, y1, x2, y2]}` or
+`"point_2d": [x, y]`, normalized 0-1000 over the picture it was sent - which the page parses
+tolerantly (first value of a repeated key, fences, lists and cut-off answers; checked against 378 real
+answers) and draws over the picture, the caption reading "Pikachu · 72%". The percentage is the
+model's own probability for the name it wrote: the presets decode greedily and ask the shim for
+per-token logprobs (`logprobs`, `top_logprobs`; nvr/shim, `47ca180`), and the name's tokens are
+multiplied. It is a probability of that exact spelling, not calibrated. The presets are worded from a
+measured comparison of eleven prompts on the 189 samples; Cosmos3-Edge names the species on 35 of them
+(18.5%; 33 of the 120 Gen-1 images, 2 of the other 69). Through the page's own captures a run scored
+32/189, its probability averaging 60% on right answers and 10% on wrong ones.
+
+A classifier answers the same presets with its species and a box or point derived from its saliency
+map, drawn dashed and labelled as an estimate (classifier/README.md, "What the overlay shows"); the
+other presets are disabled while a classifier is selected.
+
 ### Piper
 
 Live Vision's Piper is separate from porch-feed's, which

@@ -51,6 +51,8 @@ except ImportError:
     Reachy = None
 MAX_BODY = 2 * 1024 * 1024
 MAX_RESPONSE = 1024 * 1024
+# Per-token alternatives a page may ask the model for (the Name-the-Pokémon presets ask for 1).
+MAX_TOP_LOGPROBS = 5
 MAX_SECONDS = 120
 GENERATION_LOCK = threading.Lock()
 GENERATION_WAIT_LOCK = threading.Lock()
@@ -249,7 +251,7 @@ def validate_request(payload):
     if not isinstance(payload, dict):
         raise ValueError("Expected a JSON object.")
     allowed = {"model", "messages", "stream", "temperature", "max_tokens", "top_p", "stream_options",
-               "max_image_tokens_per_image"}
+               "max_image_tokens_per_image", "logprobs", "top_logprobs"}
     if "seed" in payload:
         raise ValueError("Upstream TensorRT-Edge-LLM does not support seed. Use temperature 0.")
     if set(payload) - allowed or payload.get("stream") is not True:
@@ -267,6 +269,11 @@ def validate_request(payload):
     if "max_image_tokens_per_image" in payload and (type(payload["max_image_tokens_per_image"]) is not int
             or not 4 <= payload["max_image_tokens_per_image"] <= 512):
         raise ValueError("Image token budget must be an integer from 4 to 512.")
+    if "logprobs" in payload and not isinstance(payload["logprobs"], bool):
+        raise ValueError("logprobs must be true or false.")
+    if "top_logprobs" in payload and (type(payload["top_logprobs"]) is not int or payload.get("logprobs") is not True
+                                      or not 0 <= payload["top_logprobs"] <= MAX_TOP_LOGPROBS):
+        raise ValueError(f"top_logprobs must be 0 to {MAX_TOP_LOGPROBS}, with logprobs true.")
     if "stream_options" in payload:
         options = payload["stream_options"]
         if not isinstance(options, dict) or set(options) != {"include_usage"} or options["include_usage"] is not True:

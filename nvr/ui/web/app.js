@@ -46,6 +46,178 @@ const PROMPT_PRESETS = [
   }
 ];
 
+// This repo's own quick presets, after the Live VLM WebUI ones: name the Pokémon and locate it.
+// Cosmos3-Edge answers them with JSON (parseGrounding) and per-token logprobs (nameProbability); a
+// classifier answers them with its top species and a location derived from its saliency map
+// (saliencyLocation). "locate" says which mark the preset draws.
+const POKEMON_PRESETS = [
+  {label: "🔎 Name the Pokémon · box", locate: "box",
+    prompt: "Which Pokémon is this? Reply with only a JSON object with \"name\" (its English name) and \"bbox_2d\" (its bounding box [x1, y1, x2, y2])."},
+  {label: "🔎 Name the Pokémon · point", locate: "point",
+    prompt: "Which Pokémon is this? Reply with only a JSON object with \"name\" (its English name) and \"point_2d\" (a point [x, y] on it)."},
+];
+// Per generated token, the shim's top alternatives with their logprobs (log-softmax of the raw logits).
+// The presets decode greedily, so the chosen token is the first; 5 keeps it in the list through ties.
+const POKEMON_TOP_LOGPROBS = 5;
+
+function pokemonPreset(prompt) {
+  return POKEMON_PRESETS.find(preset => preset.prompt === prompt) ?? null;
+}
+
+// Where a classifier's evidence is: ONE box [x1, y1, x2, y2] and ONE point [x, y], normalized 0-1
+// over the picture it was sent, from its saliency grid ({w, h, cells}, row-major, scaled to its peak),
+// or null when the grid is all zero or flat. Deterministic:
+//  1. peak = first maximum cell; threshold T = base + threshold x (max - base), base 0 ("max") or the
+//     smallest cell ("range", for attention rollout, which never reaches 0).
+//  2. Bilinear upsampling by an odd factor (align_corners=false, edge-clamped: what the overlay's
+//     smoothed drawImage shows), so one sample sits on each cell centre.
+//  3. Keep samples >= T: the 4- or 8-connected component holding the peak ("peak"), the largest one
+//     ("largest"), or all of them ("all").
+//  4. box = their extent, grown or shrunk by `pad` cells per side; point = the peak cell's centre, or
+//     the centroid weighted by value ("centroid") or by how far each exceeds T ("excess").
+// An estimate of where the evidence is, not a detection. Tuned on the 189-image sample set against
+// Cosmos3-Edge's boxes (a pseudo-reference): Skshmjn median IoU 0.74, point inside the Cosmos box 99%;
+// Bierny (a coarse 7x7 Grad-CAM) median IoU 0.41, point inside 76%.
+const SALIENCY_LOCATION_PARAMS = Object.freeze({
+  skshmjn: Object.freeze({threshold: 0.35, relative: "range", upsample: 9, connectivity: 4,
+    component: "peak", pad: -0.25, point: "excess"}),
+  bierny: Object.freeze({threshold: 0.05, relative: "max", upsample: 9, connectivity: 4,
+    component: "all", pad: -0.5, point: "centroid"}),
+});
+const SALIENCY_LOCATION_DEFAULT = Object.freeze({threshold: 0.5, relative: "max", upsample: 9,
+  connectivity: 4, component: "peak", pad: 0, point: "centroid"});
+const NEIGHBOURS = {
+  4: [[0, -1], [-1, 0], [1, 0], [0, 1]],
+  8: [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]],
+};
+
+function checkParams(p) {
+  const ok = p && typeof p === "object" &&
+    typeof p.threshold === "number" && p.threshold > 0 && p.threshold < 1 &&
+    (p.relative === "max" || p.relative === "range") &&
+    Number.isInteger(p.upsample) && p.upsample >= 1 && p.upsample <= 15 && p.upsample % 2 === 1 &&
+    (p.connectivity === 4 || p.connectivity === 8) &&
+    (p.component === "peak" || p.component === "largest" || p.component === "all") &&
+    typeof p.pad === "number" && Number.isFinite(p.pad) && Math.abs(p.pad) <= 2 &&
+    (p.point === "peak" || p.point === "centroid" || p.point === "excess");
+  if (!ok) throw new TypeError("saliencyLocation: invalid params");
+}
+
+// Sample k of an axis upsampled S times: the two cells it blends and the second one's weight (an
+// integer numerator, so this matches the Python reference bit for bit).
+function axisSample(k, size, S) {
+  const num = 2 * k + 1 - S;
+  let i0 = Math.floor(num / (2 * S));
+  let f = (num - 2 * S * i0) / (2 * S);
+  if (i0 < 0) { i0 = 0; f = 0; }
+  if (i0 >= size - 1) { i0 = size - 1; f = 0; }
+  return [i0, Math.min(i0 + 1, size - 1), f];
+}
+
+function upsampleField(cells, w, h, S) {
+  const W = w * S, H = h * S, field = new Float64Array(W * H);
+  const xs = [], ys = [];
+  for (let k = 0; k < W; k++) xs.push(axisSample(k, w, S));
+  for (let k = 0; k < H; k++) ys.push(axisSample(k, h, S));
+  for (let yi = 0; yi < H; yi++) {
+    const [y0, y1, fy] = ys[yi];
+    for (let xi = 0; xi < W; xi++) {
+      const [x0, x1, fx] = xs[xi];
+      const a = cells[y0 * w + x0], b = cells[y0 * w + x1], c = cells[y1 * w + x0], d = cells[y1 * w + x1];
+      field[yi * W + xi] = (1 - fy) * ((1 - fx) * a + fx * b) + fy * ((1 - fx) * c + fx * d);
+    }
+  }
+  return field;
+}
+
+// Label every connected set of samples >= T, starting scans in row-major order. {label (-1 outside), sizes}.
+function labelComponents(field, W, H, T, connectivity) {
+  const n = W * H, label = new Int32Array(n).fill(-1), stack = new Int32Array(n), sizes = [];
+  const offs = NEIGHBOURS[connectivity];
+  for (let start = 0; start < n; start++) {
+    if (!(field[start] >= T) || label[start] >= 0) continue;
+    const lab = sizes.length;
+    let top = 0, size = 0;
+    label[start] = lab; stack[top++] = start;
+    while (top > 0) {
+      const i = stack[--top];
+      size += 1;
+      const x = i % W, y = (i - x) / W;
+      for (const [dx, dy] of offs) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const j = ny * W + nx;
+        if (field[j] >= T && label[j] < 0) { label[j] = lab; stack[top++] = j; }
+      }
+    }
+    sizes.push(size);
+  }
+  return {label, sizes};
+}
+
+function saliencyLocation(saliency, params = SALIENCY_LOCATION_DEFAULT) {
+  checkParams(params);
+  const {w, h, cells} = saliency || {};
+  if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > 64 || h > 64 ||
+      !cells || cells.length !== w * h) throw new TypeError("saliencyLocation: invalid saliency grid");
+  const n = w * h;
+  for (let i = 0; i < n; i++) {
+    if (typeof cells[i] !== "number" || !Number.isFinite(cells[i])) throw new TypeError("saliencyLocation: invalid saliency grid");
+  }
+  let peak = 0, vmax = cells[0], vmin = cells[0];
+  for (let i = 1; i < n; i++) {
+    const v = cells[i];
+    if (v > vmax) { vmax = v; peak = i; }
+    if (v < vmin) vmin = v;
+  }
+  if (!(vmax > 0) || vmax === vmin) return null;
+  const base = params.relative === "range" ? vmin : 0;
+  const T = base + params.threshold * (vmax - base);
+  const S = params.upsample, W = w * S, H = h * S;
+  const field = S > 1 ? upsampleField(cells, w, h, S) : Float64Array.from(cells);
+  const seed = ((peak - (peak % w)) / w * S + (S - 1) / 2) * W + (peak % w) * S + (S - 1) / 2;
+  const {label, sizes} = labelComponents(field, W, H, T, params.connectivity);
+  if (label[seed] < 0) return null;
+  let keep = null;
+  if (params.component === "peak") keep = label[seed];
+  else if (params.component === "largest") {
+    keep = label[seed];
+    for (let lab = 0; lab < sizes.length; lab++) if (sizes[lab] > sizes[keep]) keep = lab;
+  }
+  let xmin = W, ymin = H, xmax = -1, ymax = -1, sv = 0, sx = 0, sy = 0;
+  const excess = params.point === "excess";
+  for (let i = 0; i < W * H; i++) {
+    if (keep === null ? label[i] < 0 : label[i] !== keep) continue;
+    const x = i % W, y = (i - x) / W;
+    if (x < xmin) xmin = x;
+    if (x > xmax) xmax = x;
+    if (y < ymin) ymin = y;
+    if (y > ymax) ymax = y;
+    const wt = excess ? field[i] - T : field[i];
+    sv += wt; sx += wt * (x + 0.5); sy += wt * (y + 0.5);
+  }
+  const pad = params.pad, clamp = v => Math.min(1, Math.max(0, v));
+  const box = [clamp((xmin / S - pad) / w), clamp((ymin / S - pad) / h),
+    clamp(((xmax + 1) / S + pad) / w), clamp(((ymax + 1) / S + pad) / h)];
+  const point = params.point === "peak" || !(sv > 0)
+    ? [((peak % w) + 0.5) / w, ((peak - (peak % w)) / w + 0.5) / h]
+    : [sx / sv / W, sy / sv / H];
+  return {box, point};
+}
+
+// A Name-the-Pokémon answer from Cosmos3-Edge: each grounding item with the probability of the name
+// it wrote, a caption, and overlay marks. Null when the answer holds no grounding JSON.
+function readPokemonAnswer(text, logprobs) {
+  const items = parseGrounding(text);
+  if (!items) return null;
+  const percent = p => p === null ? "" : ` ${percentText(p)}`;
+  const read = items.map(item => ({...item, probability: item.name ? nameProbability(logprobs, item.name) : null}));
+  return {items: read,
+    caption: read.map(item => `${item.name ?? "No name given"}${item.probability === null ? "" : ` ·${percent(item.probability)}`}`).join("\n"),
+    marks: read.filter(item => item.box || item.point).map(item => ({box: item.box, point: item.point,
+      label: `${item.name ?? "?"}${percent(item.probability)}`, derived: false}))};
+}
+
 const CAPTURE_PRESETS = {
   "live-vlm": {cameraConstraints: {width: {ideal: 1280}, height: {ideal: 720}},
     temperature: 0.7, jpegQuality: 0.75, maxSide: null},
@@ -311,6 +483,7 @@ function readCompletionEvent(event) {
     throw new Error(`Backend ended generation with status: ${finishReason}.`);
   }
   return {text: choice?.delta?.content, finishReason,
+    ...(Array.isArray(choice?.logprobs?.content) ? {logprobs: choice.logprobs.content} : {}),
     ...(Object.hasOwn(data, "cosmos_metrics") ? {metrics: data.cosmos_metrics} : {})};
 }
 
@@ -528,8 +701,12 @@ function readClassification(value) {
     inferenceMs: typeof inference === "number" && Number.isFinite(inference) ? inference : null};
 }
 
+function percentText(p) {
+  return `${p >= 0.1 ? Math.round(p * 100) : (p * 100).toFixed(1)}%`;
+}
+
 function describeClassification(result) {
-  const percent = p => `${p >= 0.1 ? Math.round(p * 100) : (p * 100).toFixed(1)}%`;
+  const percent = percentText;
   const [best, ...rest] = result.topk;
   const runnersUp = rest.map((r, i) => `${i + 2}. ${speciesName(r.species, r.label)} ${percent(r.score)}`).join(" · ");
   return `${speciesName(best.species, best.label)} · ${percent(best.score)}${runnersUp ? `\n${runnersUp}` : ""}`;
@@ -557,6 +734,81 @@ function heatColor(value) {
   return HEAT_STOPS[i].map((c, k) => Math.round(c + (HEAT_STOPS[i + 1][k] - c) * t));
 }
 
+// A species name as a canonical identifier, the way the sample set and the classifiers spell
+// species: "Mr. Mime" -> "mr-mime", "Nidoran♀" -> "nidoran-f", "Farfetch'd" -> "farfetchd".
+function speciesKey(name) {
+  if (typeof name !== "string") return null;
+  const key = name.trim().replace(/♀/g, "-f").replace(/♂/g, "-m").normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "").toLowerCase().replace(/['’.]/g, "").replace(/:/g, "-")
+    .replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return key || null;
+}
+
+// 2D grounding in a Name-the-Pokémon answer: the first name and the first box or point Cosmos3-Edge
+// wrote, as [{name, box, point}], or null. A plain JSON.parse fails on about 1 answer in 20 (extra
+// "]]", a second object after the first, a cut-off answer) and keeps the LAST of a duplicated key,
+// where the model's first is the one it meant. So this reads values directly: the first "name" (or
+// "label", "species") string, and the first array of 4 (box) or 2 (point) numbers after the first
+// "bbox_2d" (or "point_2d") key - inside nested objects too; "bbox_2d": null means no box. Fences,
+// lists and pretty-printing make no difference. Coordinates are normalized 0-1000 from the top-left
+// of the picture sent, whatever the prompt asks for (measured), and come back as 0-1 fractions.
+function parseGrounding(text) {
+  if (typeof text !== "string") return null;
+  const body = text.replace(/```[A-Za-z]*/g, "");
+  let name = null;
+  const nameMatch = /"(?:name|label|species)"\s*:\s*"((?:[^"\\]|\\.)*)"/i.exec(body);
+  if (nameMatch) {
+    try { name = JSON.parse(`"${nameMatch[1]}"`); } catch (_) { name = nameMatch[1]; }
+    name = name.trim().replace(/^[\s"'`]+|[\s"'`.]+$/g, "") || null;
+  }
+  const number = "\\s*(-?\\d+(?:\\.\\d+)?)\\s*";
+  const coords = (keys, n) => {
+    const key = new RegExp(`"(?:${keys})"\\s*:\\s*(null)?`, "i").exec(body);
+    if (!key || key[1]) return null;
+    const array = new RegExp(`\\[${Array(n).fill(number).join(",")}\\]`).exec(body.slice(key.index + key[0].length));
+    return array ? array.slice(1).map(c => Math.min(1, Math.max(0, Number(c) / 1000))) : null;
+  };
+  let box = coords("bbox_2d|bbox|box", 4);
+  if (box && (box[2] <= box[0] || box[3] <= box[1])) box = null;
+  const point = coords("point_2d|point", 2);
+  return name || box || point ? [{name, box, point}] : null;
+}
+
+// How likely the model thought the name it wrote was: the product of its tokens' probabilities,
+// from OpenAI-style per-token logprobs ({token, logprob, bytes}). The name's span is found in the
+// text the tokens spell; a token that straddles the span's edge (one carrying the opening quote,
+// say) counts whole, so this errs low. Null when the logprobs do not spell out the name.
+function nameProbability(content, name) {
+  if (!Array.isArray(content) || !content.length || typeof name !== "string" || !name) return null;
+  // A chosen token outside the returned top-K comes back with bytes and logprob null (sampling).
+  if (content.some(entry => entry?.bytes === null || entry?.logprob === null)) return null;
+  const encoder = new TextEncoder();
+  const pieces = content.map(entry => Array.isArray(entry?.bytes) ? Uint8Array.from(entry.bytes)
+    : encoder.encode(typeof entry?.token === "string" ? entry.token : ""));
+  const all = new Uint8Array(pieces.reduce((n, p) => n + p.length, 0));
+  let offset = 0;
+  const spans = pieces.map(p => { all.set(p, offset); const span = [offset, offset + p.length]; offset += p.length; return span; });
+  const text = new TextDecoder().decode(all);
+  const found = text.indexOf(name);
+  if (found < 0) return null;
+  const from = encoder.encode(text.slice(0, found)).length, to = from + encoder.encode(name).length;
+  let logprob = 0, used = 0;
+  content.forEach((entry, i) => {
+    if (spans[i][1] > from && spans[i][0] < to && typeof entry?.logprob === "number" && Number.isFinite(entry.logprob)) {
+      logprob += entry.logprob; used += 1;
+    }
+  });
+  return used ? Math.exp(logprob) : null;
+}
+
+// A Name-the-Pokémon answer as a sample result, in the classifiers' shape: the first name it gave as
+// the ranking's only entry, scored by that name's probability (null without logprobs).
+function cosmosResult(named) {
+  const item = named?.items.find(entry => entry.name) ?? null;
+  const entry = {species: item ? speciesKey(item.name) : null, label: item?.name ?? "", score: item?.probability ?? null};
+  return {...entry, topk: [entry], cosmos: true};
+}
+
 // Score of a sample run: rows of {truth, covered (false when the model cannot name that species
 // at all), ranked: [species, ...] best first}.
 function scoreSamples(rows) {
@@ -569,7 +821,7 @@ function scoreSamples(rows) {
   return score;
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, POKEMON_PRESETS, pokemonPreset, saliencyLocation, SALIENCY_LOCATION_PARAMS, readPokemonAnswer, cosmosResult, percentText};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -741,14 +993,25 @@ if (typeof document !== "undefined") {
     option.value = preset.prompt; option.textContent = preset.label;
     $("promptPreset").append(option);
   }
+  const pokemonGroup = document.createElement("optgroup");
+  pokemonGroup.label = "Pokémon · Cosmos3-Edge and the classifiers";
+  for (const preset of POKEMON_PRESETS) {
+    const option = document.createElement("option");
+    option.value = preset.prompt; option.textContent = preset.label;
+    pokemonGroup.append(option);
+  }
+  $("promptPreset").append(pokemonGroup);
   function matchPromptPreset() {
     $("promptPreset").value = PROMPT_PRESETS.some(preset => preset.prompt === $("prompt").value)
       ? $("prompt").value : "";
   }
   $("promptPreset").addEventListener("change", () => {
     if ($("promptPreset").value) $("prompt").value = $("promptPreset").value;
+    if (pokemonPreset($("prompt").value) && Number($("maxTokens").value) < 96) $("maxTokens").value = "96";
+    resetSampleResults();
+    controls();
   });
-  $("prompt").addEventListener("input", matchPromptPreset);
+  $("prompt").addEventListener("input", () => { matchPromptPreset(); resetSampleResults(); controls(); });
   matchPromptPreset();
   function error(message = "") { $("error").textContent = message; $("error").hidden = !message; }
   function controls() {
@@ -759,14 +1022,24 @@ if (typeof document !== "undefined") {
       ? (state.source === "reachy" ? reachyFrameReady() : Boolean(state.media && $("video").readyState >= 2))
       : Boolean(state.imageURL);
     $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid || switchingEngine();
-    for (const id of ["prompt", "promptPreset", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"]) {
+    for (const id of ["prompt", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"]) {
       $(id).disabled = Boolean(state.policy) || state.kind === "classifier" || switchingEngine();
     }
+    // A classifier has no prompt, but the Name-the-Pokémon presets say what it returns: its
+    // species, plus a box or point derived from its saliency map.
+    $("promptPreset").disabled = Boolean(state.policy) || switchingEngine();
+    for (const option of $("promptPreset").querySelectorAll("option")) {
+      option.disabled = state.kind === "classifier" && option.value !== "" && !pokemonPreset(option.value);
+    }
     for (const id of ["lightweightPreset", "liveVlmPreset"]) $(id).disabled = Boolean(state.policy) || switchingEngine();
-    $("overlayToggleButton").hidden = state.kind !== "classifier";
+    const pokemon = pokemonPreset($("prompt").value.trim());
+    $("overlayToggleButton").hidden = state.kind !== "classifier" && !pokemon;
     $("overlayToggleButton").setAttribute("aria-pressed", String(state.overlays));
     $("overlayToggleButton").textContent = `Saliency overlay: ${state.overlays ? "On" : "Off"}`;
-    $("sampleRunAll").disabled = state.kind !== "classifier" || !state.ready || state.busy || switchingEngine() || !samples.list.length;
+    $("sampleRunAll").disabled = !(state.kind === "classifier" || pokemon) || !state.ready || state.busy ||
+      switchingEngine() || !samples.list.length;
+    $("sampleRunAll").title = state.kind === "classifier" || pokemon ? ""
+      : "Choose a Name the Pokémon quick preset to score Cosmos3-Edge on the sample set";
     $("sampleStop").hidden = !samples.run;
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
@@ -948,6 +1221,7 @@ if (typeof document !== "undefined") {
     const policy = state.policy;
     const prompt = policy?.prompt ?? $("prompt").value.trim();
     const maxTokens = policy?.max_tokens ?? Number($("maxTokens").value);
+    const pokemon = policy ? null : pokemonPreset(prompt);
     if (!prompt || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 512) {
       error("Enter a prompt and an output token limit from 1 to 512.");
       if (!keepSource) stop();
@@ -959,7 +1233,7 @@ if (typeof document !== "undefined") {
     try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
     if (policy) advanced = {topP: 1, imageTokens: policy.image_tokens};
     const timingGroup = state.timingGroup;
-    const temperature = policy?.temperature ?? CAPTURE_PRESETS[state.preset].temperature;
+    const temperature = policy?.temperature ?? (pokemon ? 0 : CAPTURE_PRESETS[state.preset].temperature);
     const ticket = engineRequests.begin(), controller = ticket.controller;
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
@@ -975,11 +1249,13 @@ if (typeof document !== "undefined") {
       if (counted) state.sampled += 1;
       const started = performance.now();
       let firstToken = null, done = false, output = "", finishReason = null, serverMetrics = null;
+      const tokenLogprobs = [];
       const response = await fetch("/v1/chat/completions", {
         method: "POST", headers: {"Content-Type": "application/json"}, signal: controller.signal,
         body: JSON.stringify({model: state.model, stream: true, temperature,
           top_p: advanced.topP, max_image_tokens_per_image: advanced.imageTokens,
           stream_options: {include_usage: true},
+          ...(pokemon ? {logprobs: true, top_logprobs: POKEMON_TOP_LOGPROBS} : {}),
           max_tokens: maxTokens, messages: [{role: "user", content: [
             {type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}
           ]}]})
@@ -998,6 +1274,7 @@ if (typeof document !== "undefined") {
         const completion = readCompletionEvent(event);
         if (completion.done) { done = true; return; }
         if (Object.hasOwn(completion, "metrics")) serverMetrics = completion.metrics;
+        if (completion.logprobs) tokenLogprobs.push(...completion.logprobs);
         if (completion.finishReason) finishReason = completion.finishReason;
         const text = completion.text;
         if (typeof text === "string" && text.length) {
@@ -1037,11 +1314,27 @@ if (typeof document !== "undefined") {
       }
       $("runStatus").textContent = finishReason === "length" ? "Output token limit reached" : "Answer complete";
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
+      // A Name-the-Pokémon answer is JSON: show the name and how likely the model found it, draw
+      // its box or point, and keep the raw answer one hover away.
+      let spoken = output;
+      const named = pokemon ? readPokemonAnswer(output, tokenLogprobs) : null;
+      $("answer").title = named ? output : "";
+      if (named) {
+        $("answer").textContent = named.caption;
+        spoken = named.items.map(item => item.name).filter(Boolean).join(", ") || output;
+        overlay = named.marks.length ? {natural: image.natural, sent: image.sent, marks: named.marks} : null;
+        drawOverlay();
+        const sample = source === $("uploadedImage") ? state.sampleId : null;
+        const key = `${state.model}|${prompt}`;
+        if (sample && samples.byId.has(sample) && (samples.model === null || samples.model === key)) {
+          samples.model = key; samples.results.set(sample, cosmosResult(named)); renderSampleTiles();
+        }
+      }
       // speakText() itself no-ops while a previous utterance is still in flight (see its own
       // "speaking" guard below), which is exactly the behaviour wanted here: a caption that lands
       // while Reachy is still speaking the last one is skipped, not queued, so auto-speak tracks
       // captioning as closely as the selected rate allows without ever building a backlog.
-      if (autoSpeak) speakText(output);
+      if (autoSpeak) speakText(spoken);
     } catch (err) {
       if (state.abort !== controller) return;
       const skipped = trigger === "live" ? skippedSampleReason(err) : null;
@@ -1075,6 +1368,10 @@ if (typeof document !== "undefined") {
   // exactly as a sample-set run does, rather than a re-encoded capture of it.
   async function classify(source, trigger = "manual", sampleId = null) {
     if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return null; }
+    // A Name-the-Pokémon preset needs the saliency map even with the overlay off: it is where the
+    // box or point comes from.
+    const pokemon = pokemonPreset($("prompt").value.trim());
+    const saliency = state.overlays || Boolean(pokemon);
     const keepSource = trigger === "live" && state.source === "reachy";
     const timingGroup = state.timingGroup;
     const ticket = engineRequests.begin(), controller = ticket.controller;
@@ -1088,7 +1385,7 @@ if (typeof document !== "undefined") {
       if (sampleId) {
         const shown = $("uploadedImage"), width = shown.naturalWidth, height = shown.naturalHeight;
         placement = {natural: {width, height}, sent: {canvasWidth: width, canvasHeight: height, x: 0, y: 0, w: width, h: height}};
-        request = {model: state.model, sample: sampleId, saliency: state.overlays, topk: 5};
+        request = {model: state.model, sample: sampleId, saliency, topk: 5};
         state.captureAt = performance.now();
         $("captureStatus").textContent = `Sample ${width}×${height} · the server's copy`;
       } else {
@@ -1096,7 +1393,7 @@ if (typeof document !== "undefined") {
         state.captureAt = image.capturedAt; placement = {natural: image.natural, sent: image.sent};
         counted = state.running && source === liveSource();
         if (counted) state.sampled += 1;
-        request = {model: state.model, image: image.url, saliency: state.overlays, topk: 5};
+        request = {model: state.model, image: image.url, saliency, topk: 5};
       }
       $("runStatus").textContent = "Classifying…";
       const started = performance.now();
@@ -1120,7 +1417,13 @@ if (typeof document !== "undefined") {
         $("timingStatus").textContent = "Classifier inference on the server · excludes image decoding and preprocessing.";
         renderLatency();
       }
-      overlay = result.saliency ? {...placement, saliency: result.saliency} : null;
+      const location = pokemon && result.saliency
+        ? (() => { try { return saliencyLocation(result.saliency, SALIENCY_LOCATION_PARAMS[state.model] ?? SALIENCY_LOCATION_DEFAULT); } catch (_) { return null; } })()
+        : null;
+      const marks = location ? [{box: pokemon.locate === "box" ? location.box : null,
+        point: pokemon.locate === "point" ? location.point : null,
+        label: `${speciesName(result.species, result.label)} ${percentText(result.score)}`, derived: true}] : [];
+      overlay = result.saliency ? {...placement, saliency: result.saliency, marks} : null;
       drawOverlay();
       if (sampleId && samples.byId.has(sampleId) && (samples.model === null || samples.model === state.model)) {
         samples.model = state.model; samples.results.set(sampleId, result); renderSampleTiles();
@@ -1154,17 +1457,30 @@ if (typeof document !== "undefined") {
   }
   // The latest saliency over the preview: the grid stretched over the picture the classifier was
   // sent (overlayPlacement), clipped to the visible picture, smoothed by the browser's scaling.
+  // The latest overlay over the preview: a classifier's saliency heatmap, boxes and points, or
+  // both. Everything is normalized over the picture the model was sent, so it is stretched over that
+  // (overlayPlacement) and clipped to the visible picture. Marks a model wrote are solid; marks
+  // derived from a classifier's saliency are dashed, because they are an estimate, not a detection.
   function drawOverlay() {
     const layer = $("overlayCanvas"), box = layer.parentElement;
-    const show = Boolean(state.overlays && state.kind === "classifier" && overlay?.saliency &&
+    const show = Boolean(state.overlays && overlay && (overlay.saliency || overlay.marks?.length) &&
       overlay.natural.width && overlay.natural.height);
     layer.hidden = !show;
-    $("overlayHelp").hidden = state.kind !== "classifier";
-    if (state.kind === "classifier") {
-      $("overlayHelp").textContent = (overlay?.saliency?.method ? `Saliency: ${overlay.saliency.method}. ` : "") +
-        "The heatmap shows where the classifier's evidence came from: brighter is more. It is not a detection. " +
-        "None of these classifiers outputs boxes, points or masks, so a saliency map is the only 2D grounding there is to draw.";
+    const help = [];
+    if (overlay?.saliency) {
+      help.push(`${overlay.saliency.method ? `Saliency: ${overlay.saliency.method}. ` : ""}The heatmap shows where the classifier's evidence came from: brighter is more. It is not a detection.`);
     }
+    if (overlay?.marks?.some(mark => mark.derived)) {
+      help.push("The dashed box or point is derived from that heatmap - the region around its peak - so it is an estimate of where the Pokémon is, not a detection: none of these classifiers outputs boxes or points.");
+    }
+    if (overlay?.marks?.some(mark => !mark.derived)) {
+      help.push("The box or point is Cosmos3-Edge's own 2D grounding: coordinates it wrote in its answer, normalized 0-1000 over the picture it was sent. Its percentage is how likely the model found the name it wrote.");
+    }
+    if (!help.length && state.kind === "classifier") {
+      help.push("None of these classifiers outputs boxes, points or masks: their 2D grounding is a saliency heatmap, and the Name the Pokémon presets add a box or point derived from it.");
+    }
+    $("overlayHelp").hidden = !help.length;
+    $("overlayHelp").textContent = help.join(" ");
     if (!show) return;
     const width = box.clientWidth, height = box.clientHeight, ratio = window.devicePixelRatio || 1;
     layer.width = Math.max(1, Math.round(width * ratio)); layer.height = Math.max(1, Math.round(height * ratio));
@@ -1172,15 +1488,50 @@ if (typeof document !== "undefined") {
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
     const {clip, grid} = overlayPlacement(overlay.sent, overlay.natural, width, height);
-    const {w, h, cells} = overlay.saliency;
-    const tile = document.createElement("canvas"); tile.width = w; tile.height = h;
-    const pixels = tile.getContext("2d").createImageData(w, h);
-    cells.forEach((value, i) => pixels.data.set([...heatColor(value), Math.round(200 * value ** 1.3)], i * 4));
-    tile.getContext("2d").putImageData(pixels, 0, 0);
     context.save();
     context.beginPath(); context.rect(clip.x, clip.y, clip.width, clip.height); context.clip();
-    context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
-    context.drawImage(tile, grid.x, grid.y, grid.width, grid.height);
+    if (overlay.saliency) {
+      const {w, h, cells} = overlay.saliency;
+      const tile = document.createElement("canvas"); tile.width = w; tile.height = h;
+      const pixels = tile.getContext("2d").createImageData(w, h);
+      const strength = overlay.marks?.length ? 140 : 200;
+      cells.forEach((value, i) => pixels.data.set([...heatColor(value), Math.round(strength * value ** 1.3)], i * 4));
+      tile.getContext("2d").putImageData(pixels, 0, 0);
+      context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
+      context.drawImage(tile, grid.x, grid.y, grid.width, grid.height);
+    }
+    const at = (x, y) => [grid.x + x * grid.width, grid.y + y * grid.height];
+    context.font = "600 13px Inter, ui-sans-serif, sans-serif";
+    for (const mark of overlay.marks || []) {
+      const color = mark.derived ? "#7dd3fc" : "#b4f679";
+      context.setLineDash(mark.derived ? [7, 5] : []);
+      let labelAt = null;
+      if (mark.box) {
+        const [x1, y1] = at(mark.box[0], mark.box[1]), [x2, y2] = at(mark.box[2], mark.box[3]);
+        for (const [lineWidth, stroke] of [[5, "rgba(0,0,0,0.6)"], [2.5, color]]) {
+          context.lineWidth = lineWidth; context.strokeStyle = stroke; context.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        }
+        labelAt = [x1, y1];
+      }
+      if (mark.point) {
+        const [x, y] = at(mark.point[0], mark.point[1]);
+        context.setLineDash([]);
+        for (const [lineWidth, stroke] of [[5, "rgba(0,0,0,0.6)"], [2.5, color]]) {
+          context.lineWidth = lineWidth; context.strokeStyle = stroke;
+          context.beginPath(); context.arc(x, y, 9, 0, 2 * Math.PI); context.stroke();
+          context.beginPath(); context.moveTo(x - 15, y); context.lineTo(x + 15, y); context.moveTo(x, y - 15); context.lineTo(x, y + 15); context.stroke();
+        }
+        labelAt ??= [x + 14, y - 14];
+      }
+      if (mark.label && labelAt) {
+        const textWidth = context.measureText(mark.label).width;
+        const lx = Math.min(Math.max(labelAt[0], clip.x), clip.x + clip.width - textWidth - 10);
+        const ly = Math.max(labelAt[1] - 22, clip.y);
+        context.setLineDash([]);
+        context.fillStyle = "rgba(10,16,12,0.82)"; context.fillRect(lx, ly, textWidth + 10, 20);
+        context.fillStyle = color; context.fillText(mark.label, lx + 5, ly + 15);
+      }
+    }
     context.restore();
   }
   new ResizeObserver(drawOverlay).observe($("overlayCanvas").parentElement);
@@ -1188,6 +1539,12 @@ if (typeof document !== "undefined") {
     state.overlays = !state.overlays; drawOverlay(); controls();
   });
 
+  // Sample results are one model's, and for Cosmos3-Edge one prompt's: a new prompt starts over.
+  function resetSampleResults() {
+    if (!samples.model || state.kind === "classifier" || samples.model === `${state.model}|${$("prompt").value.trim()}`) return;
+    if (samples.run) samples.run.cancelled = true;
+    samples.results.clear(); samples.model = null; renderSampleTiles();
+  }
   // The sample set: thumbnails anyone can open in the preview, and - with a classifier selected -
   // a run over every image, scored against its label as each answer lands.
   // model: the selected classifier's id, for which species it can name; null for a Cosmos engine.
@@ -1232,17 +1589,25 @@ if (typeof document !== "undefined") {
       tile.classList.toggle("correct", Boolean(result) && result.species === item.species);
       tile.classList.toggle("wrong", Boolean(result) && result.species !== item.species);
       if (result) {
-        rows.push({truth: item.species, covered: item.covered, ranked: result.topk.map(r => r.species)});
-        verdict.textContent = `${result.species === item.species ? "✓" : "✗"} ${speciesName(result.species, result.label)} ${Math.round(result.score * 100)}%`;
+        rows.push({truth: item.species, covered: item.covered, ranked: result.topk.map(r => r.species), score: result.score});
+        verdict.textContent = `${result.species === item.species ? "✓" : "✗"} ${speciesName(result.species, result.label)}` +
+          (typeof result.score === "number" ? ` ${percentText(result.score)}` : "");
       } else verdict.textContent = uncovered ? "Not a species it knows" : "";
       tile.hidden = $("sampleMistakes").checked && !(result && result.species !== item.species);
     }
     const score = scoreSamples(rows), pct = (a, b) => b ? ` (${(100 * a / b).toFixed(1)}%)` : "";
-    const name = engineData?.active?.name || "the selected classifier";
+    const name = engineData?.active?.name || "the selected model";
+    // How sure the model said it was, against whether it was right: a quick look at calibration.
+    const mean = list => list.length ? percentText(list.reduce((a, b) => a + b, 0) / list.length) : null;
+    const scored = rows.filter(row => typeof row.score === "number");
+    const sureRight = mean(scored.filter(row => row.ranked[0] === row.truth).map(row => row.score));
+    const sureWrong = mean(scored.filter(row => row.ranked[0] !== row.truth).map(row => row.score));
     $("sampleScore").hidden = !score.n;
     $("sampleScore").textContent = !score.n ? "" :
-      `${name}: top-1 ${score.top1}/${score.n}${pct(score.top1, score.n)} · top-5 ${score.top5}/${score.n}${pct(score.top5, score.n)}` +
-      (score.coveredN < score.n ? ` · on the ${score.coveredN} images of species it can name: top-1 ${score.coveredTop1}/${score.coveredN}${pct(score.coveredTop1, score.coveredN)}` : "");
+      `${name}: top-1 ${score.top1}/${score.n}${pct(score.top1, score.n)}` +
+      (rows.some(row => row.ranked.length > 1) ? ` · top-5 ${score.top5}/${score.n}${pct(score.top5, score.n)}` : "") +
+      (score.coveredN < score.n ? ` · on the ${score.coveredN} images of species it can name: top-1 ${score.coveredTop1}/${score.coveredN}${pct(score.coveredTop1, score.coveredN)}` : "") +
+      (sureRight || sureWrong ? ` · its own probability averaged ${sureRight ?? "—"} when right, ${sureWrong ?? "—"} when wrong` : "");
     const covered = samples.list.filter(item => item.covered !== false).length;
     $("sampleStatus").textContent = samples.run ? `Running ${samples.results.size} of ${samples.list.length}…`
       : `${samples.list.length} images · ${new Set(samples.list.map(item => item.species)).size} species` +
@@ -1263,24 +1628,79 @@ if (typeof document !== "undefined") {
     $("sourceStatus").textContent = `Sample · ${speciesName(item.species)}`; controls();
     if (state.ready && !switchingEngine()) await analyze($("uploadedImage"));
   }
+  // One answer read off the token stream without touching the caption: the text and its per-token
+  // logprobs. Used by the sample run; analyze() streams into the caption itself.
+  async function streamAnswer(body, signal) {
+    const response = await fetch("/v1/chat/completions", {
+      method: "POST", headers: {"Content-Type": "application/json"}, signal, body: JSON.stringify(body)});
+    if (!response.ok) {
+      const failure = await response.json().catch(() => ({}));
+      throw new Error(failure.error?.message || `Backend returned HTTP ${response.status}.`);
+    }
+    if (!response.headers.get("content-type")?.includes("text/event-stream") || !response.body) {
+      throw new Error("Backend did not return a token stream.");
+    }
+    let output = "", done = false, finishReason = null;
+    const logprobs = [];
+    const parser = new SSEParser(event => {
+      const completion = readCompletionEvent(event);
+      if (completion.done) { done = true; return; }
+      if (completion.finishReason) finishReason = completion.finishReason;
+      if (completion.logprobs) logprobs.push(...completion.logprobs);
+      if (typeof completion.text === "string") output += completion.text;
+    });
+    const reader = response.body.getReader(), decoder = new TextDecoder();
+    try {
+      while (!done) {
+        const chunk = await reader.read();
+        if (chunk.done) { parser.feed(decoder.decode(), true); break; }
+        parser.feed(decoder.decode(chunk.value, {stream: true}));
+      }
+    } finally { reader.cancel().catch(() => {}); }
+    if (!done || !["stop", "length"].includes(finishReason)) throw new Error("The answer did not complete.");
+    return {output, logprobs};
+  }
+  // Every sample through the selected model, scored as each answer lands: a classifier by sample id
+  // (the server's own copy of the file), or Cosmos3-Edge with a Name-the-Pokémon preset, sent the
+  // way this page sends any picture, with that preset's prompt and the current settings.
   async function runSamples() {
-    if (state.kind !== "classifier" || !state.ready || state.busy || samples.run || switchingEngine()) return;
+    const prompt = $("prompt").value.trim(), pokemon = pokemonPreset(prompt);
+    const classifier = state.kind === "classifier";
+    if (!(classifier || pokemon) || !state.ready || state.busy || samples.run || switchingEngine()) return;
+    let advanced;
+    try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
     stop(); error();
     const run = samples.run = {cancelled: false, model: state.model};
     const ticket = engineRequests.begin();
-    samples.results.clear(); samples.model = run.model;
+    samples.results.clear(); samples.model = classifier ? run.model : `${run.model}|${prompt}`;
     state.busy = true; renderSampleTiles(); controls();
     try {
       for (const item of samples.list) {
         if (run.cancelled || !engineRequests.current(ticket)) break;
-        const response = await fetch("/api/classify", {
-          method: "POST", headers: {"Content-Type": "application/json"}, signal: ticket.controller.signal,
-          body: JSON.stringify({model: run.model, sample: item.id, saliency: false, topk: 5})
-        });
-        const body = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(body?.error?.message || `Classifier returned HTTP ${response.status}.`);
+        let result;
+        if (classifier) {
+          const response = await fetch("/api/classify", {
+            method: "POST", headers: {"Content-Type": "application/json"}, signal: ticket.controller.signal,
+            body: JSON.stringify({model: run.model, sample: item.id, saliency: false, topk: 5})
+          });
+          const body = await response.json().catch(() => null);
+          if (!response.ok) throw new Error(body?.error?.message || `Classifier returned HTTP ${response.status}.`);
+          result = readClassification(body);
+        } else {
+          const picture = new Image();
+          picture.src = `/api/samples/${encodeURIComponent(item.id)}`;
+          await picture.decode();
+          const image = capture(picture);
+          const answer = await streamAnswer({model: run.model, stream: true,
+            temperature: 0, top_p: advanced.topP,
+            max_image_tokens_per_image: advanced.imageTokens, stream_options: {include_usage: true},
+            logprobs: true, top_logprobs: POKEMON_TOP_LOGPROBS, max_tokens: Number($("maxTokens").value),
+            messages: [{role: "user", content: [{type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}]}]},
+            ticket.controller.signal);
+          result = cosmosResult(readPokemonAnswer(answer.output, answer.logprobs));
+        }
         if (run.cancelled || !engineRequests.current(ticket)) break;
-        samples.results.set(item.id, readClassification(body));
+        samples.results.set(item.id, result);
         renderSampleTiles();
       }
     } catch (err) {

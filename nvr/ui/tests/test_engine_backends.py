@@ -115,6 +115,18 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(switcher.selected, 'cosmos')
 
 
+class LogprobRequestTests(unittest.TestCase):
+    """The Name-the-Pokémon presets ask the shim for per-token logprobs; nothing else may get through."""
+
+    def test_logprobs_are_bounded(self):
+        ui.validate_request({**payload(), 'logprobs': True, 'top_logprobs': 5})
+        ui.validate_request({**payload(), 'logprobs': False})
+        for extra in [{'logprobs': 1}, {'top_logprobs': 1}, {'logprobs': True, 'top_logprobs': 6},
+                      {'logprobs': True, 'top_logprobs': True}, {'logprobs': True, 'top_logprobs': -1}]:
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                ui.validate_request({**payload(), **extra})
+
+
 class SymlinkSwitcherTests(unittest.TestCase):
     """The legacy switcher: one shim, an engine symlink, `sudo ln -sfn` and a restart."""
 
