@@ -49,9 +49,7 @@
   "gemma4": {
     "name": "Gemma 4 E2B",
     "path": "/home/orin/tensorrt-edgellm-workspace/Gemma-4-E2B-it-llamacpp/engines/reasoning",
-    "profile": "llama.cpp Q4_K_S · Jetson AI Lab's Orin Nano path, for an otherwise idle board · Apache-2.0",
-    "enabled": false,
-    "unavailable_reason": "Does not fit beside the NVR: llama.cpp peaks at ~4.1-4.4 GB loading it (OOM-killed inside a 3.3 GB cap, twice); the board has ~3.6-3.9 GB free with the shim stopped"
+    "profile": "llama.cpp Q4_K_S, newer build with --lazy-mode · caption 1341 ms · yes/no 495 ms · 3.05 GB · person 83%, count 58%, boxes 37% (its own box_2d) on this house's cameras · Apache-2.0"
   },
   "locateanything": {
     "name": "LocateAnything 3B",

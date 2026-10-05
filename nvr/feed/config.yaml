@@ -175,6 +175,20 @@ reachy_alert_categories: [person, animal]
 # shared cooldown keeps a busy camera from turning this into continuous inference.
 reachy_trigger_labels: [person, dog, cat]
 reachy_trigger_cameras: []
+# Detection modes (detection_modes.py): after Frigate's first detection, a second, targeted look by
+# the loaded VLM on the cameras a mode is on. Its verdict, with the model's box drawn on the frame,
+# is that camera's notification instead of the stock description. These seed the settings; the
+# command centre's Detection modes card changes them at runtime (detection_modes.json).
+detection_modes:
+  bernese:
+    cameras: [reachy_mini]   # the Reachy Mini watches the doggy-daycare feed on a monitor
+    notify: true
+    speak: false
+    cooldown_s: 300
+# Frigate's name for the Reachy's camera: its looks use the robot's own 1280x720 frame.
+reachy_frigate_camera: reachy_mini
+# frigate-notify's config: the modes push through the same phone provider.
+notify_config: /home/orin/nvr/notify/config.yaml
 # Only used to build the "open in" link; the preview no longer depends on it being up.
 reachy_webui_url: "https://127.0.0.1:8090"
 reachy_session: "reachy"

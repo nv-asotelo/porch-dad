@@ -21,6 +21,7 @@ import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)).replace("/notify", "/feed"))
 from alert_policy import classify, summarize  # noqa: E402
+from detection_modes import owner  # noqa: E402
 
 CFG = yaml.safe_load(Path(os.environ.get("FRIGATE_NOTIFY_CONFIG",
                                          "/home/orin/nvr/notify/config.yaml")).read_text())
@@ -132,6 +133,12 @@ def handle(after: dict) -> None:
     if not eid:
         return
     if CAMERAS and cam not in CAMERAS:
+        return
+    # A detection mode answers for this camera's label: porch-feed pushes its verdict, with the
+    # model's box drawn, so a stock description here would be a second, vaguer notification.
+    mode = owner(cam, str(label).lower())
+    if mode:
+        print(f"[notify] {eid} left to detection mode {mode} ({label} on {cam})", flush=True)
         return
     now = time.time()
     if now - _last.get(cam, 0) < MIN_GAP:

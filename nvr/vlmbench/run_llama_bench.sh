@@ -21,6 +21,9 @@ RESULTS=${VLMBENCH_RESULTS:-/home/orin/nvr/vlmbench/results}
 CAP=${LLAMA_MEMORY_MAX:-3300m}
 PORT=${LLAMA_PORT:-8091}
 CTX=${LLAMA_CTX:-2048}
+# A newer llama.cpp build to run inside the same image (its bin/llama-server), e.g. one with --lazy-mode,
+# which the image's build predates; see build_llama_upstream.sh.
+BIN_DIR=${LLAMA_BIN_DIR:-}
 NAME=vlmbench-llama
 
 [ "$(id -u)" -eq 0 ] || { echo "run with sudo: it stops and starts the shim" >&2; exit 2; }
@@ -54,9 +57,13 @@ args=(-m "/models/$model" --host 127.0.0.1 --port "$PORT" -ngl 999 -c "$CTX" -b 
 # directly, the way the others' default (non-thinking) chat templates do.
 read -r -a extra <<< "${LLAMA_EXTRA:-}"
 args+=("${extra[@]}")
+server=(llama-server) mounts=(-v "$GGUF_DIR:/models:ro")
+if [ -n "$BIN_DIR" ]; then
+  server=(/opt/llama-upstream/bin/llama-server) mounts+=(-v "$BIN_DIR:/opt/llama-upstream:ro")
+fi
 t0=$(date +%s)
 cid=$(docker run -d --name "$NAME" --runtime nvidia --network host --memory "$CAP" --memory-swap "$CAP" \
-  -e GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 -v "$GGUF_DIR:/models:ro" "$IMAGE" llama-server "${args[@]}") || exit 1
+  -e GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 "${mounts[@]}" "$IMAGE" "${server[@]}" "${args[@]}") || exit 1
 up=0
 for _ in $(seq 1 120); do
   curl -sf -m 2 "http://127.0.0.1:$PORT/health" >/dev/null && { up=1; break; }
@@ -76,4 +83,4 @@ mkdir -p "$RESULTS" && chown orin:orin "$RESULTS"
 runuser -u orin -- python3 "$HERE/bench.py" --url "http://127.0.0.1:$PORT/v1/chat/completions" --cgroup "$cgroup" \
   --data "$DATA" $( [ -f "$DATA/labels.json" ] && echo --labels "$DATA/labels.json" ) ${BENCH_ARGS:-} --label "$label" --out "$RESULTS/$label.jsonl" "$@"
 echo "   peak $(( $(cat "$cgroup/memory.peak") / 1048576 )) MiB, oom_kill=$(awk '/oom_kill / {print $2}' "$cgroup/memory.events")"
-docker logs "$NAME" 2>&1 | grep -E "load time|model buffer size|KV self size|compute buffer size|CUDA0 model buffer|mmproj|clip" | tail -12 | sed 's/^/   /'
+docker logs "$NAME" 2>&1 | grep -E "load time|model buffer size|KV self size|compute buffer size|CUDA0 model buffer|mmproj|clip|lazy" | tail -12 | sed 's/^/   /'

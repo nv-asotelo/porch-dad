@@ -44,6 +44,7 @@ from xml.sax.saxutils import escape
 
 import alert_policy
 import base64
+import detection_modes
 import requests
 import uvicorn
 import yaml
@@ -196,6 +197,17 @@ REACHY_TRIGGER_CAMERAS = {str(x) for x in (CFG.get("reachy_trigger_cameras") or 
 _reachy_alert: dict = {"at": None, "description": None, "categories": [], "headline": None,
                        "trigger": None, "checked": 0, "last_check": 0.0}
 REACHY_SESSION = str(CFG.get("reachy_session") or "reachy")
+
+# Detection modes (detection_modes.py): config.yaml's detection_modes: block seeds each mode's
+# settings and the command centre edits the runtime copy. The Reachy's own camera is read from its
+# bridge (1280x720), not Frigate's 640x360 detect stream: a dog on the daycare monitor it watches
+# is a few dozen pixels at detect resolution.
+MODE_DEFAULTS = CFG.get("detection_modes") or {}
+REACHY_FRIGATE_CAMERA = str(CFG.get("reachy_frigate_camera") or "reachy_mini")
+NOTIFY_CONFIG = Path(CFG.get("notify_config") or "/home/orin/nvr/notify/config.yaml")
+_mode_lock = threading.Lock()
+_mode_next: dict[tuple[str, str], float] = {}
+_mode_last: dict[str, dict] = {}        # "mode/camera" -> that camera's last verdict
 
 _lock = threading.Lock()
 _cfg_lock = threading.Lock()   # serialises read-modify-write of the Frigate YAML
@@ -529,6 +541,94 @@ def reachy_watcher() -> None:
         except Exception as e:
             print(f"[feed] reachy watcher: {e}", flush=True)
         time.sleep(3)
+
+
+# --------------------------------------------------------------------------- detection modes
+def mode_frame(camera: str, event_id: str | None) -> bytes | None:
+    """The sharpest frame on hand: the Reachy bridge for the robot's camera, else the event's clean
+    snapshot, else Frigate's latest frame."""
+    urls = []
+    if camera == REACHY_FRIGATE_CAMERA and REACHY_CAM:
+        urls.append(f"{REACHY_CAM}/still.jpg")
+    if event_id:
+        urls.append(f"{FRIGATE}/api/events/{event_id}/snapshot.jpg?bbox=0&timestamp=0")
+    urls.append(f"{FRIGATE}/api/{camera}/latest.jpg")
+    for u in urls:
+        try:
+            r = requests.get(u, timeout=8)
+            if r.status_code == 200 and len(r.content) > 1024:
+                return r.content
+        except requests.RequestException:
+            pass
+    return None
+
+
+def mode_due(mode: str, camera: str) -> bool:
+    """Claim the mode's next look on this camera if its cooldown has passed."""
+    cooldown = float(detection_modes.load_state(MODE_DEFAULTS)[mode]["cooldown_s"])
+    with _mode_lock:
+        now = time.time()
+        if now < _mode_next.get((mode, camera), 0):
+            return False
+        _mode_next[(mode, camera)] = now + cooldown
+        return True
+
+
+def run_detection_mode(mode: str, camera: str, trigger: str, event_id: str | None = None) -> dict:
+    """One targeted look. Found: a Feed entry with the box drawn, Frigate's sub_label on the event,
+    and the push and/or spoken line the mode is set to - in place of the stock description."""
+    s = detection_modes.load_state(MODE_DEFAULTS)[mode]
+    name = detection_modes.MODES[mode]["name"]
+    frame = mode_frame(camera, event_id)
+    if not frame:
+        v = {"mode": mode, "found": False, "error": "no frame available"}
+    else:
+        v = detection_modes.check(s["url"] or CFG["cosmos3_url"], frame, mode, float(s["min_confidence"]))
+    v.update(camera=camera, trigger=trigger, at=time.time(), event_id=event_id)
+    _mode_last[f"{mode}/{camera}"] = v
+    if not v.get("found"):
+        why = v.get("error") or f"P(yes)={v.get('confidence')}"
+        print(f"[feed] mode {mode} on {camera} ({trigger}): not found ({why})", flush=True)
+        return v
+
+    text = detection_modes.headline(mode, v)
+    if not v.get("engine_trusted"):
+        # Recorded so engines can be compared in the Feed, but not pushed or spoken: see MODES.
+        text += f" Not sent: {v.get('engine') or 'this engine'} is not validated for this mode."
+    conf = v.get("confidence")
+    img = detection_modes.annotate(frame, v.get("box"), name if conf is None else f"{name} {conf:.0%}")
+    eid = f"mode-{mode}-{camera}-{int(v['at'])}"
+    snap_path(eid).write_bytes(img)
+    threading.Thread(target=prune_snapshots, daemon=True).start()
+    eng = active_engine()
+    save({"id": eid, "ts": v["at"], "camera": camera, "label": mode, "description": text,
+          "engine_id": eng["id"], "engine_name": eng["name"], "latency_ms": v.get("ms", 0),
+          "peak_cpu": None, "peak_mem": None, "peak_gpu": None})
+    v.update(entry=eid, headline=text)
+    if event_id:
+        # Frigate's own UI then lists the event as "dog · Bernese mountain dog".
+        try:
+            requests.post(f"{FRIGATE}/api/events/{event_id}/sub_label", timeout=10,
+                          json={"subLabel": name, "subLabelScore": conf if conf is not None else 1.0})
+        except requests.RequestException:
+            pass
+    if s["notify"] and v.get("engine_trusted"):
+        try:
+            ncfg = yaml.safe_load(NOTIFY_CONFIG.read_text())
+            public = (ncfg.get("frigate_public_url") or "").rstrip("/")
+            click = f"{public}/events?event_id={event_id}" if public and event_id else ""
+            detection_modes.push(ncfg, f"{camera.replace('_', ' ').title()} · {name}", text, img, click)
+            v["notified"] = True
+        except Exception as e:
+            print(f"[feed] mode {mode} push failed: {type(e).__name__}: {e}", flush=True)
+    if s["speak"] and v.get("engine_trusted"):
+        try:
+            v["spoken"], _msg = reachy_speak(f"{name}, {detection_modes.where(v.get('box'))}.")
+        except Exception as e:
+            print(f"[feed] mode {mode} speak failed: {type(e).__name__}: {e}", flush=True)
+    print(f"[feed] mode {mode} on {camera} ({trigger}): {text} [{v.get('engine')}, {v.get('ms')} ms]",
+          flush=True)
+    return v
 
 
 # Low-battery beacon: cancel any native dock-seek, describe where it is in place, save that as a
@@ -1133,6 +1233,8 @@ def handle_event(after: dict) -> None:
     eid = after.get("id")
     if not eid:
         return
+    if detection_modes.owner(after.get("camera", ""), (after.get("label") or "").lower(), MODE_DEFAULTS):
+        return  # a detection mode answers for this camera's label (run_detection_mode)
     with _lock, closing(db()) as c:
         if c.execute("SELECT 1 FROM entries WHERE id=?", (eid,)).fetchone():
             return
@@ -1208,7 +1310,13 @@ def mqtt_loop() -> None:
         if data.get("type") in ("new", "update"):
             label = (after.get("label") or "").lower()
             cam = after.get("camera") or ""
-            if label in REACHY_TRIGGER_LABELS and (
+            # A detection mode on this camera's label takes the look instead of the generic one.
+            mode = detection_modes.owner(cam, label, MODE_DEFAULTS)
+            if mode:
+                if mode_due(mode, cam):
+                    threading.Thread(target=run_detection_mode, args=(mode, cam, f"{label}@{cam}"),
+                                     kwargs={"event_id": after.get("id")}, daemon=True).start()
+            elif label in REACHY_TRIGGER_LABELS and (
                 not REACHY_TRIGGER_CAMERAS or cam in REACHY_TRIGGER_CAMERAS
             ):
                 w = load_reachy_watch()
@@ -2402,6 +2510,61 @@ def api_reachy_check(request: Request):
     return res
 
 
+@app.get("/api/modes")
+def api_modes():
+    """Detection modes: what each looks for, where it is on, and its last look on each camera."""
+    state = detection_modes.load_state(MODE_DEFAULTS)
+    return {"modes": [{"id": m, "name": d["name"], "labels": d["labels"], **state[m],
+                       "last": {k.split("/", 1)[1]: v for k, v in _mode_last.items()
+                                if k.startswith(m + "/")}}
+                      for m, d in detection_modes.MODES.items()]}
+
+
+@app.post("/api/modes/{mode}")
+async def api_mode_set(mode: str, request: Request):
+    """Turn a mode on or off per camera, or change whether it pushes or speaks. Runtime, persisted
+    in detection_modes.json; any field may be omitted to leave it unchanged."""
+    require_control(request)
+    if mode not in detection_modes.MODES:
+        raise HTTPException(404, f"unknown mode {mode}")
+    try:
+        b = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        b = {}
+    state = detection_modes.load_state(MODE_DEFAULTS)
+    s = state[mode]
+    if "cameras" in b:
+        unknown = sorted(set(b["cameras"] or []) - set(camera_power()))
+        if unknown:
+            raise HTTPException(400, f"unknown camera(s): {', '.join(unknown)}")
+        s["cameras"] = sorted(set(b["cameras"] or []))
+    for k in ("notify", "speak"):          # url is config.yaml-only, see detection_modes.SETTINGS
+        if k in b:
+            s[k] = bool(b[k])
+    if "cooldown_s" in b:
+        s["cooldown_s"] = max(30.0, min(3600.0, float(b["cooldown_s"])))
+    if "min_confidence" in b:
+        s["min_confidence"] = max(0.05, min(0.99, float(b["min_confidence"])))
+    detection_modes.save_state(state)
+    name = detection_modes.MODES[mode]["name"]
+    return {"ok": True, "message": f"{name} mode: on for {', '.join(s['cameras']) or 'no camera'}", **s}
+
+
+@app.post("/api/modes/{mode}/check")
+def api_mode_check(mode: str, camera: str, request: Request):
+    """Look now on one camera, whatever the cooldown - the mode's own Look & describe. A find is
+    recorded and pushed exactly like an automatic one."""
+    require_control(request)
+    if mode not in detection_modes.MODES:
+        raise HTTPException(404, f"unknown mode {mode}")
+    if camera not in camera_power():
+        raise HTTPException(400, f"unknown camera {camera}")
+    v = run_detection_mode(mode, camera, "manual")
+    if v.get("error"):
+        raise HTTPException(502, v["error"])
+    return {"message": v.get("headline") or f"no {detection_modes.MODES[mode]['name']} on {camera}", **v}
+
+
 @app.get("/healthz")
 def healthz():
     with closing(db()) as c:
@@ -2796,6 +2959,12 @@ button.mini{padding:3px 9px;font-size:11.5px}
        caption can be deleted independently or together.</p>
     <div id="feed" style="margin-top:10px"></div>
   </details>
+
+  <h2>Detection modes</h2>
+  <!-- After Frigate's first detection, a second, targeted look by the loaded VLM on the cameras a
+       mode is on (nvr/feed/detection_modes.py). Its verdict and box replace the stock description
+       in that camera's push. -->
+  <div class="card" id="modesCard"><div id="modes" class="hint">checking…</div></div>
 
   <h2>Cosmos3-Edge engine</h2>
   <div class="callout">
@@ -3745,6 +3914,57 @@ function initCtl(){
   lookPaint();
 }
 
+// Detection modes: one chip per Frigate camera turns a mode on there; Look now spends one look
+// on that camera whatever the cooldown. Rebuilt on the 10 s poll from the server's own state.
+let MODE_CAMS = [];
+async function loadModes(){
+  const box = document.getElementById('modes');
+  try{
+    const j = await (await fetch('/api/modes',{cache:'no-store'})).json();
+    box.className = '';
+    box.innerHTML = j.modes.map(m => {
+      const chips = MODE_CAMS.map(c => {
+        const on = m.cameras.includes(c);
+        return `<button class="${on?'on':''}" onclick="modeToggle('${m.id}','${esc(c)}',${!on})">${on?'✓ ':''}${esc(c)}</button>`;
+      }).join(' ');
+      const looks = m.cameras.map(c =>
+        `<button onclick="modeCheck('${m.id}','${esc(c)}')">Look now: ${esc(c)}</button>`).join(' ');
+      const last = Object.entries(m.last || {}).map(([c, v]) => {
+        const when = new Date(v.at*1000).toLocaleTimeString();
+        const what = v.found ? '✅ ' + esc(v.headline || 'found')
+                   : '— ' + esc(v.error || ('not seen' + (v.confidence!=null ? ` (P(yes) ${Math.round(v.confidence*100)}%)` : '')));
+        return `<div class="hint">${esc(c)}: ${what} <span>(${esc(v.trigger||'')} · ${when}${v.engine?' · '+esc(v.engine):''})</span></div>`;
+      }).join('');
+      return `<div class="sec">🐕 ${esc(m.name)} mode <span class="hint" style="text-transform:none;letter-spacing:0">after Frigate detects ${esc(m.labels.join('/'))}</span></div>
+        <div class="row">${chips}</div>
+        <div class="row" style="gap:6px;align-items:center;margin-top:6px">
+          <label class="tswitch" title="Push the verdict, with the box drawn, instead of the stock description">
+            <input type="checkbox" ${m.notify?'checked':''} onchange="modeSet('${m.id}',{notify:this.checked})">
+            <span class="track"></span><span class="tlabel">📱 Push</span></label>
+          <label class="tswitch" title="Also say it on the Reachy Mini's speaker">
+            <input type="checkbox" ${m.speak?'checked':''} onchange="modeSet('${m.id}',{speak:this.checked})">
+            <span class="track"></span><span class="tlabel">🔊 Say it on the Reachy</span></label>
+          ${looks}
+        </div>
+        <p class="hint">At most one look per camera every ${Math.round(m.cooldown_s)} s. Found when the model's own P(yes) is at least ${Math.round(m.min_confidence*100)}%; then it draws the box.</p>
+        ${last}`;
+    }).join('');
+  }catch(e){ box.textContent = 'detection modes unavailable'; }
+}
+async function modeToggle(id, cam, on){
+  const j = await (await fetch('/api/modes',{cache:'no-store'})).json();
+  const m = j.modes.find(x => x.id === id); if(!m) return;
+  const cams = on ? [...new Set([...m.cameras, cam])] : m.cameras.filter(c => c !== cam);
+  await postJSON('/api/modes/'+id, {cameras: cams});
+  loadModes();
+}
+async function modeSet(id, body){ await postJSON('/api/modes/'+id, body); loadModes(); }
+async function modeCheck(id, cam){
+  say('looking…', true);
+  await postJSON(`/api/modes/${id}/check?camera=${encodeURIComponent(cam)}`, {});
+  loadModes(); loadFeed();
+}
+
 // Wake, Sleep, Centre and the like move the head themselves, so the live controls re-seed from the
 // next poll instead of steering back to where they were before the button.
 async function rq(url){
@@ -3985,6 +4205,8 @@ async function load(){
     : `<tr><td colspan="8" class="hint">No captions recorded yet.</td></tr>`;
 
   ENGINES_META = st.engines;
+  MODE_CAMS = Object.keys(st.cameras || {});
+  loadModes();
   await loadFeed();
 }
 // The Scouts refresh on their own timer: their cameras are worth seeing at a higher rate than the
@@ -4014,6 +4236,9 @@ def _run_https() -> None:
 
 def main() -> None:
     init_db()
+    # frigate-notify reads this file to stand its stock push down for what a mode owns, so it has
+    # to exist with config.yaml's defaults before the first event, not only after a UI change.
+    detection_modes.save_state(detection_modes.load_state(MODE_DEFAULTS))
     threading.Thread(target=mqtt_loop, daemon=True).start()
     threading.Thread(target=link_poller, daemon=True).start()
     threading.Thread(target=reachy_watcher, daemon=True).start()

@@ -360,7 +360,7 @@ cameras:
     # OFF by default - toggle from the porch-dad command centre (Camera power), which flips this
     # flag over MQTT with no restart. While on it costs ~1 core of detection plus an h264
     # transcode, on a board whose detector already runs ~100 ms per inference, so it is opt-in.
-    # Detect only: no record role, person tracking only, 2 fps.
+    # Detect only: no record role, person and dog tracking, 2 fps.
     enabled: false
     # Live view offers the mic as a choice, not a default (see reachy_mini_mic above).
     live:
@@ -383,6 +383,13 @@ cameras:
     objects:
       track:
         - person
+        # Dogs are for the Bernese mountain dog mode (nvr/feed/detection_modes.py): Frigate finds
+        # the dog, porch-feed asks the VLM whether it is a Bernese and where, and that verdict is
+        # this camera's notification. Frigate's own description stays person-only here.
+        - dog
+      genai:
+        objects:
+          - person
   # MOTION GATING (the DeepStream/VSS principle: gate inference cheaply, do not run the detector on
   # everything). These views are full of vegetation, and wind was keeping motion ON across four
   # cameras at once, starving a shared CPU detector already at ~116ms/inference. contour_area is

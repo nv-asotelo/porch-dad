@@ -1063,6 +1063,86 @@ Left unset here rather than changed silently, because it removes the local GUI e
 should be a deliberate choice, not a side effect of a memory fix.
 
 
+## Detection modes: a second, targeted look after Frigate's detection
+
+Frigate's detector names COCO classes, so every dog in a doggy daycare is just "dog". A detection
+mode ([`feed/detection_modes.py`](feed/detection_modes.py)) is a second look that asks one
+question. On the cameras it is on, when Frigate reports one of its labels, porch-feed asks the
+loaded VLM that question about the camera's frame. The answer replaces the stock description in
+that camera's notification.
+
+**The Bernese mountain dog mode** is the first. It is on for the Reachy Mini, which watches a
+doggy-daycare feed on a monitor. Each look goes like this:
+
+1. **Detection.** Frigate tracks `dog` on `reachy_mini`. Its generic GenAI description stays
+   person-only there.
+2. **Trigger.** porch-feed looks on the event's `new` or `update`. It does not wait for `end`,
+   because a dog asleep at daycare can be one event for an hour.
+3. **Gate.** It takes the robot's own 1280x720 frame and asks the benchmark's yes/no question
+   with logprobs: "Is there a Bernese mountain dog in this image? Answer with only yes or no." The
+   gate is the model's own P(yes) of at least 0.6.
+4. **Box.** Only on a yes, it asks for the box in the loaded model's own dialect: `bbox_2d`,
+   `box_2d` or `<ref>`. LocateAnything takes the phrase itself.
+5. **Notification.** When found, porch-feed does four things:
+   - draws the box on the frame and saves a Feed entry;
+   - sets Frigate's sub_label on the event, which then shows as "dog · Bernese mountain dog";
+   - pushes to the phone, for example "Reachy Mini · Bernese mountain dog: Bernese mountain dog
+     spotted in the middle of the frame (99% sure).", with the boxed frame attached;
+   - optionally says it aloud on the Reachy.
+
+   frigate-notify stands its stock push down for any label a mode owns, so there is one
+   notification, not two.
+6. **Cooldown.** It looks at most once per camera every 300 s.
+
+Measured on 35 frames of the daycare footage the Reachy recorded on 2026-10-04:
+- **Qwen3-VL-2B** found the Bernese in three frames, with tight boxes. It also called a
+  curled-up husky a Bernese at P(yes) 0.54, which is under the 0.6 gate now in use.
+- **Cosmos3-Edge v3** said yes on 24 of the 35 frames, boxing doodles and huskies.
+
+So each mode lists the engines it trusts. For this one that is Qwen3-VL and LocateAnything, in
+`MODES["bernese"]["engines"]`. With another model loaded, its verdicts are still recorded in the
+Feed for comparison, but nothing is pushed or spoken.
+
+The command centre's **Detection modes** card has three controls:
+- one chip per Frigate camera, to turn the mode on there;
+- toggles for the push and for the Reachy's voice;
+- a Look now button per camera, which spends one look whatever the cooldown.
+
+Settings persist in `/home/orin/nvr/feed/detection_modes.json`, seeded by `config.yaml`'s
+`detection_modes:` block. `vlmbench/mode_eval.py` runs a mode over a folder of frames on any engine
+and draws a contact sheet. That is how the numbers above were taken.
+
+**Different prompts and engines per camera: what this board can do.**
+- **Prompts per camera, the Frigate way.** Frigate 0.18 takes per-camera
+  `objects.genai.object_prompts`. A `reachy_mini`-only dog prompt was validated: it resolves while
+  every other camera keeps the global one. Frigate fills in `{camera}`, `{label}` and
+  `{sub_label}`; literal braces must be doubled. It can switch prompt sets at runtime with profiles,
+  over MQTT `frigate/profile/set`. All of this changes only the wording of the stock description:
+  there is no gate, no box and no probability, and the text goes out as-is.
+- **Prompts per camera, the detection-mode way.** A mode can ask any question, gated on the
+  model's own probability, with a box drawn and its own notification.
+- **Engines per camera: not at the same time on this board.** One VLM fits beside the NVR (2.2-3.1
+  GiB resident, with 0.8-1.3 GB left), and switching is global and takes 45-55 s. A mode can name
+  another engine with a `url` in `config.yaml`, such as a second box serving LocateAnything. That
+  is the only way a camera's mode gets an engine of its own here. It is config-only, so the control
+  plane can never be told to send camera frames somewhere new.
+
+**Recommended way to customize detection per camera:**
+1. **Keep Frigate as the first stage** on every camera, tuned per camera: labels, zones, masks and
+   fps. It is the cheap gate that decides whether a VLM is asked anything at all.
+2. **Change wording with Frigate's per-camera `object_prompts`**, with no code. For example, give the
+   Reachy's indoor view and the driveway different prompts. Use profiles for sets that follow the
+   time of day or presence.
+3. **Put identity and location questions in detection modes:** whose dog it is, which car, whether
+   the gate is open. Make one mode per question, on the cameras that need it. Give each mode a
+   measured gate and the engines it was validated on, and let its verdict be the notification.
+4. **Choose the one loaded engine by the modes the house actually runs.** Cosmos3-Edge v3 is the
+   better person detector on the dark indoor cameras, but it cannot tell breeds. Qwen3-VL-2B can.
+   Post-training Qwen3-VL on these cameras, the Bernese included, is how one engine does both.
+5. **A second engine needs a second device.** Point a mode's `url` at it, or add a small
+   co-resident specialist, such as a breed classifier on Frigate's dog crop, which is a few hundred
+   MB. A second VLM does not fit on this Orin.
+
 ## Live Vision: models, Pokémon classifiers, Reachy Mini control and Piper speech
 
 Live Vision (`nvr/ui`, `cosmos-edge-ui.service`) captions a browser camera, or the Reachy Mini's
@@ -1218,9 +1298,12 @@ it - so Frigate's GenAI, porch-dad and this page reach every model the same way,
 stops the server before the next model loads. Nemotron 3 Nano 4B reads text only: the shim drops the
 image, so it is there for text prompts. LocateAnything answers boxes, not prose: a short phrase
 ("Bernese mountain dog", `person</c>dog`) is its query, and anything longer falls back to people,
-pets and vehicles; its license is non-commercial. On this board Gemma 4 E2B and LocateAnything 3B
-are greyed out, with the measured reason as the tooltip: both were OOM-killed inside the memory left
-beside the NVR. Their proxy engines stay in place for a board with more to spare.
+pets and vehicles; its license is non-commercial. On this board LocateAnything 3B is greyed out,
+with the measured reason as the tooltip: it was OOM-killed inside the memory left beside the NVR.
+Gemma 4 E2B was greyed out the same way until it ran on a newer llama.cpp. That build reads its
+per-layer embedding table from disk on demand (`--lazy-mode`), which NVIDIA's Jetson image
+predates; `vlmbench/build_llama_upstream.sh` builds it on the workstation, and it runs inside the
+same image.
 
 **Name the Pokémon presets.** Two quick presets, after the Live VLM WebUI ones, ask for the species
 and a box or a point. Cosmos3-Edge answers with JSON - `{"name": ..., "bbox_2d": [x1, y1, x2, y2]}` or

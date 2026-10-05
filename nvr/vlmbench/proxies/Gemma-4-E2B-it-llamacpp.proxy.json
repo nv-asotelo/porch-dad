@@ -1,5 +1,5 @@
 {
- "model_id": "google/gemma-4-E2B-it (llama.cpp Q4_K_S)",
+ "model_id": "google/gemma-4-E2B-it (llama.cpp Q4_K_S, lazy per-layer embeddings)",
  "url": "http://127.0.0.1:8091",
  "ready_path": "/health",
  "start": [
@@ -20,8 +20,10 @@
   "GGML_CUDA_ENABLE_UNIFIED_MEMORY=1",
   "-v",
   "/home/orin/tensorrt-edgellm-workspace/gguf:/models:ro",
+  "-v",
+  "/home/orin/tensorrt-edgellm-workspace/llama-upstream:/opt/llama-upstream:ro",
   "ghcr.io/nvidia-ai-iot/llama_cpp:latest-jetson-orin",
-  "llama-server",
+  "/opt/llama-upstream/bin/llama-server",
   "-m",
   "/models/gemma-4-E2B-it-Q4_K_S.gguf",
   "--mmproj",
@@ -33,11 +35,11 @@
   "-ngl",
   "999",
   "-c",
-  "1024",
+  "2048",
   "-b",
-  "128",
+  "512",
   "-ub",
-  "128",
+  "512",
   "-np",
   "1",
   "--fit",
@@ -46,7 +48,11 @@
   "0",
   "--jinja",
   "--reasoning",
-  "off"
+  "off",
+  "--lazy-mode",
+  "on",
+  "-fa",
+  "on"
  ],
  "stop": [
   "docker",

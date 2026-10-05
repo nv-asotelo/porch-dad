@@ -77,6 +77,7 @@ boxes), differences of a few points are noise. `report.py` renders these tables 
 | Qwen3.5-2B | 89% (84% / 100%) | 100% | 85% | 90% (0.17) | 44% (0.46) | 1.89 | 10% |
 | Cosmos-Reason2-2B | 75% (70% / 100%) | 100% | 97% | 71% (0.30) | 93% (0.72) | 1.37 | 57% |
 | InternVL3.5-2B | 83% (78% / 98%) | 100% | 97% | 51% (0.50) | 37% (0.44) | 1.51 | 46% |
+| Gemma 4 E2B (llama.cpp) | 83% (96% / 73%) | 99% | 92% | 58% (0.78) | 37% (0.47) | - | - |
 | Nemotron 3 Nano 4B on v3's caption | 97% (100% / 95%) | 99% | 97% | 95% (0.06) | - (-) | - | - |
 | LocateAnything-3B INT4 (RTX 5070) | 66% (63% / 98%) | 99% | 71% | 62% (0.49) | 98% (0.85) | - | - |
 
@@ -90,6 +91,7 @@ boxes), differences of a few points are noise. `report.py` renders these tables 
 | Qwen3.5-2B | 669 / 850 | 274 | 16.7 | 202 | 894 | 2.83 |
 | Cosmos-Reason2-2B | 677 / 886 | 207 | 14.9 | 132 | 564 | 2.74 |
 | InternVL3.5-2B | 508 / 635 | 238 | 15.4 | 172 | 518 | 2.22 |
+| Gemma 4 E2B (llama.cpp) | 1341 / 1797 | 438 | 40.4 | 495 | 2173 | 3.04 |
 | Nemotron 3 Nano 4B on v3's caption | - / - | - | - | 381 | - | 2.63 |
 
 ### False "person" answers, by camera (frames with nobody in them)
@@ -102,6 +104,7 @@ boxes), differences of a few points are noise. `report.py` renders these tables 
 | Qwen3.5-2B | 2/13 | 0/5 | 8/14 | 0/6 | 2/9 |
 | Cosmos-Reason2-2B | 7/13 | 1/5 | 8/14 | 4/6 | 7/9 |
 | InternVL3.5-2B | 2/13 | 3/5 | 5/14 | 2/6 | 6/9 |
+| Gemma 4 E2B (llama.cpp) | 0/13 | 0/5 | 1/14 | 0/6 | 1/9 |
 | Nemotron 3 Nano 4B on v3's caption | 0/13 | 0/5 | 0/14 | 0/6 | 0/9 |
 | LocateAnything-3B INT4 (RTX 5070) | 10/13 | 2/5 | 14/14 | 2/6 | 8/9 |
 
@@ -112,6 +115,8 @@ like the others:
   of the frame, so its time is added to v3's 530 ms caption.
 - **LocateAnything** was measured on the workstation's RTX 5070, because it does not fit on the Orin
   beside the NVR (below). It finds things rather than describing them, so it has no caption.
+- **Gemma 4 E2B** runs in llama.cpp, from a newer build than NVIDIA's Jetson image (below), measured
+  2026-10-05 under the same 3.3 GB cap. Its captions were not judged.
 
 ### What the numbers say
 
@@ -141,8 +146,11 @@ like the others:
 - **InternVL3.5-2B is the smallest** (2.22 GiB), with fast captions, but it is less accurate than v3
   on people, counts, boxes and captions.
 - **Cosmos3-Edge v3 beats v2** on every accuracy column, for 86 ms more per caption.
+- **Gemma 4 E2B runs, but last.** It rarely calls an empty room a person (precision 96%), but it
+  misses people (recall 73%). It is 2.5-3.7 times slower than the TensorRT models: 495 ms for a
+  yes/no, 1341 ms a caption, 40 ms a token. Its boxes need its own `box_2d` format (37%).
 
-### The models that did not make the speed table
+### Outside the TensorRT path
 
 **Nemotron 3 Nano 4B (text only).** There is no INT4 TensorRT build: its 3136-wide projections fit
 no 128 group. It ran instead in NVIDIA's Jetson llama.cpp container (Q4_K_M) as a second stage,
@@ -157,17 +165,30 @@ reading Cosmos3-Edge v3's captions.
 - **Verdict.** It is a reasonable text model to ask questions about Frigate's descriptions. It is
   not an alert filter as prompted.
 
-**Gemma 4 E2B does not fit beside the NVR.**
-- TensorRT-Edge-LLM loads its 4.7 GB per-layer embedding table whole.
-- llama.cpp (Q4_K_S plus the vision projector), the path Jetson AI Lab documents for the Orin Nano,
-  was OOM-killed under the 3.3 GB cap twice. The first attempt reached 2.27 GB anonymous plus
-  1.81 GB of mapped file. The second, with a 1024-token context, 128-token batches and the Q8_0
-  projector, reached 2.56 + 1.81 GB.
-- With the shim stopped the board has 3.6-3.9 GB free.
-- Gemma 4 E2B suits an otherwise idle Orin Nano, not one that is also running Frigate.
+**Gemma 4 E2B: it fits once llama.cpp stops holding its embedding table.** Of its 2.9 GB GGUF,
+1.54 GiB is the per-layer embedding table and 0.21 GiB the token embedding. Both are lookups that
+llama.cpp keeps on the CPU side as a memory map, and NVIDIA's Jetson build (b10373, 2026-08-12)
+pre-faults the whole map at load.
+- **Why it failed.** It was OOM-killed under the 3.3 GB cap twice, at 2.27 + 1.81 GB and
+  2.56 + 1.81 GB (anonymous + mapped file). The 1.81 GB of file is those two tables, held resident
+  although a lookup touches a few KB per token. TensorRT-Edge-LLM fares worse: it loads the table
+  whole, in FP16, at 4.7 GB.
+- **The fix is upstream.** llama.cpp added lazy tensor reads on 2026-08-27 (`--lazy-mode on`): the
+  table's rows are read from disk when a token needs them. Its default `auto` only applies to
+  tensors over 4 GiB, so it has to be forced on for E2B. `build_llama_upstream.sh` cross-compiles
+  current llama.cpp for the Orin on the workstation. The binary runs inside NVIDIA's image, which
+  supplies the CUDA 13 runtime.
+- **Result.** It loads in about 40 s with 23 MiB of the GGUF mapped instead of 1.73 GiB. It holds
+  3.04 GiB resident (0.5 GiB anonymous, 2.4 GiB NvMap) and leaves about 1 GB free on the board. It
+  is a Live Vision button again (proxy engine `proxies/Gemma-4-E2B-it-llamacpp.proxy.json`). Its
+  numbers are in the tables above.
 
 **LocateAnything-3B: the best boxes, but it does not fit on the Orin.** It ships only as BF16
-PyTorch (7.7 GB), and its parallel box decoding has no TensorRT-Edge-LLM path.
+PyTorch (7.7 GB), and its parallel box decoding has no TensorRT-Edge-LLM path. Nothing claims it
+runs on an Orin Nano. Jetson AI Lab has no page for it, and its parent there, Nemotron 3 Nano Omni,
+lists commands only for Thor and AGX Orin 64GB. Its model card says Transformers only ("TensorRT,
+TensorRT-LLM, and Triton are not yet supported"), tested on A100 and H100, with Thor "possible with
+additional model optimization".
 - **Quantization.** `locateanything/la_int4.py` shrinks it to 2.2 GB: INT4 weight-only through
   PyTorch's own tinygemm kernel, an INT4 copy of the tied head, and an INT8 embedding.
 - **Accuracy on the RTX 5070.** It draws the best boxes measured: 98% at IoU 0.5 or better, mean IoU
@@ -189,6 +210,48 @@ PyTorch (7.7 GB), and its parallel box decoding has no TensorRT-Edge-LLM path.
 - In 5 minutes it read 23 GB from the SD card and never finished loading, so no token came.
 - Frigate logged no recording warnings during the run. The GGUF was deleted afterwards.
 
+## Jetson AI Lab's "runs on Orin Nano", and NVIDIA's jetson-device-skills
+
+**What the listings mean.** Jetson AI Lab's Gemma 4 E2B page lists the Orin Nano 8GB for llama.cpp
+only:
+- Its page data has an empty vLLM command for the Nano, and its benchmark says "No data available".
+- Its command is the bare `llama-server -hf unsloth/gemma-4-E2B-it-GGUF:Q4_K_S`, which assumes the
+  whole board.
+- That board is an otherwise idle Orin Nano with about 6 GB to spend. This one also runs Frigate,
+  go2rtc, porch-dad, Live Vision and three Scout bridges. That leaves 3.3-3.9 GB with the shim
+  stopped, and each model here is capped at 3.3 GB so that an overrun kills the model, not the NVR.
+- LocateAnything has no listing at all (above).
+
+**The skills, one by one.** These are the techniques in
+[NVIDIA-AI-IOT/jetson-device-skills](https://github.com/NVIDIA-AI-IOT/jetson-device-skills), read
+2026-10-05. Its own `audit.sh` and headless `plan.sh` were run on this board.
+
+| Technique (skill) | Here | Measured |
+|---|---|---|
+| Headless: `multi-user.target`, no display manager (headless-mode) | already in place: the desktop session was ~243 MB ([nvr/README.md](../README.md)) | the skill's plan finds 3 MB left to take (avahi) |
+| MAXN power mode (llm-serve) | already `MAXN_SUPER` | |
+| `jetson_clocks` (llm-serve) | not used | no gain on Qwen3-VL-2B, which was loaded (details below) |
+| INT4 W4A16 on the Orin Nano (inference-mem-tune) | every TensorRT model | |
+| llama.cpp: small context, one slot (inference-mem-tune) | `-c` 1024-2048, `-np 1`, `--cache-ram 0` | |
+| llama.cpp `--flash-attn` (inference-mem-tune) | `on` for Gemma; before, the default `auto` (on with CUDA) | |
+| llama.cpp `--no-mmap` (inference-mem-tune) | not used, on purpose | it would make Gemma worse: 1.7 GiB of embedding tables would become anonymous memory the kernel cannot reclaim. What worked is newer than the skills: `--lazy-mode on` (above) |
+| TensorRT Edge-LLM: batch, input length, KV (inference-mem-tune) | batch 1, 1024 input, 1024 KV | |
+| Memory audit with NvMap attribution (memory-audit) | each run's cgroup `memory.stat` (anonymous + NvMap kernel + shared), the same idea | `audit.sh` agrees: 2.87 GB of NvMap in the shim with Cosmos-Reason2 loaded |
+| `drop_caches` (memory-audit) | not needed | the skill scopes its stuck-memory bug to JetPack before 7.2; this is L4T 39.2.1 |
+| vLLM / SGLang, speculative decoding (llm-serve, speculative-decoding) | not applicable | Jetson AI Lab gives Gemma 4 E2B no vLLM command on the Nano, and the skills' own recommender picks llama.cpp for 8 GB boards |
+
+**The `jetson_clocks` A/B.** Qwen3-VL-2B was loaded; each arm ran 15 frames for captions and
+yes/no, and 5 single requests:
+
+| Request | Default clocks (DVFS) | Pinned |
+|---|---|---|
+| Warm caption | 548 ms | 544-550 ms |
+| Single request after 25 s idle (median) | 396 ms | 420 ms |
+| Yes/no | 130-134 ms | 130-134 ms |
+
+DVFS ramps fast enough, so the clocks stay at their defaults, with no extra heat or power on a box
+that runs all day.
+
 ## Recommendation
 
 **Inference: keep Cosmos3-Edge v3 as the default.** On these cameras it is the only model that is
@@ -208,6 +271,15 @@ its weak side.
 - **Generic post-training will not do.** Cosmos-Reason2-2B is that same base after NVIDIA's generic
   physical-AI post-training, and here it made more false alarms, not fewer. Training data has to
   come from this house's cameras.
+
+**Identity questions need Qwen3-VL's world knowledge.** In the Bernese mountain dog mode
+(nvr/feed/detection_modes.py), on 35 frames of the doggy-daycare feed the Reachy watched:
+- Qwen3-VL-2B said yes on 4 frames. Three were the Bernese, with a tight box; one was a
+  curled-up husky at P 0.54.
+- Cosmos3-Edge v3 said yes on 24 frames, boxing doodles and huskies.
+
+So the engine that runs a camera's modes can matter more than the one that is best at "is there a
+person". That is one more reason to post-train Qwen3-VL.
 
 Choose Qwen3.5-2B instead if descriptions matter more than boxes. It gives the best captions and
 counts, for about a quarter more latency, and its boxes need the most training.
