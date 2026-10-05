@@ -183,25 +183,42 @@ pre-faults the whole map at load.
   is a Live Vision button again (proxy engine `proxies/Gemma-4-E2B-it-llamacpp.proxy.json`). Its
   numbers are in the tables above.
 
-**LocateAnything-3B: the best boxes, but it does not fit on the Orin.** It ships only as BF16
-PyTorch (7.7 GB), and its parallel box decoding has no TensorRT-Edge-LLM path. Nothing claims it
-runs on an Orin Nano. Jetson AI Lab has no page for it, and its parent there, Nemotron 3 Nano Omni,
-lists commands only for Thor and AGX Orin 64GB. Its model card says Transformers only ("TensorRT,
-TensorRT-LLM, and Triton are not yet supported"), tested on A100 and H100, with Thor "possible with
-additional model optimization".
-- **Quantization.** `locateanything/la_int4.py` shrinks it to 2.2 GB: INT4 weight-only through
-  PyTorch's own tinygemm kernel, an INT4 copy of the tied head, and an INT8 embedding.
-- **Accuracy on the RTX 5070.** It draws the best boxes measured: 98% at IoU 0.5 or better, mean IoU
-  0.85, at 0.4-0.7 s a query.
-- **It finds, not classifies.** Asked for "person" it boxed something in all 14 empty Reachy frames
-  and 10 of 13 empty driveway frames (precision 63%).
-- **Memory on the Orin.** It loads at 3.1 GB, and its first inference passes 3.6 GB:
-  - PyTorch's CUDA context is 0.9 GB on its own.
-  - NvMap adds about 8% over the tensors.
-  - JetPack 7.2 has no PyTorch build for the Orin's sm_87. The generic cu130 wheel JIT-compiles PTX,
-    and Jetson AI Lab's cu130 wheel targets Thor and Spark.
-- **Result.** It was OOM-killed under the 3.3 GB cap and again under a raised 3.6 GB cap, even with
-  images capped at 448 px.
+**LocateAnything-3B: the best boxes, in llama.cpp, and only in demo mode.** Nothing claims it runs on
+an Orin Nano:
+- Jetson AI Lab has no page for it. Its parent there, Nemotron 3 Nano Omni, lists commands only for
+  Thor and AGX Orin 64GB.
+- Its model card says Transformers only ("TensorRT, TensorRT-LLM, and Triton are not yet supported"),
+  tested on A100 and H100, with Thor "possible with additional model optimization".
+
+Two attempts:
+1. **PyTorch, INT4 (`locateanything/la_int4.py`).** This shrinks 7.7 GB to 2.2 GB: tinygemm INT4
+   weights, an INT4 copy of the tied head, and an INT8 embedding.
+   - On the RTX 5070 it drew the best boxes measured: 98% at IoU 0.5 or better, mean IoU 0.85.
+   - It finds rather than classifies. Asked for "person" it boxed something in all 14 empty Reachy
+     frames (precision 63%).
+   - On the Orin it was OOM-killed under caps of 3.3 and 3.6 GB. PyTorch's CUDA context alone is
+     0.9 GB there, and JetPack 7.2 has no sm_87 PyTorch build.
+2. **llama.cpp, the jetson-device-skills recipe for an 8 GB board.** It comes from NVlabs/Eagle's
+   Embodied branch: Kimi-VL's MoonViT-400M vision encoder, Eagle's MLP projector and a plain
+   Qwen2.5-3B, so neither TensorRT-Edge-LLM nor Eagle's runtimes can load it.
+   - Its parallel box decoding can be switched off. Next-token ("slow") decoding is plain causal
+     Qwen2, and Eagle's results rate it the most accurate mode.
+   - llama.cpp's draft PR #24749 adds the projector. `build_llama_upstream.sh`'s cross-build, pointed
+     at the PR, makes the Orin binary.
+   - The PR's own converter made a Q4_K_M text model (2.0 GiB) and a Q8_0 projector (0.6 GB).
+     `locateanything/la_http_bench.py` benchmarks it over HTTP.
+
+What the llama.cpp build measured:
+- **Beside the NVR**, on 69 of the benchmark frames (640x360 event snapshots), under the 3.3 GB cap:
+  - 2.8 GiB resident, about 1.4 s a query;
+  - boxes 100% at IoU 0.5, mean 0.85;
+  - dog or cat 93%, person 73% (precision 67%).
+- **Then a global OOM.** On the Reachy's 960x540 recordings (672 image tokens instead of about 300)
+  it grew past 3 GB while the board had 3.5 GB free. The kernel ran out of memory globally and
+  killed `llama-server`, the largest process; Frigate survived.
+- **Result: demo mode only.** Live Vision's LocateAnything button now needs demo mode (nvr/README.md),
+  where it runs at full resolution with 3.46 GB to spare. `run_llama_bench.sh` now also holds its
+  cap 600 MiB under what is free.
 
 **Nemotron 3 Nano 30B-A3B does not run on this board.** Jetson AI Lab's catalogue ticks "Orin Nano
 8GB", but the model's own page asks for 32 GB of RAM, and the smallest GGUF is 17 GB.
@@ -238,6 +255,7 @@ only:
 | TensorRT Edge-LLM: batch, input length, KV (inference-mem-tune) | batch 1, 1024 input, 1024 KV | |
 | Memory audit with NvMap attribution (memory-audit) | each run's cgroup `memory.stat` (anonymous + NvMap kernel + shared), the same idea | `audit.sh` agrees: 2.87 GB of NvMap in the shim with Cosmos-Reason2 loaded |
 | `drop_caches` (memory-audit) | not needed | the skill scopes its stuck-memory bug to JetPack before 7.2; this is L4T 39.2.1 |
+| llama.cpp + 4-bit GGUF for a model with no TensorRT path (inference-mem-tune) | LocateAnything-3B, via llama.cpp PR #24749 | fits beside the NVR only at about 300 image tokens; at full resolution, demo mode |
 | vLLM / SGLang, speculative decoding (llm-serve, speculative-decoding) | not applicable | Jetson AI Lab gives Gemma 4 E2B no vLLM command on the Nano, and the skills' own recommender picks llama.cpp for 8 GB boards |
 
 **The `jetson_clocks` A/B.** Qwen3-VL-2B was loaded; each arm ran 15 frames for captions and

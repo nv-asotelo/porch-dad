@@ -790,13 +790,42 @@ bash nvr/demo-mode.sh status
 bash nvr/demo-mode.sh off                     # full stack back
 ```
 
-Demo mode keeps three units - `cosmos3-edge-shim.service` (holds the engine),
-`cosmos-edge-ui.service` (Live Vision, the default Live UI since 2026-10-03) and
-`reachy-mjpeg-bridge.service` (its Reachy source). The containers and services the script lists
-stop; `porch-dad.service`, in the boot set since the same day, is not on that list and keeps
-running. Before that day demo mode kept the shim and `live-vlm-webui.service` instead, and the
-effect below was measured that way; with Live Vision and the bridge in its place it has not been
-re-measured:
+Demo mode keeps four units:
+- `cosmos3-edge-shim.service`, which holds the engine;
+- `cosmos-edge-ui.service`, Live Vision;
+- `reachy-mjpeg-bridge.service`, Live Vision's Reachy source;
+- `pokemon-classifier.service`, its classifiers.
+
+It stops everything else in the NVR:
+- the Frigate, ring-mqtt, Home Assistant and MQTT containers;
+- the three Scout bridges;
+- porch-feed, porch-dad, frigate-notify and breed-classifier.
+
+`on` records what it stopped in `/home/orin/nvr/.demo-mode`, and `off` brings back exactly that. A
+container that was already down, such as Home Assistant outside the boot set, stays down. It runs
+one `systemctl` call per unit, so a sudoers file can allow exactly those lines
+(`ui/config/sudoers-live-vision-engines`). `json` reports the state for Live Vision.
+
+**From Live Vision.** The page's **Demo mode** button runs the same script, and also covers engines
+that only fit on a quiesced board:
+- An engine marked `"needs_demo_mode": true` in `engines.json`, today LocateAnything 3B, says
+  "Needs demo mode" under its button.
+- Clicking it shows a warning: what will stop, and why the model does not fit beside the NVR.
+- Only after the user confirms does the page send the switch with `?demo=1`. The server then
+  enters demo mode and loads the model. Stopping the NVR is never a side effect.
+- **End demo mode** first swaps such a model back for one that fits: the one active before, or the
+  registry's `"default"`. Only then does the NVR come back, so Frigate never restarts beside a
+  model that crowds it out.
+
+Verified on 2026-10-05 with LocateAnything:
+- Refused without consent (HTTP 409).
+- With consent, loaded in 138 s, with 3.46 GB still free.
+- Answered a Bernese query.
+- Ended in 50 s, with Cosmos3-Edge v3 back first and every container, service and camera running
+  again. Frigate's runtime camera state was unchanged.
+
+The table below predates the current script. It was measured when demo mode kept the shim and
+`live-vlm-webui.service`:
 
 | | Full stack | Demo mode |
 |---|---|---|
@@ -1067,9 +1096,9 @@ should be a deliberate choice, not a side effect of a memory fix.
 
 Frigate's detector names COCO classes, so every dog in a doggy daycare is just "dog". A detection
 mode ([`feed/detection_modes.py`](feed/detection_modes.py)) is a second look that asks one
-question. On the cameras it is on, when Frigate reports one of its labels, porch-feed asks the
-loaded VLM that question about the camera's frame. The answer replaces the stock description in
-that camera's notification.
+question. On the cameras it is on, when Frigate reports one of its labels, porch-feed answers
+that question about the camera's frame. It uses a specialist where there is one, and the loaded
+VLM otherwise. The answer replaces the stock description in that camera's notification.
 
 **The Bernese mountain dog mode** is the first. It is on for the Reachy Mini, which watches a
 doggy-daycare feed on a monitor. Each look goes like this:
@@ -1078,11 +1107,17 @@ doggy-daycare feed on a monitor. Each look goes like this:
    person-only there.
 2. **Trigger.** porch-feed looks on the event's `new` or `update`. It does not wait for `end`,
    because a dog asleep at daycare can be one event for an hour.
-3. **Gate.** It takes the robot's own 1280x720 frame and asks the benchmark's yes/no question
-   with logprobs: "Is there a Bernese mountain dog in this image? Answer with only yes or no." The
-   gate is the model's own P(yes) of at least 0.6.
-4. **Box.** Only on a yes, it asks for the box in the loaded model's own dialect: `bbox_2d`,
-   `box_2d` or `<ref>`. LocateAnything takes the phrase itself.
+3. **Identify, on Frigate's boxes.** It takes the robot's own 1280x720 frame and every dog box
+   Frigate is tracking on the camera. `breed-classifier.service` scores each box with ImageNet
+   ViT-B/16 ([`feed/breed_service.py`](feed/breed_service.py): INT8, CPU, onnxruntime, its own
+   venv) against the Swiss mountain dog family that a blurry Bernese is taken for: Bernese,
+   EntleBucher, Appenzeller and Greater Swiss. The best box at 0.5 or more is the Bernese, and
+   its box is the 2D grounding.
+4. **Or ask the VLM.** With no dog tracked, as in a Look now, or with no breed service, it asks
+   the loaded VLM the benchmark's yes/no question with logprobs: "Is there a Bernese mountain dog
+   in this image? Answer with only yes or no." It gates on the model's own P(yes) of at least 0.6.
+   Only then does it ask for the box in that model's own dialect: `bbox_2d`, `box_2d` or `<ref>`.
+   LocateAnything takes the phrase itself.
 5. **Notification.** When found, porch-feed does four things:
    - draws the box on the frame and saves a Feed entry;
    - sets Frigate's sub_label on the event, which then shows as "dog · Bernese mountain dog";
@@ -1094,14 +1129,22 @@ doggy-daycare feed on a monitor. Each look goes like this:
    notification, not two.
 6. **Cooldown.** It looks at most once per camera every 300 s.
 
-Measured on 35 frames of the daycare footage the Reachy recorded on 2026-10-04:
-- **Qwen3-VL-2B** found the Bernese in three frames, with tight boxes. It also called a
-  curled-up husky a Bernese at P(yes) 0.54, which is under the 0.6 gate now in use.
-- **Cosmos3-Edge v3** said yes on 24 of the 35 frames, boxing doodles and huskies.
+Measured on 35 frames of the daycare footage the Reachy recorded on 2026-10-04 (332 dog crops).
+These are the frames the gates were set on:
 
-So each mode lists the engines it trusts. For this one that is Qwen3-VL and LocateAnything, in
-`MODES["bernese"]["engines"]`. With another model loaded, its verdicts are still recorded in the
-Feed for comparison, but nothing is pushed or spoken.
+| Engine | Frames with the Bernese found | False alarms |
+|---|---|---|
+| Breed scores on the dog boxes | 4 of 4, scoring 0.70-0.99; one of them Qwen3-VL missed | none: no other dog above 0.09 |
+| Qwen3-VL-2B | 3, with tight boxes | a curled-up husky at P(yes) 0.54, under the 0.6 gate now in use |
+| Cosmos3-Edge v3 | | yes on 24 of the 35 frames, boxing doodles and huskies |
+
+The breed path runs whatever VLM is loaded, so the mode works beside stock Cosmos3-Edge:
+- **Speed:** about 0.5 s per dog on two capped cores.
+- **Memory:** it loads its 89 MB model on demand and drops it after 15 idle minutes (27 MB idle,
+  231 MB loaded).
+- **Engine trust:** for its VLM fallback, each mode still lists the engines it trusts. For this
+  one that is Qwen3-VL and LocateAnything, in `MODES["bernese"]["engines"]`. With another model
+  loaded, a VLM verdict is recorded in the Feed for comparison, but nothing is pushed or spoken.
 
 The command centre's **Detection modes** card has three controls:
 - one chip per Frigate camera, to turn the mode on there;
@@ -1121,11 +1164,12 @@ and draws a contact sheet. That is how the numbers above were taken.
   there is no gate, no box and no probability, and the text goes out as-is.
 - **Prompts per camera, the detection-mode way.** A mode can ask any question, gated on the
   model's own probability, with a box drawn and its own notification.
-- **Engines per camera: not at the same time on this board.** One VLM fits beside the NVR (2.2-3.1
-  GiB resident, with 0.8-1.3 GB left), and switching is global and takes 45-55 s. A mode can name
-  another engine with a `url` in `config.yaml`, such as a second box serving LocateAnything. That
-  is the only way a camera's mode gets an engine of its own here. It is config-only, so the control
-  plane can never be told to send camera frames somewhere new.
+- **Engines per camera: one VLM, plus specialists.** One VLM fits beside the NVR (2.2-3.1 GiB
+  resident, with 0.8-1.3 GB left), and switching is global and takes 45-55 s. So a camera's mode
+  gets an engine of its own in one of two ways:
+  - a small specialist beside the VLM, like the breed service;
+  - a `url` in `config.yaml` pointing at a second box. It is config-only, so the control plane can
+    never be told to send camera frames somewhere new.
 
 **Recommended way to customize detection per camera:**
 1. **Keep Frigate as the first stage** on every camera, tuned per camera: labels, zones, masks and
@@ -1139,9 +1183,10 @@ and draws a contact sheet. That is how the numbers above were taken.
 4. **Choose the one loaded engine by the modes the house actually runs.** Cosmos3-Edge v3 is the
    better person detector on the dark indoor cameras, but it cannot tell breeds. Qwen3-VL-2B can.
    Post-training Qwen3-VL on these cameras, the Bernese included, is how one engine does both.
-5. **A second engine needs a second device.** Point a mode's `url` at it, or add a small
-   co-resident specialist, such as a breed classifier on Frigate's dog crop, which is a few hundred
-   MB. A second VLM does not fit on this Orin.
+5. **A second engine has to be small, or elsewhere.** The breed service is the working example: a
+   co-resident specialist on Frigate's crops, a few hundred MB on the CPU only while it is
+   looking. A mode's `url` can also point at a second device. A second VLM does not fit on this
+   Orin.
 
 ## Live Vision: models, Pokémon classifiers, Reachy Mini control and Piper speech
 
@@ -1298,9 +1343,13 @@ it - so Frigate's GenAI, porch-dad and this page reach every model the same way,
 stops the server before the next model loads. Nemotron 3 Nano 4B reads text only: the shim drops the
 image, so it is there for text prompts. LocateAnything answers boxes, not prose: a short phrase
 ("Bernese mountain dog", `person</c>dog`) is its query, and anything longer falls back to people,
-pets and vehicles; its license is non-commercial. On this board LocateAnything 3B is greyed out,
-with the measured reason as the tooltip: it was OOM-killed inside the memory left beside the NVR.
-Gemma 4 E2B was greyed out the same way until it ran on a newer llama.cpp. That build reads its
+pets and vehicles; its license is non-commercial.
+
+LocateAnything now runs in llama.cpp (PR #24749, Q4_K_M), with its adapter (`la_server.py
+--upstream`) in front. Beside the NVR, a 960x540 frame pushed it past 3 GB and the kernel ran out of
+memory, so its button says "Needs demo mode": clicking it warns that the NVR will stop, then loads
+it at full resolution (Demo mode, above). Gemma 4 E2B was greyed out until it ran on a newer
+llama.cpp. That build reads its
 per-layer embedding table from disk on demand (`--lazy-mode`), which NVIDIA's Jetson image
 predates; `vlmbench/build_llama_upstream.sh` builds it on the workstation, and it runs inside the
 same image.
