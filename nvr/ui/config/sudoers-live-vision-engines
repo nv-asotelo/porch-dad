@@ -25,6 +25,7 @@ orin ALL=(root) NOPASSWD: /usr/bin/systemctl restart cosmos3-edge-shim
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop frigate-notify, /usr/bin/systemctl start frigate-notify
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop porch-feed, /usr/bin/systemctl start porch-feed
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop porch-dad, /usr/bin/systemctl start porch-dad
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop breed-classifier, /usr/bin/systemctl start breed-classifier
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop x11vnc, /usr/bin/systemctl start x11vnc
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop gnome-remote-desktop, /usr/bin/systemctl start gnome-remote-desktop
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop jetson-oled, /usr/bin/systemctl start jetson-oled

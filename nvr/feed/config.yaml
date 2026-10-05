@@ -189,6 +189,9 @@ detection_modes:
 reachy_frigate_camera: reachy_mini
 # frigate-notify's config: the modes push through the same phone provider.
 notify_config: /home/orin/nvr/notify/config.yaml
+# breed_service.py (breed-classifier.service): a mode with breed classes scores the dogs Frigate
+# is tracking there, whatever VLM the shim has loaded. Empty: the VLM answers alone.
+breed_classifier_url: http://127.0.0.1:8107
 # Only used to build the "open in" link; the preview no longer depends on it being up.
 reachy_webui_url: "https://127.0.0.1:8090"
 reachy_session: "reachy"

@@ -205,6 +205,8 @@ REACHY_SESSION = str(CFG.get("reachy_session") or "reachy")
 MODE_DEFAULTS = CFG.get("detection_modes") or {}
 REACHY_FRIGATE_CAMERA = str(CFG.get("reachy_frigate_camera") or "reachy_mini")
 NOTIFY_CONFIG = Path(CFG.get("notify_config") or "/home/orin/nvr/notify/config.yaml")
+# breed_service.py: a mode with breed classes scores Frigate's dog boxes there, whatever VLM is loaded.
+BREED_URL = str(CFG.get("breed_classifier_url") or "").rstrip("/")
 _mode_lock = threading.Lock()
 _mode_next: dict[tuple[str, str], float] = {}
 _mode_last: dict[str, dict] = {}        # "mode/camera" -> that camera's last verdict
@@ -563,6 +565,23 @@ def mode_frame(camera: str, event_id: str | None) -> bytes | None:
     return None
 
 
+def mode_boxes(camera: str, labels: list[str]) -> list[list[float]]:
+    """Every box Frigate is tracking right now for these labels on this camera, as [x1, y1, x2, y2]
+    in 0-1 (Frigate stores [x, y, w, h])."""
+    try:
+        r = requests.get(f"{FRIGATE}/api/events", timeout=8, params={
+            "cameras": camera, "labels": ",".join(labels), "in_progress": 1, "limit": 25})
+        events = r.json() if r.status_code == 200 else []
+    except (requests.RequestException, ValueError):
+        return []
+    boxes = []
+    for ev in events:
+        b = (ev.get("data") or {}).get("box")
+        if isinstance(b, list) and len(b) == 4 and b[2] > 0 and b[3] > 0:
+            boxes.append([b[0], b[1], b[0] + b[2], b[1] + b[3]])
+    return boxes
+
+
 def mode_due(mode: str, camera: str) -> bool:
     """Claim the mode's next look on this camera if its cooldown has passed."""
     cooldown = float(detection_modes.load_state(MODE_DEFAULTS)[mode]["cooldown_s"])
@@ -580,9 +599,15 @@ def run_detection_mode(mode: str, camera: str, trigger: str, event_id: str | Non
     s = detection_modes.load_state(MODE_DEFAULTS)[mode]
     name = detection_modes.MODES[mode]["name"]
     frame = mode_frame(camera, event_id)
+    spec = detection_modes.MODES[mode]
+    boxes = mode_boxes(camera, spec["labels"]) if BREED_URL and spec.get("breeds") else []
     if not frame:
         v = {"mode": mode, "found": False, "error": "no frame available"}
+    elif boxes:
+        # Frigate has the dogs and their boxes: the breed service scores each one.
+        v = detection_modes.check_breed(BREED_URL, frame, boxes, mode)
     else:
+        # Nothing tracked to score (a Look now with no dog in view, or no breed service): ask the VLM.
         v = detection_modes.check(s["url"] or CFG["cosmos3_url"], frame, mode, float(s["min_confidence"]))
     v.update(camera=camera, trigger=trigger, at=time.time(), event_id=event_id)
     _mode_last[f"{mode}/{camera}"] = v

@@ -1,0 +1,26 @@
+[Unit]
+Description=Breed scores for porch-feed's detection modes (loopback :8107)
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=orin
+Group=orin
+WorkingDirectory=/home/orin/nvr/feed
+# Loopback only: porch-feed asks it to score the dogs Frigate is tracking (breed_classifier_url).
+# CPU and its own venv (onnxruntime, numpy, pillow): no CUDA context beside the VLM, and nothing
+# added to the TensorRT-Edge-LLM venv the shim and Live Vision share.
+ExecStart=/home/orin/nvr/breed-venv/bin/python /home/orin/nvr/feed/breed_service.py --host 127.0.0.1 --port 8107 --threads 2 --model /home/orin/nvr/breed/vit-b16-imagenet-int8.onnx --meta /home/orin/nvr/breed/vit-b16-imagenet.json --idle-unload 900
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+# Two cores at most and a lower priority: the CPU detector in Frigate comes first.
+CPUQuota=200%
+Nice=10
+# The model is loaded only while a mode is looking (--idle-unload): ~27 MB idle, ~231 MB loaded.
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

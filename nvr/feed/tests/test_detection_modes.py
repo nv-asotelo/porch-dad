@@ -91,6 +91,40 @@ class Gate(unittest.TestCase):
         self.assertIn("text only", v["error"])
 
 
+class Breed(unittest.TestCase):
+    """The breed service's way: Frigate's boxes scored, the best one is the verdict."""
+
+    def scored(self, scores, top=None):
+        resp = mock.Mock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"scores": scores, "top": top or [["Siberian husky", 0.4]] * len(scores), "ms": 120}
+        boxes = [[0.1, 0.1, 0.2, 0.2], [0.4, 0.3, 0.55, 0.47], [0.7, 0.6, 0.9, 0.9]][:len(scores)]
+        with mock.patch.object(dm.requests, "post", return_value=resp) as post:
+            v = dm.check_breed("http://breed", b"jpeg", boxes, "bernese")
+        return v, post.call_args.kwargs["json"]
+
+    def test_the_best_scoring_dog_is_found_and_boxed(self):
+        v, sent = self.scored([0.02, 0.97, 0.05])
+        self.assertTrue(v["found"])
+        self.assertEqual(v["box"], [0.4, 0.3, 0.55, 0.47])
+        self.assertEqual(v["confidence"], 0.97)
+        self.assertTrue(v["engine_trusted"])
+        self.assertIn("EntleBucher", sent["classes"])     # the look-alike family counts together
+        self.assertEqual(len(sent["boxes"]), 3)
+
+    def test_no_dog_over_the_gate_is_not_found(self):
+        v, _ = self.scored([0.09, 0.04])
+        self.assertFalse(v["found"])
+        self.assertIsNone(v["box"])
+        self.assertEqual(v["confidence"], 0.09)
+
+    def test_service_down_is_an_error_not_a_miss(self):
+        with mock.patch.object(dm.requests, "post", side_effect=dm.requests.ConnectionError("refused")):
+            v = dm.check_breed("http://breed", b"jpeg", [[0.1, 0.1, 0.2, 0.2]], "bernese")
+        self.assertFalse(v["found"])
+        self.assertIn("ConnectionError", v["error"])
+
+
 class Settings(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()

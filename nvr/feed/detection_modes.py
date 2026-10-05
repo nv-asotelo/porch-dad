@@ -44,6 +44,12 @@ MODES = {
         # still recorded, so it can be compared, but stays off the phone.
         "engines": ["qwen3-vl", "locateanything"],
         "min_confidence": 0.6,
+        # The breed service's way (breed_service.py), used whenever Frigate is tracking dogs: score
+        # each dog's box against the Swiss mountain dog family, the classes a blurry crop of a
+        # Bernese is taken for. On the same daycare footage the Bernese scored 0.70-0.99 in all four
+        # frames it was in and no other dog above 0.09, so 0.5 is the gate.
+        "breeds": ["Bernese mountain dog", "EntleBucher", "Appenzeller", "Greater Swiss Mountain dog"],
+        "breed_min_score": 0.5,
     },
 }
 
@@ -219,6 +225,34 @@ def check(url: str, image: bytes, mode: str, min_confidence: float = 0.5, timeou
                 out["box"] = parse_box(ans)
                 out["found"] = True
     except (requests.RequestException, KeyError, IndexError, ValueError, TypeError) as e:
+        out["error"] = f"{type(e).__name__}: {e}"
+    out["ms"] = int((time.time() - t0) * 1000)
+    return out
+
+
+def check_breed(url: str, image: bytes, boxes: list[list[float]], mode: str, timeout: float = 30) -> dict:
+    """Score the dogs Frigate is tracking (boxes in 0-1) with the breed service; the best box wins.
+
+    Independent of the shim: this is how a mode gets a second engine on a board with room for one
+    VLM. The verdict has the same shape as check()'s, with the family score as its confidence."""
+    import base64
+    m = MODES[mode]
+    out = {"mode": mode, "engine": "ImageNet ViT-B/16 breed scores", "family": "breed", "found": False,
+           "box": None, "confidence": None, "answers": [], "error": None, "engine_trusted": True,
+           "dogs": len(boxes)}
+    t0 = time.time()
+    try:
+        r = requests.post(f"{url.rstrip('/')}/score", timeout=timeout,
+                          json={"image": base64.b64encode(image).decode(), "boxes": boxes, "classes": m["breeds"]})
+        r.raise_for_status()
+        j = r.json()
+        out["answers"] = [f"{label} {p}" for label, p in j["top"]]
+        if j["scores"]:
+            k = max(range(len(j["scores"])), key=j["scores"].__getitem__)
+            out["confidence"] = j["scores"][k]
+            if out["confidence"] >= m.get("breed_min_score", 0.5):
+                out["found"], out["box"] = True, [round(v, 4) for v in boxes[k]]
+    except (requests.RequestException, KeyError, ValueError, TypeError) as e:
         out["error"] = f"{type(e).__name__}: {e}"
     out["ms"] = int((time.time() - t0) * 1000)
     return out

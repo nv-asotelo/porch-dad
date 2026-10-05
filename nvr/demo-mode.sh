@@ -20,7 +20,7 @@
 set -uo pipefail
 
 CONTAINERS=(frigate ring-mqtt homeassistant mosquitto scout-bridge scout-bridge-first-floor scout-bridge-1f-wheeled)
-SERVICES=(frigate-notify porch-feed porch-dad)
+SERVICES=(frigate-notify porch-feed porch-dad breed-classifier)
 # Desktop/remote-access units. Only worth stopping when the recording is driven from another
 # machine's browser - if you are recording ON the Orin's own desktop, stopping these kills it.
 DESKTOP=(x11vnc gnome-remote-desktop jetson-oled)
