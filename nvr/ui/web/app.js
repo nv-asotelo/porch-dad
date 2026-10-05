@@ -370,19 +370,35 @@ function engineChoices(data) {
   return choices;
 }
 
+// A model that does not fit beside the NVR ("needs_demo_mode" in engines.json) loads only in demo
+// mode: until demo mode is on, its button says so and a click asks before the NVR is stopped.
+function needsDemoMode(engine, data) {
+  return engine?.needs_demo_mode === true && data?.demo?.on !== true;
+}
+
+function demoWarning(engine) {
+  return `${engine.name} does not fit beside the NVR` +
+    (engine.demo_reason ? ` (${engine.demo_reason})` : "") + ".\n\n" +
+    "Switching to it turns on demo mode: Frigate's recording and detection, ring-mqtt, Home Assistant, " +
+    "MQTT, the Scout bridges, the command centre and phone notifications all stop until you end demo " +
+    "mode here. Live Vision, the Reachy camera and the classifiers keep running.\n\nContinue?";
+}
+
 function renderEngineChoices(container, data, switching, onSwitch) {
   const nodes = engineChoices(data).map(engine => {
     const card = container.ownerDocument.createElement("div"); card.className = "model-choice";
     const button = container.ownerDocument.createElement("button"); button.type = "button";
     const active = engine.id === data.active?.id;
+    const demo = needsDemoMode(engine, data);
     button.textContent = engine.name; button.dataset.modelId = engine.id;
     button.className = active ? "active" : "";
     button.setAttribute("aria-pressed", String(active));
     button.disabled = switching || active || !engine.available;
-    button.title = !engine.available ? engine.reason : (engine.profile || engine.name);
+    button.title = !engine.available ? engine.reason
+      : demo ? `Needs demo mode: ${engine.demo_reason || "does not fit beside the NVR"}` : (engine.profile || engine.name);
     button.addEventListener("click", () => { if (!button.disabled) onSwitch(engine.id); });
     const note = container.ownerDocument.createElement("small"); note.className = "model-availability";
-    note.textContent = !engine.available ? engine.reason : active ? "Active" : "Available";
+    note.textContent = !engine.available ? engine.reason : active ? "Active" : demo ? "Needs demo mode" : "Available";
     card.append(button, note); return card;
   });
   container.replaceChildren(...nodes);
@@ -821,7 +837,7 @@ function scoreSamples(rows) {
   return score;
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, POKEMON_PRESETS, pokemonPreset, saliencyLocation, SALIENCY_LOCATION_PARAMS, readPokemonAnswer, cosmosResult, percentText};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, POKEMON_PRESETS, pokemonPreset, saliencyLocation, SALIENCY_LOCATION_PARAMS, readPokemonAnswer, cosmosResult, percentText};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -2474,10 +2490,52 @@ if (typeof document !== "undefined") {
       : "Only one vision-language engine is resident at a time. Switching pauses inference while the new model loads; a failed switch attempts to restore the previous model." +
         (classifiers ? " Classifiers load beside it in seconds and leave it running." : "");
     updateSwitchProgress();
+    renderDemoMode();
   }
+  // Demo mode (nvr/demo-mode.sh, run by the server): stop the NVR so the model has the board to
+  // itself for a performance demonstration, then bring back what was stopped.
+  let demoBusy = false;
+  function renderDemoMode() {
+    const demo = engineData?.demo, button = $("demoModeButton"), status = $("demoModeStatus");
+    if (!demo?.configured) { button.hidden = true; status.textContent = ""; return; }
+    const busy = demoBusy || Boolean(demo.busy);
+    button.hidden = false;
+    button.disabled = busy || switchingEngine();
+    button.className = demo.on ? "active" : "";
+    button.setAttribute("aria-pressed", String(demo.on === true));
+    button.textContent = busy ? (demo.on ? "Ending demo mode…" : "Starting demo mode…") : demo.on ? "End demo mode" : "Demo mode";
+    const free = Number.isFinite(demo.mem_available_mb) ? ` · ${(demo.mem_available_mb / 1024).toFixed(1)} GB free` : "";
+    status.textContent = demo.on ? `Demo mode: the NVR is stopped${free}` : `NVR running${free}`;
+  }
+  async function toggleDemoMode() {
+    const demo = engineData?.demo;
+    if (!demo?.configured || demoBusy || switchingEngine()) return;
+    if (!demo.on && !window.confirm("Demo mode stops Frigate's recording and detection, ring-mqtt, Home Assistant, " +
+        "MQTT, the Scout bridges, the command centre and phone notifications, so the model has the board to " +
+        "itself. Live Vision, the Reachy camera and the classifiers keep running. End demo mode here to bring " +
+        "the NVR back.\n\nStart demo mode?")) return;
+    demoBusy = true; renderDemoMode();
+    try {
+      const credentials = await loadAccess();
+      const response = await fetch(`/api/demo/${demo.on ? "off" : "on"}`, {
+        method: "POST", credentials: "same-origin", headers: {"X-Reachy-Token": credentials.reachy_token},
+        signal: AbortSignal.timeout(420000)
+      });
+      const body = await response.json().catch(() => null);
+      if (response.status === 401 || response.status === 403) access = null;
+      if (!response.ok || body?.ok === false) throw new Error(body?.error?.message || body?.message || `Demo mode change failed (HTTP ${response.status}).`);
+      $("engineSwitchStatus").textContent = body?.message || "Demo mode changed";
+    } catch (err) {
+      error(err.message);
+    } finally { demoBusy = false; await checkBackend(); renderEngines(); controls(); }
+  }
+  $("demoModeButton").addEventListener("click", toggleDemoMode);
   async function switchToEngine(id) {
     const choice = engineData && engineChoices(engineData).find(engine => engine.id === id);
     if (switchingEngine() || !choice?.available || id === engineData.active?.id) return;
+    // Stopping the NVR is never a side effect: the user confirms it, then ?demo=1 says so.
+    const demo = needsDemoMode(choice, engineData);
+    if (demo && !window.confirm(demoWarning(choice))) return;
     try {
       await runEngineSwitch(engineRequests, {
         before() {
@@ -2489,7 +2547,7 @@ if (typeof document !== "undefined") {
         },
         async request() {
           const credentials = await loadAccess();
-          const response = await fetch(`/api/engines/${encodeURIComponent(id)}`, {
+          const response = await fetch(`/api/engines/${encodeURIComponent(id)}${demo ? "?demo=1" : ""}`, {
             method: "POST", credentials: "same-origin", headers: {"X-Reachy-Token": credentials.reachy_token},
             signal: AbortSignal.timeout(420000)
           });

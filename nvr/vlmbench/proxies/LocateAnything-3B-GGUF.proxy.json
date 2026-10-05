@@ -1,0 +1,17 @@
+{
+ "model_id": "nvidia/LocateAnything-3B (llama.cpp Q4_K_M, PR 24749)",
+ "url": "http://127.0.0.1:8105",
+ "ready_path": "/health",
+ "start": [
+  "bash",
+  "-c",
+  "docker rm -f shim-llama >/dev/null 2>&1; docker run -d --rm --name shim-llama --runtime nvidia --network host --memory 4500m --memory-swap 4500m -e GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 -v /home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-GGUF:/models:ro -v /home/orin/tensorrt-edgellm-workspace/llama-locateanything:/opt/llama-la:ro ghcr.io/nvidia-ai-iot/llama_cpp:latest-jetson-orin /opt/llama-la/bin/llama-server -m /models/la-3b-Q4_K_M.gguf --mmproj /models/mmproj-la-3b-q8_0.gguf --host 127.0.0.1 --port 8091 -ngl 999 -c 2048 -b 512 -ub 128 -np 1 --fit off --cache-ram 0 --jinja -fa on --special --image-max-tokens 700 >/dev/null && exec /home/orin/TensorRT-Edge-LLM/.venv/bin/python /home/orin/nvr/vlmbench/locateanything/la_server.py --upstream http://127.0.0.1:8091 --port 8105"
+ ],
+ "stop": [
+  "docker",
+  "rm",
+  "-f",
+  "shim-llama"
+ ],
+ "ready_timeout_s": 300
+}

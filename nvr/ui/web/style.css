@@ -109,6 +109,7 @@
 .model-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
 .model-heading>span{font-size:12px;color:var(--muted)}
 .model-panel .hint{margin:12px 0 0}
+.demo-mode{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px}.demo-mode small{color:var(--muted);font-size:12px}.demo-mode button.active{color:#2a1a05;background:#f2b544;border-color:#f2b544;font-weight:650}
 .model-choice{display:flex;flex-direction:column;gap:7px;min-width:135px;max-width:300px;flex:1 1 150px}
 .model-choice button{width:100%;min-height:42px;overflow-wrap:anywhere}
 .model-availability{color:var(--muted);font-size:11px;line-height:1.5;overflow-wrap:anywhere}

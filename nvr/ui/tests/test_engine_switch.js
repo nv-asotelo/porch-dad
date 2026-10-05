@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices,
-  renderEngineChoices, runEngineSwitch, SSEParser, readCompletionEvent} = require("../web/app.js");
+  renderEngineChoices, needsDemoMode, demoWarning, runEngineSwitch, SSEParser, readCompletionEvent} = require("../web/app.js");
 
 const policy = {prompt: "Synthetic fixed identification prompt.", max_tokens: 64,
   temperature: 0, image_tokens: 512, stream: false};
@@ -105,6 +105,26 @@ test("buttons use safe text, visible reasons, active state and availability", ()
   container.children[1].children[0].events.click(); assert.deepEqual(calls, ["alt"]);
   renderEngineChoices(container, engines, true, id => calls.push(id));
   assert.ok(container.children.every(c => c.children[0].disabled));
+});
+
+test("a model that only fits in demo mode says so, and asks before the NVR stops", () => {
+  const document = {createElement: tag => element(tag, document)};
+  const container = element("div", document), calls = [], engines = data();
+  Object.assign(engines.engines[1], {needs_demo_mode: true, demo_reason: "3.6 GB at first inference"});
+  engines.demo = {configured: true, on: false};
+  assert.equal(needsDemoMode(engines.engines[1], engines), true);
+  assert.equal(needsDemoMode(engines.engines[0], engines), false);
+  renderEngineChoices(container, engines, false, id => calls.push(id));
+  const [, card] = container.children;
+  assert.equal(card.children[1].textContent, "Needs demo mode");
+  assert.match(card.children[0].title, /Needs demo mode: 3\.6 GB/);
+  card.children[0].events.click(); assert.deepEqual(calls, ["alt"]);   // the page then asks first
+  assert.match(demoWarning(engines.engines[1]), /does not fit beside the NVR \(3\.6 GB at first inference\)/);
+  assert.match(demoWarning(engines.engines[1]), /Frigate's recording and detection/);
+  engines.demo.on = true;
+  assert.equal(needsDemoMode(engines.engines[1], engines), false);
+  renderEngineChoices(container, engines, false, () => {});
+  assert.equal(container.children[1].children[1].textContent, "Available");
 });
 
 test("complete-answer SSE is compatible without fabricating token metrics", () => {

@@ -8,7 +8,11 @@ visible..." for one - falls back to people, pets and vehicles, so a caller that 
 still gets a truthful one-line count. The answer is that line plus the boxes as JSON
 ({"label", "bbox_2d"} on the 0-1000 grid, x first), the format Live Vision's overlay reads.
 
-  python la_server.py --model <dir> --weights <int4.safetensors> --port 8105
+Two backends answer the query:
+  python la_server.py --model <dir> --weights <int4.safetensors> --port 8105   PyTorch, INT4 (la_int4.py)
+  python la_server.py --upstream http://127.0.0.1:8091 --port 8105            llama.cpp (PR #24749)
+The second is what fits beside the NVR on the Orin: llama-server, started with --special, decodes
+the boxes one token at a time and has none of PyTorch's 0.9 GB CUDA context.
 """
 import argparse
 import base64
@@ -24,6 +28,10 @@ import uuid
 # (PyTorch asks NVML for GPU fabric info, which the integrated GPU does not have).
 
 DEFAULT_QUERY = "person</c>dog</c>cat</c>car</c>truck"
+# LocateAnything's own chat wrapper and query wording (processing_locateanything.py,
+# batch_utils/hybrid_runtime.py), which an OpenAI-style server has to be sent verbatim.
+SYSTEM = "You are a helpful assistant.\n"
+LOCATE = "Locate all the instances that matches the following description: "
 ASK = re.compile(r"^\s*(?:please\s+)?(?:locate|find|detect|point (?:to|at)|show me|where (?:is|are))\s+"
                  r"(?:the |a |an |all |every |any )?(.+?)\s*[.?!]*\s*$", re.I)
 DATA_URL = re.compile(r"^data:[\w/+.-]+;base64,(.+)$", re.S)
@@ -71,13 +79,41 @@ def summary(found, query):
     return ", ".join(f"{n} {label}" for label, n in counts.items() if n) + "."
 
 
+def upstream_locate(upstream, image_url, query, timeout=180):
+    """One query to a llama.cpp server running LocateAnything: its raw <ref>/<box> answer."""
+    import urllib.request
+    body = {"model": "local", "temperature": 0, "max_tokens": 512,
+            "messages": [{"role": "system", "content": SYSTEM},
+                         {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url}},
+                                                      {"type": "text", "text": LOCATE + query}]}]}
+    req = urllib.request.Request(f"{upstream.rstrip('/')}/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)["choices"][0]["message"]["content"] or ""
+
+
+def upstream_ready(upstream):
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"{upstream.rstrip('/')}/health", timeout=2) as r:
+            return r.status == 200
+    except OSError:
+        return False
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True)
-    ap.add_argument("--weights", required=True)
+    ap.add_argument("--model")
+    ap.add_argument("--weights")
+    ap.add_argument("--upstream", help="llama.cpp server with LocateAnything loaded, instead of PyTorch")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8105)
     args = ap.parse_args()
+    if not args.upstream and not (args.model and args.weights):
+        ap.error("give --upstream, or --model and --weights")
+    if args.upstream:
+        serve(args, None)
+        return
 
     os.environ.setdefault("LA_FLASH_MODEL", args.model)
     os.environ.setdefault("LA_FLASH_ATTN", "sdpa")
@@ -85,10 +121,6 @@ def main():
     # This directory's la_int4 wins over any copy that ended up beside the model.
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import torch
-    import uvicorn
-    from fastapi import FastAPI, Request
-    from fastapi.responses import JSONResponse, StreamingResponse
-    from PIL import Image
     from transformers import AutoProcessor, AutoTokenizer
     from batch_utils import generate_batch_hybrid
     from batch_utils import hybrid_runtime as hr
@@ -101,20 +133,41 @@ def main():
     hr._set_llm_mode(hr._model, "sdpa")
     print("[la] model loaded", flush=True)
 
+    def local(image, query):
+        torch.cuda.synchronize()
+        raw = generate_batch_hybrid([(image, query)], temperature=0.0, top_p=0.9, top_k=None,
+                                    repetition_penalty=1.1, max_new_tokens=512)[0]
+        torch.cuda.synchronize()
+        return raw
+
+    serve(args, local)
+
+
+def serve(args, local):
+    """The OpenAI-compatible front: local(image, query) runs PyTorch; without it, args.upstream."""
+    import uvicorn
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse, StreamingResponse
+    from PIL import Image
+
     app = FastAPI()
+    model_name = "nvidia/LocateAnything-3B"
 
     @app.get("/health")
     def health():
+        # In upstream mode the shim waits on this, so it must not say ok before llama.cpp does.
+        if local is None and not upstream_ready(args.upstream):
+            return JSONResponse(status_code=503, content={"status": "loading"})
         return {"status": "ok"}
 
     @app.get("/v1/models")
     def models():
-        return {"object": "list", "data": [{"id": "nvidia/LocateAnything-3B", "object": "model", "owned_by": "local"}]}
+        return {"object": "list", "data": [{"id": model_name, "object": "model", "owned_by": "local"}]}
 
     @app.post("/v1/chat/completions")
     async def chat(request: Request):
         body = await request.json()
-        image, text = None, ""
+        image_url, text = None, ""
         for m in body.get("messages") or []:
             if m.get("role") != "user":
                 continue
@@ -126,31 +179,29 @@ def main():
                 if c.get("type") == "text":
                     text = c.get("text") or text
                 elif c.get("type") == "image_url":
-                    url = (c.get("image_url") or {}).get("url", "")
-                    d = DATA_URL.match(url)
-                    image = Image.open(io.BytesIO(base64.b64decode(d.group(1))) if d else url).convert("RGB")
-        if image is None:
+                    image_url = (c.get("image_url") or {}).get("url", "")
+        if not image_url:
             return JSONResponse(status_code=400, content={"error": {"message": "LocateAnything needs an image"}})
-        image = fit_side(image, int(os.environ.get("LA_MAX_SIDE", "0")))
         query = query_for(text)
-        torch.cuda.synchronize()
         t0 = time.perf_counter()
-        raw = generate_batch_hybrid([(image, query)], temperature=0.0, top_p=0.9, top_k=None,
-                                    repetition_penalty=1.1, max_new_tokens=512)[0]
-        torch.cuda.synchronize()
+        if local is None:
+            raw = upstream_locate(args.upstream, image_url, query)
+        else:
+            d = DATA_URL.match(image_url)
+            image = Image.open(io.BytesIO(base64.b64decode(d.group(1))) if d else image_url).convert("RGB")
+            raw = local(fit_side(image, int(os.environ.get("LA_MAX_SIDE", "0"))), query)
         found = parse(raw)
         answer = summary(found, query) + "\n" + json.dumps(found)
         print(f"[la] query={query!r} boxes={len(found)} ms={(time.perf_counter() - t0) * 1000:.0f}", flush=True)
         usage = {"prompt_tokens": 0, "completion_tokens": len(found) * 6 + 1, "total_tokens": len(found) * 6 + 1}
         cid = "chatcmpl-" + uuid.uuid4().hex
         if not body.get("stream"):
-            return {"id": cid, "object": "chat.completion", "created": int(time.time()), "model": "nvidia/LocateAnything-3B",
+            return {"id": cid, "object": "chat.completion", "created": int(time.time()), "model": model_name,
                     "choices": [{"index": 0, "message": {"role": "assistant", "content": answer}, "finish_reason": "stop"}],
                     "usage": usage}
 
         def frames():
-            head = {"id": cid, "object": "chat.completion.chunk", "created": int(time.time()),
-                    "model": "nvidia/LocateAnything-3B"}
+            head = {"id": cid, "object": "chat.completion.chunk", "created": int(time.time()), "model": model_name}
             yield "data: " + json.dumps({**head, "choices": [{"index": 0, "delta": {"content": answer}, "finish_reason": None}]}) + "\n\n"
             yield "data: " + json.dumps({**head, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}) + "\n\n"
             yield "data: " + json.dumps({**head, "choices": [], "usage": usage}) + "\n\n"

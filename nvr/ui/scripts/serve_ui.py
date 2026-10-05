@@ -932,6 +932,71 @@ class Piper:
         return s
 
 
+class DemoMode:
+    """The board's demo mode (nvr/demo-mode.sh): stop the NVR so a model has the board to itself, or
+    bring back what was stopped. Live Vision is one of the units the script keeps, so this page
+    stays up to turn it off again.
+
+    An engine entry with "needs_demo_mode": true (and a "demo_reason") does not fit beside the NVR:
+    Handler.engine_switch only loads it in demo mode, and only after the page has warned the user and
+    sent ?demo=1. Leaving demo mode first swaps such a model back for one that fits - the one that
+    was active before, else the registry's "default" entry - so the NVR never restarts beside it.
+    """
+
+    def __init__(self, script: Path):
+        self.script = script
+        self.lock = threading.Lock()
+        self.busy = None              # "on" or "off" while the script runs
+        self.previous = None          # the engine to go back to when demo mode ends
+        self._status = (-math.inf, None)
+
+    def _run(self, *args, timeout=300):
+        return subprocess.run(["bash", str(self.script), *args], capture_output=True, text=True,
+                              timeout=timeout)
+
+    def status(self) -> dict:
+        """{"configured", "on", "running", "stopped", "mem_available_mb", "busy"}, at most 3 s old."""
+        at, cached = self._status
+        if cached is None or time.monotonic() - at >= 3:
+            try:
+                cached = json.loads(self._run("json", timeout=20).stdout.strip().splitlines()[-1])
+            except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+                cached = {"on": False, "error": "demo mode status unavailable"}
+            self._status = (time.monotonic(), cached)
+        return {"configured": True, **cached, "busy": self.busy}
+
+    def set(self, on: bool) -> tuple[bool, str]:
+        if not self.lock.acquire(blocking=False):
+            return False, "demo mode is already changing"
+        self.busy = "on" if on else "off"
+        try:
+            r = self._run("on" if on else "off")
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, f"{type(exc).__name__}: {exc}"
+        finally:
+            self.busy = None
+            self._status = (-math.inf, None)
+            self.lock.release()
+        if r.returncode != 0:
+            return False, (r.stderr or r.stdout)[-300:] or f"demo-mode.sh exited {r.returncode}"
+        return True, ("Demo mode on: the NVR is stopped until you end demo mode." if on
+                      else "Demo mode off: the NVR is starting again.")
+
+    def fallback(self, switcher) -> str | None:
+        """The engine to load before the NVR comes back: the one active before demo mode, else the
+        registry's "default", else the first available one that fits beside the NVR."""
+        def fits(eid):
+            e = switcher.engines.get(eid) or {}
+            return bool(e) and e.get("kind") != "classifier" and e.get("needs_demo_mode") is not True \
+                and switcher.availability(eid)[0]
+        if self.previous and fits(self.previous):
+            return self.previous
+        for eid, e in switcher.engines.items():
+            if e.get("default") and fits(eid):
+                return eid
+        return next((eid for eid in switcher.engines if fits(eid)), None)
+
+
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 8
@@ -948,6 +1013,8 @@ class Server(ThreadingHTTPServer):
         self.services_config = {}
         # Populated in main() from --samples-dir: {id: {"path", "species", ...}} - see load_samples.
         self.samples = {}
+        # Populated in main() from --demo-mode-script (DemoMode), else None.
+        self.demo_mode = None
 
     def server_close(self):
         if getattr(self, "owns_telemetry", False):
@@ -1126,17 +1193,20 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/engines":
             switcher = self.server.engine_switcher
             if not switcher:
-                body = json.dumps({"configured": False, "engines": []}).encode()
+                data = {"configured": False, "engines": []}
             elif getattr(switcher, "managed", False):
-                body = json.dumps(switcher.status()).encode()
+                data = switcher.status()
             else:
                 available = [{"id": eid, **e, **dict(zip(("available", "reason"), switcher.availability(eid)))}
                              for eid, e in switcher.engines.items()]
                 progress = ({"target": switcher.switch_target, "started_at": switcher.switch_started_at,
                             "timeout": switcher.switch_timeout} if switcher.switching else None)
-                body = json.dumps({"configured": True, "active": switcher.active(),
-                                   "switching": switcher.switching, "switch_progress": progress,
-                                   "engines": available}).encode()
+                data = {"configured": True, "active": switcher.active(),
+                        "switching": switcher.switching, "switch_progress": progress,
+                        "engines": available}
+            demo = self.server.demo_mode
+            data["demo"] = demo.status() if demo else {"configured": False}
+            body = json.dumps(data).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
@@ -1169,6 +1239,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/engines/"):
             self.engine_switch(self.path[len("/api/engines/"):])
+            return
+        if self.path in ("/api/demo/on", "/api/demo/off"):
+            self.demo_switch(self.path == "/api/demo/on")
             return
         if self.path == "/api/classify":
             self.classify()
@@ -1686,21 +1759,72 @@ class Handler(BaseHTTPRequestHandler):
             msg = f"spoke in {t2 - t0:.2f}s (synth {t1 - t0:.2f}s, play {t2 - t1:.2f}s)"
         self.reachy_result(ok, msg)
 
-    def engine_switch(self, eid):
+    def control_allowed(self, what):
+        """Same-site page with the current relay token: what the model and demo buttons send."""
         if self.host_refused():
-            return
+            return False
         token = self.headers.get("X-Reachy-Token", "")
         if not self.fetch_site_allowed() or not secrets.compare_digest(token.encode(), RELAY_TOKEN.encode()):
-            self.json_error(403, "Reload Live Vision before switching engines.")
+            self.json_error(403, f"Reload Live Vision before {what}.")
+            return False
+        return True
+
+    def engine_switch(self, path):
+        eid, _, query = path.partition("?")
+        if not self.control_allowed("switching engines"):
             return
         switcher = self.server.engine_switcher
         if not switcher:
             self.json_error(503, "engine switching not configured (--engine-link/--engines-config)")
             return
+        registry = getattr(switcher, "engines", None)
+        entry = (registry.get(eid) or {}) if isinstance(registry, dict) else {}
+        demo = self.server.demo_mode
+        if entry.get("needs_demo_mode") is True and not (demo and demo.status().get("on")):
+            reason = entry.get("demo_reason") or "it does not fit beside the NVR"
+            if not demo:
+                self.json_error(409, f"{entry['name']} needs demo mode ({reason}), which is not set up here.")
+                return
+            # The page asks first and only then sends ?demo=1: stopping the NVR is never a side effect.
+            if (parse_qs(query).get("demo") or [""])[0] != "1":
+                self.json_error(409, f"{entry['name']} needs demo mode: {reason}.")
+                return
+            demo.previous = switcher.active().get("id")
+            ok, msg = demo.set(True)
+            if not ok:
+                self.reachy_result(False, f"Demo mode did not start, so {entry['name']} was not loaded: {msg}")
+                return
         # Can take up to switch_timeout (180 s: symlink + service restart + readiness poll).
         # No separate ack-then-poll: a slow synchronous response is simpler for a demo UI and this
         # server already has one thread per request (ThreadingHTTPServer).
         ok, msg = switcher.switch(eid)
+        self.reachy_result(ok, msg)
+
+    def demo_switch(self, on):
+        if not self.control_allowed("changing demo mode"):
+            return
+        demo, switcher = self.server.demo_mode, self.server.engine_switcher
+        if not demo:
+            self.json_error(503, "demo mode not configured (--demo-mode-script)")
+            return
+        if on:
+            if switcher:
+                demo.previous = switcher.active().get("id")
+            ok, msg = demo.set(True)
+            self.reachy_result(ok, msg)
+            return
+        # A model that only fits in demo mode goes first; otherwise the NVR would start beside it.
+        registry = getattr(switcher, "engines", None)
+        if isinstance(registry, dict) and (registry.get(switcher.active().get("id")) or {}).get("needs_demo_mode") is True:
+            back = demo.fallback(switcher)
+            if not back:
+                self.reachy_result(False, "Demo mode stays on: no model that fits beside the NVR is available.")
+                return
+            ok, msg = switcher.switch(back)
+            if not ok:
+                self.reachy_result(False, f"Demo mode stays on: switching back to {back} failed: {msg}")
+                return
+        ok, msg = demo.set(False)
         self.reachy_result(ok, msg)
 
 
@@ -1750,6 +1874,11 @@ def main():
     parser.add_argument("--samples-dir", type=Path, default=None,
                         help="Directory holding manifest.json and the labelled images it lists, which "
                              "the page can run the selected classifier over (/api/samples).")
+    parser.add_argument("--demo-mode-script", type=Path, default=None,
+                        help="nvr/demo-mode.sh: turns on the page's Demo mode button, and lets engine "
+                             'entries marked "needs_demo_mode" load after the page has warned the user. '
+                             "Needs passwordless sudo for that script's systemctl command lines "
+                             "(nvr/ui/config/sudoers-live-vision-engines).")
     parser.add_argument("--services-config", type=Path, default=None,
                         help='JSON file: {"Display Name": {"cmdline_match": "substring to find '
                              'in /proc/*/cmdline", "path": "/dir/to/report/size/and/disk/for"}, '
@@ -1849,6 +1978,8 @@ def main():
         else:
             engine_switcher = (EngineSwitcher(args.engine_link, engines, args.shim_service, args.backend_port,
                                               args.classifier_url) if engines else None)
+        # One instance for both listeners: its lock and the engine to go back to are shared.
+        demo_mode = DemoMode(args.demo_mode_script) if args.demo_mode_script else None
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
@@ -1856,6 +1987,7 @@ def main():
         server.reachy_client = reachy_client
         server.piper = piper
         server.engine_switcher = engine_switcher
+        server.demo_mode = demo_mode
         server.samples = samples
         server.services_config = services_config
         server.https_port = args.https_port
@@ -1870,6 +2002,7 @@ def main():
             secure.reachy_client = reachy_client
             secure.piper = piper
             secure.engine_switcher = engine_switcher
+            secure.demo_mode = demo_mode
             secure.samples = samples
             secure.services_config = services_config
             secure.allowed_hosts = allowed_hosts
@@ -1885,6 +2018,7 @@ def main():
               f"{args.reachy_daemon_url or 'not configured'}", flush=True)
         print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)
         print(f"Engines: {', '.join(engines) if engines else 'not configured'}", flush=True)
+        print(f"Demo mode: {args.demo_mode_script or 'not configured'}", flush=True)
         print(f"Sample set: {f'{len(samples)} images' if samples else 'not configured'}", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()

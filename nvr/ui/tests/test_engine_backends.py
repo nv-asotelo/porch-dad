@@ -225,6 +225,103 @@ class SymlinkSwitcherTests(unittest.TestCase):
                          (False, 'Does not fit beside the NVR'))
 
 
+class DemoModeTests(unittest.TestCase):
+    """Demo mode: a fake demo-mode.sh records its calls; the symlink switcher is the real one."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name)
+        for name in ('v3', 'la'):
+            (root / name).mkdir()
+            (root / name / 'llm.engine').write_bytes(b'synthetic engine fixture')
+        self.link = root / 'default'
+        self.link.symlink_to(root / 'v3')
+        self.log = root / 'calls.txt'
+        self.state = root / 'demo-on'
+        script = root / 'demo-mode.sh'
+        script.write_text(f"""#!/bin/bash
+echo "$1" >> {self.log}
+case "$1" in
+  on) touch {self.state} ;;
+  off) rm -f {self.state} ;;
+  json) [ -e {self.state} ] && on=true || on=false
+        echo "{{\\"on\\": $on, \\"running\\": [], \\"stopped\\": [], \\"mem_available_mb\\": 4000}}" ;;
+esac
+""")
+        self.entries = {
+            'v3': {'name': 'Slow', 'path': str(root / 'v3'), 'default': True},
+            'la': {'name': 'LocateAnything', 'path': str(root / 'la'), 'needs_demo_mode': True,
+                   'demo_reason': 'passes 3.6 GB'}}
+        self.switcher = ui.EngineSwitcher(self.link, self.entries, 'shim', 1)
+        self.demo = ui.DemoMode(script)
+
+        def fake_sudo(cmd, timeout=180):
+            if cmd[2] == 'ln':
+                self.link.unlink()
+                self.link.symlink_to(cmd[4])
+            return True, ''
+        for patch in (mock.patch.object(self.switcher, '_run', side_effect=fake_sudo),
+                      mock.patch.object(self.switcher, 'wait_ready', return_value=True)):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+        class Telemetry:
+            def snapshot(self): return {}
+            def close(self): pass
+        class Quiet(ui.Handler):
+            def log_message(self, *args): pass
+        self.server = ui.Server(('127.0.0.1', 0), Quiet, telemetry=Telemetry())
+        self.server.engine_switcher = self.switcher
+        self.server.demo_mode = self.demo
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+
+    def post(self, path, token=True):
+        connection = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=10)
+        connection.request('POST', path, headers={'X-Reachy-Token': ui.RELAY_TOKEN} if token else {})
+        response = connection.getresponse()
+        result = response.status, json.loads(response.read() or b'{}')
+        connection.close()
+        return result
+
+    def calls(self):
+        return [c for c in self.log.read_text().split() if c != 'json'] if self.log.exists() else []
+
+    def test_a_demo_only_model_is_refused_until_the_user_confirms(self):
+        code, body = self.post('/api/engines/la')
+        self.assertEqual(code, 409)
+        self.assertIn('needs demo mode: passes 3.6 GB', body['error']['message'])
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.switcher.active()['id'], 'v3')
+        code, body = self.post('/api/engines/la?demo=1')
+        self.assertEqual(code, 200, body)
+        self.assertEqual(self.calls(), ['on'])
+        self.assertEqual(self.switcher.active()['id'], 'la')
+        self.assertEqual(self.demo.previous, 'v3')
+
+    def test_ending_demo_mode_swaps_the_model_back_before_the_nvr_returns(self):
+        self.post('/api/engines/la?demo=1')
+        code, body = self.post('/api/demo/off')
+        self.assertEqual(code, 200, body)
+        self.assertEqual(self.switcher.active()['id'], 'v3')
+        self.assertEqual(self.calls(), ['on', 'off'])
+
+    def test_demo_button_needs_the_page_token_and_reports_state(self):
+        self.assertEqual(self.post('/api/demo/on', token=False)[0], 403)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.post('/api/demo/on')[0], 200)
+        self.assertTrue(self.demo.status()['on'])
+        connection = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=10)
+        connection.request('GET', '/api/engines')
+        data = json.loads(connection.getresponse().read())
+        connection.close()
+        self.assertEqual(data['demo']['on'], True)
+        self.assertEqual(data['demo']['mem_available_mb'], 4000)
+        self.assertEqual({e['id']: e.get('needs_demo_mode', False) for e in data['engines']}, {'v3': False, 'la': True})
+
+
 class FakeModel(BaseHTTPRequestHandler):
     """A real OpenAI-shaped SSE backend - proxy() (serve_ui.py) requires an actual
     text/event-stream response for a managed engine, not a plain JSON object."""

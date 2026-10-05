@@ -49,7 +49,14 @@ restore() {
 trap restore EXIT
 
 systemctl stop cosmos3-edge-shim
-echo "shim stopped; MemAvailable $(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo) MiB"
+avail=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)
+# The cap only protects the NVR if it leaves the NVR room: on 2026-10-05 LocateAnything stayed under
+# a fixed 3300m while the board had 3517 MiB free, and the kernel ran out globally instead (it killed
+# llama-server, not Frigate, but only because it was the largest). So the cap is also held 600 MiB
+# under what is free once the shim is down.
+want=${CAP%m}
+[ "$want" -gt $(( avail - 600 )) ] && CAP="$(( avail - 600 ))m"
+echo "shim stopped; MemAvailable $avail MiB; cap $CAP"
 args=(-m "/models/$model" --host 127.0.0.1 --port "$PORT" -ngl 999 -c "$CTX" -b "${LLAMA_BATCH:-512}" -ub "${LLAMA_UBATCH:-512}" -np 1
       --fit off --cache-ram 0 --jinja)
 [ "$mmproj" != "-" ] && args+=(--mmproj "/models/$mmproj")
@@ -80,7 +87,8 @@ if [ $up -ne 1 ]; then
 fi
 echo "== $label up in $(( $(date +%s) - t0 ))s; memory.current $(( $(cat "$cgroup/memory.current") / 1048576 )) MiB"
 mkdir -p "$RESULTS" && chown orin:orin "$RESULTS"
-runuser -u orin -- python3 "$HERE/bench.py" --url "http://127.0.0.1:$PORT/v1/chat/completions" --cgroup "$cgroup" \
+# BENCH_SCRIPT swaps the client, e.g. locateanything/la_http_bench.py for a grounding model.
+runuser -u orin -- python3 "$HERE/${BENCH_SCRIPT:-bench.py}" --url "http://127.0.0.1:$PORT/v1/chat/completions" --cgroup "$cgroup" \
   --data "$DATA" $( [ -f "$DATA/labels.json" ] && echo --labels "$DATA/labels.json" ) ${BENCH_ARGS:-} --label "$label" --out "$RESULTS/$label.jsonl" "$@"
 echo "   peak $(( $(cat "$cgroup/memory.peak") / 1048576 )) MiB, oom_kill=$(awk '/oom_kill / {print $2}' "$cgroup/memory.events")"
 docker logs "$NAME" 2>&1 | grep -E "load time|model buffer size|KV self size|compute buffer size|CUDA0 model buffer|mmproj|clip|lazy" | tail -12 | sed 's/^/   /'

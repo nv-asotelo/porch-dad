@@ -12,7 +12,8 @@
   "v3": {
     "name": "Cosmos v3 · Slow",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v3/engines/reasoning",
-    "profile": "INT4 · 482 ms · 3.395 GB RAM · 320 tokens/frame · 1024 ctx"
+    "profile": "INT4 · 482 ms · 3.395 GB RAM · 320 tokens/frame · 1024 ctx",
+    "default": true
   },
   "mlp": {
     "name": "Cosmos MLP-INT4",
@@ -53,10 +54,10 @@
   },
   "locateanything": {
     "name": "LocateAnything 3B",
-    "path": "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/engines/reasoning",
-    "profile": "PyTorch INT4 (2.2 GB of weights) · NVIDIA non-commercial license",
-    "enabled": false,
-    "unavailable_reason": "Does not fit beside the NVR: loads at 3.1 GB, but its first inference passes 3.6 GB in PyTorch (no sm_87 build for JetPack 7.2). On the workstation GPU: 0.4-0.7 s a query and the best boxes measured (mean IoU 0.85)"
+    "path": "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-GGUF/engines/reasoning",
+    "profile": "llama.cpp Q4_K_M (PR #24749), boxes one token at a time · ~1.4 s a query · boxes 100% at IoU 0.5 (mean 0.85) on 69 frames of this house's cameras · NVIDIA non-commercial license",
+    "needs_demo_mode": true,
+    "demo_reason": "beside the NVR, a 960x540 frame pushed it past 3 GB and the kernel ran out of memory; with the NVR stopped it runs at full resolution"
   },
   "nemotron4b": {
     "name": "Nemotron 3 Nano 4B · text",

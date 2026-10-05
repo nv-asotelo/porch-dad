@@ -19,3 +19,19 @@ orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace
 orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/engines/reasoning /opt/tensorrt-edgellm/models/default
 orin ALL=(root) NOPASSWD: /usr/bin/ln -sfn /home/orin/tensorrt-edgellm-workspace/Nemotron-3-Nano-4B-llamacpp/engines/reasoning /opt/tensorrt-edgellm/models/default
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl restart cosmos3-edge-shim
+
+# Demo mode (nvr/demo-mode.sh, serve_ui.py --demo-mode-script): one systemctl call per unit. Its
+# containers need no sudo: orin is in the docker group.
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop frigate-notify, /usr/bin/systemctl start frigate-notify
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop porch-feed, /usr/bin/systemctl start porch-feed
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop porch-dad, /usr/bin/systemctl start porch-dad
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop x11vnc, /usr/bin/systemctl start x11vnc
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop gnome-remote-desktop, /usr/bin/systemctl start gnome-remote-desktop
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop jetson-oled, /usr/bin/systemctl start jetson-oled
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop iperf3, /usr/bin/systemctl start iperf3
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop kerneloops, /usr/bin/systemctl start kerneloops
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop fwupd, /usr/bin/systemctl start fwupd
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now cosmos3-edge-shim
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now cosmos-edge-ui
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now reachy-mjpeg-bridge
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now pokemon-classifier
