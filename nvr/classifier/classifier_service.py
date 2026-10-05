@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Pokémon classifiers for Live Vision: a loopback HTTP service with one model resident at a time.
+"""Image classifiers for Live Vision - Pokémon and dog breeds: a loopback HTTP service with one model
+resident at a time.
 
 Live Vision (nvr/ui) offers these beside its Cosmos3-Edge engines as "kind": "classifier" registry
 entries and relays its /api/classify here. Each model directory holds a TensorRT engine built on the
 Orin from an ONNX export with two outputs - logits and a saliency map, Grad-CAM for the CNNs and
-attention rollout for the ViTs - and a meta.json with the model's own preprocessing and the
-canonical species of every output (nvr/classifier/README.md).
+attention rollout for the ViTs, a class activation map for SigLIP - and a meta.json with the
+model's own preprocessing and the canonical species (or breed) of every output
+(nvr/classifier/README.md).
 
 None of these models outputs 2D grounding (boxes, points or masks), so "boxes" is always empty. The
-saliency grid shows where the model's evidence came from, not where a Pokémon is.
+saliency grid shows where the model's evidence came from, not where a Pokémon or a dog is.
 
 Only the model in use is resident: POST /load swaps it in, and Live Vision sends POST /unload when
 it goes back to Cosmos3-Edge, so the service holds no model memory while no classifier is selected.

@@ -286,6 +286,54 @@ Bernese at IoU 0.5 or more.
     detector in front of the breed scores. RT-DETR, which boxed the Bernese in 34 of 50 frames,
     runs on the Orin's CPU in about a second a frame.
 
+### Which breed classifier
+
+**The question:** would a dedicated dog-breed classifier identify the Bernese better than the
+ImageNet ViT-B/16 the mode scores with?
+
+**The candidates**, each at its pinned revision (`nvr/classifier/export_models.py`):
+- The mode's own ImageNet ViT-B/16, in FP32 and as the INT8 ONNX the breed service runs.
+- wesleyacheng's ViT-B/16, fine-tuned on Stanford Dogs.
+- prithivMLmods' Dog-Breed-120, a SigLIP2-base fine-tuned on undisclosed data. Its card's 86.8%
+  accuracy appears to be measured on its training images.
+
+**The crops:** every RT-DETR dog box in the 132 daycare frames, cut as `breed_service.py` cuts them
+(the box plus 10%). A crop counts as the Bernese if it overlaps the Bernese's labelled box at IoU 0.5 or more,
+and as another dog below 0.1; the 4 in between (merged or partial boxes) are left out. That leaves 36
+crops of the Bernese and 955 of other dogs.
+
+**The score:** the probability of any of the four Swiss mountain dogs, as the mode reads it. The 95%
+intervals come from a bootstrap over frames, because crops in one frame are not independent.
+
+| Model | PR-AUC [95% CI] | ROC-AUC | At the mode's 0.5 gate: right / wrong | Frames said "Bernese" at 0.5 (right / wrong) | Gate set on the dev frames | At that gate: right / wrong | Top label "Bernese": right / wrong |
+|---|---|---:|---:|---:|---:|---:|---:|
+| ImageNet ViT-B/16 (FP32) | 0.74 [0.60-0.86] | 0.952 | 15 / 2 | 16 (15 / 1) | 0.47 | 15 / 2 | 11 / 0 |
+| ImageNet ViT-B/16, INT8 (the breed service) | 0.74 [0.60-0.87] | 0.942 | 15 / 2 | 16 (15 / 1) | 0.40 | 15 / 2 | 11 / 0 |
+| wesleyacheng ViT-B/16 | 0.71 [0.55-0.85] | 0.916 | 0 / 0 | 0 | 0.27 | 11 / 0 | 18 / 1 |
+| Dog-Breed-120 SigLIP2 | 0.59 [0.42-0.73] | 0.910 | 15 / 11 | 26 (16 / 10) | 0.91 | 4 / 0 | 19 / 26 |
+
+Each dev gate sits halfway between the best-scoring other dog on the 35 frames the mode's gate was
+first set on and the next Bernese crop above it, so dev precision is 100%. It was then applied
+unchanged to the crops above. The last column needs no gate: a crop counts when the model's single most
+likely breed is the Bernese mountain dog, which is what Live Vision shows.
+
+**What it says:**
+- **The ImageNet ViT stays, for now.** Dog-Breed-120 ranks the crops significantly worse: PR-AUC 0.15 lower,
+  95% interval 0.02 to 0.28. At 0.5 it called 11 other dogs Swiss mountain dogs, and on the dev
+  frames another dog (0.89) outscored two of the four Bernese crops.
+- **wesleyacheng ranks about as well** (PR-AUC 0.03 lower, interval -0.11 to +0.16), but its
+  probabilities run low. The four dev Bernese crops scored 0.40-0.49, so at 0.5 it never fires; at its
+  own gate it was right 11 times and never wrong, against the ImageNet ViT's 15.
+- **As a top label it is the best of the three.** It named the Bernese on 18 of its 36 crops with one
+  false call among 955 other dogs; the ImageNet ViT named it on 11, and Dog-Breed-120 on 19 but on 26
+  other dogs too. A top-label rule for the mode is worth trying on the next footage; 36 crops are too
+  few to switch on.
+- **INT8 costs nothing measurable:** PR-AUC difference 0.000, interval -0.04 to +0.04.
+
+All three are in Live Vision's "Dog breeds" group, so any picture can be tried on each
+(`nvr/classifier/README.md`, "Dog breeds"; its "What the overlay shows" has how their saliency maps
+fared on this footage).
+
 ## Jetson AI Lab's "runs on Orin Nano", and NVIDIA's jetson-device-skills
 
 **What the listings mean.** Jetson AI Lab's Gemma 4 E2B page lists the Orin Nano 8GB for llama.cpp

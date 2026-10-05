@@ -1,12 +1,13 @@
 "use strict";
-// Name-the-Pokémon presets: grounding JSON, name probability, saliency-derived locations and sample
-// results. Synthetic; no device, backend or model.
+// Name presets (Pokémon and dog breeds): grounding JSON, name probability, saliency-derived
+// locations and sample results. Synthetic; no device, backend or model.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const {speciesKey, parseGrounding, nameProbability, readPokemonAnswer, saliencyLocation, SALIENCY_LOCATION_PARAMS,
-  cosmosResult, pokemonPreset, POKEMON_PRESETS, readCompletionEvent} = require("../web/app.js");
+const {speciesKey, parseGrounding, nameProbability, readNameAnswer, saliencyLocation, SALIENCY_LOCATION_PARAMS,
+  cosmosResult, namePreset, presetFits, presetForSubject, NAME_PRESETS, NAME_SUBJECTS, SAMPLE_SUBJECT,
+  readCompletionEvent} = require("../web/app.js");
 
 const encoder = new TextEncoder();
 const token = (text, probability) => ({token: text, logprob: Math.log(probability), bytes: [...encoder.encode(text)]});
@@ -60,16 +61,16 @@ test("the name's probability multiplies its own tokens, and errs low at a stradd
 
 test("an answer becomes a caption, labelled marks, and a sample result", () => {
   const text = '{"name": "Pikachu", "bbox_2d": [263, 303, 563, 770]}';
-  const read = readPokemonAnswer(text, [token('{"name": "', 0.99), token("Pikachu", 0.87), token('", "bbox_2d": [263, 303, 563, 770]}', 0.9)]);
+  const read = readNameAnswer(text, [token('{"name": "', 0.99), token("Pikachu", 0.87), token('", "bbox_2d": [263, 303, 563, 770]}', 0.9)]);
   assert.equal(read.caption, "Pikachu · 87%");
   assert.deepEqual(read.marks, [{box: [0.263, 0.303, 0.563, 0.77], point: null, label: "Pikachu 87%", derived: false}]);
   assert.deepEqual(cosmosResult(read), {species: "pikachu", label: "Pikachu", score: 0.87,
     topk: [{species: "pikachu", label: "Pikachu", score: 0.87}], cosmos: true});
-  const withoutLogprobs = readPokemonAnswer(text, []);
+  const withoutLogprobs = readNameAnswer(text, []);
   assert.equal(withoutLogprobs.caption, "Pikachu");
   assert.equal(cosmosResult(withoutLogprobs).score, null);
   assert.equal(cosmosResult(null).species, null);
-  assert.equal(readPokemonAnswer("It is a Pikachu.", []), null);
+  assert.equal(readNameAnswer("It is a Pikachu.", []), null);
 });
 
 test("a saliency grid becomes a box and a point, as the Python reference derives them", () => {
@@ -84,9 +85,12 @@ test("a saliency grid becomes a box and a point, as the Python reference derives
   assert.deepEqual(saliencyLocation(strip, {...plain, component: "largest"}).box, [3 / 6, 0, 1, 1]);
   assert.deepEqual(saliencyLocation(strip, {...plain, component: "all"}).box, [0, 0, 1, 1]);
   assert.throws(() => saliencyLocation(grid(2, 2, {0: 1}), {...plain, upsample: 2}), TypeError);
-  // Real grids from the sample set, both classifiers, against the reference's exact output.
+  // Real grids - the Pokémon sample set, and Commons photos for the dog-breed classifiers - against
+  // the reference's exact output.
   const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "saliency_location_cases.json"), "utf8"));
   assert.deepEqual(JSON.parse(JSON.stringify(SALIENCY_LOCATION_PARAMS)), fixture.params);
+  // Dog-Breed-120 derives no mark at all: its map is nearly flat.
+  assert.equal(SALIENCY_LOCATION_PARAMS.dogbreed120, null);
   for (const c of fixture.cases) {
     const got = saliencyLocation(c.saliency, SALIENCY_LOCATION_PARAMS[c.model]);
     assert.deepEqual(got, c.expected, `${c.model} ${c.file}`);
@@ -94,10 +98,35 @@ test("a saliency grid becomes a box and a point, as the Python reference derives
   }
 });
 
-test("presets are recognised by their exact prompt and locate a box or a point", () => {
-  assert.deepEqual(POKEMON_PRESETS.map(preset => preset.locate), ["box", "point"]);
-  for (const preset of POKEMON_PRESETS) assert.equal(pokemonPreset(preset.prompt), preset);
-  assert.equal(pokemonPreset("Describe what you see in this image in one sentence."), null);
+test("presets are recognised by their exact prompt and locate a box or a point, per subject", () => {
+  assert.deepEqual(NAME_PRESETS.map(preset => `${preset.subject} ${preset.locate}`),
+    ["pokemon box", "pokemon point", "dog box", "dog point"]);
+  for (const preset of NAME_PRESETS) {
+    assert.equal(namePreset(preset.prompt), preset);
+    assert.ok(NAME_SUBJECTS[preset.subject], preset.label);
+  }
+  assert.equal(namePreset("Describe what you see in this image in one sentence."), null);
+  assert.ok(NAME_SUBJECTS[SAMPLE_SUBJECT]);
+});
+
+test("a classifier answers its own subject's presets, and selecting it swaps in the same mark", () => {
+  const [pokemonBox, pokemonPoint, dogBox, dogPoint] = NAME_PRESETS;
+  assert.equal(presetFits(dogBox, "dog"), true);
+  assert.equal(presetFits(pokemonBox, "dog"), false);
+  // A registry entry without a subject takes any Name preset, as before subjects existed.
+  assert.equal(presetFits(pokemonPoint, null), true);
+  assert.equal(presetFits(null, "dog"), false);
+  assert.equal(presetForSubject(pokemonBox.prompt, "dog"), dogBox);
+  assert.equal(presetForSubject(dogPoint.prompt, "pokemon"), pokemonPoint);
+  // Nothing to change: the preset already fits, the prompt is not a Name preset, or no subject.
+  assert.equal(presetForSubject(dogBox.prompt, "dog"), null);
+  assert.equal(presetForSubject("Describe the scene.", "dog"), null);
+  assert.equal(presetForSubject(pokemonBox.prompt, null), null);
+  assert.equal(presetForSubject(pokemonBox.prompt, "cat"), null);
+  // Cosmos3-Edge reads a breed answer the same way it reads a Pokémon one.
+  const read = readNameAnswer('{"name": "Bernese Mountain Dog", "bbox_2d": [120, 80, 640, 900]}', []);
+  assert.deepEqual(read.marks[0].box, [0.12, 0.08, 0.64, 0.9]);
+  assert.equal(cosmosResult(read).species, "bernese-mountain-dog");
 });
 
 test("streamed chunks carry their logprobs through", () => {

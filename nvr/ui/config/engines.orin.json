@@ -2,80 +2,123 @@
   "v2": {
     "name": "Cosmos v2 · Fast",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v2/engines/reasoning",
-    "profile": "INT4 · 208 ms · 3.692 GB RAM · 170 tokens/frame · 3072 ctx"
+    "profile": "INT4 · 208 ms · 3.692 GB RAM · 170 tokens/frame · 3072 ctx",
+    "group": "Cosmos3-Edge"
   },
   "v1": {
     "name": "Cosmos v1 · Medium",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4/engines/reasoning",
-    "profile": "INT4 · 443 ms · 3.410 GB RAM · 200 tokens/frame · 1536 ctx"
+    "profile": "INT4 · 443 ms · 3.410 GB RAM · 200 tokens/frame · 1536 ctx",
+    "group": "Cosmos3-Edge"
   },
   "v3": {
     "name": "Cosmos v3 · Slow",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-INT4-v3/engines/reasoning",
     "profile": "INT4 · 482 ms · 3.395 GB RAM · 320 tokens/frame · 1024 ctx",
-    "default": true
+    "default": true,
+    "group": "Cosmos3-Edge"
   },
   "mlp": {
     "name": "Cosmos MLP-INT4",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge-RTN-MLP-INT4/engines/reasoning",
-    "profile": "RTN INT4 on the MLP layers only · weight-stripped, refits from its model/ directory at load (~65 s) · the tightest fit: ~0.3 GB left beside the NVR"
+    "profile": "RTN INT4 on the MLP layers only · weight-stripped, refits from its model/ directory at load (~65 s) · the tightest fit: ~0.3 GB left beside the NVR",
+    "group": "Cosmos3-Edge"
   },
   "fp16": {
     "name": "Cosmos FP16",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos3-Edge/engines/reasoning",
     "profile": "FP16 · 4.8 GB of engine files",
     "enabled": false,
-    "unavailable_reason": "Does not fit beside the NVR: 4.8 GB of engine files, 3.6 GB free with the shim stopped"
+    "unavailable_reason": "Does not fit beside the NVR: 4.8 GB of engine files, 3.6 GB free with the shim stopped",
+    "group": "Cosmos3-Edge"
   },
   "qwen3vl": {
     "name": "Qwen3-VL 2B",
     "path": "/home/orin/tensorrt-edgellm-workspace/Qwen3-VL-2B-INT4/engines/reasoning",
-    "profile": "INT4 · caption 574 ms · yes/no 129 ms · 2.61 GB · person 88%, count 83%, boxes 85% on this house's cameras · Apache-2.0"
+    "profile": "INT4 · caption 574 ms · yes/no 129 ms · 2.61 GB · person 88%, count 83%, boxes 85% on this house's cameras · Apache-2.0",
+    "group": "Other VLMs"
   },
   "qwen35": {
     "name": "Qwen3.5 2B",
     "path": "/home/orin/tensorrt-edgellm-workspace/Qwen3.5-2B-INT4/engines/reasoning",
-    "profile": "INT4 · caption 669 ms · yes/no 202 ms · 2.83 GB · person 89%, count 90%, boxes 44% on this house's cameras · Apache-2.0"
+    "profile": "INT4 · caption 669 ms · yes/no 202 ms · 2.83 GB · person 89%, count 90%, boxes 44% on this house's cameras · Apache-2.0",
+    "group": "Other VLMs"
   },
   "internvl35": {
     "name": "InternVL3.5 2B",
     "path": "/home/orin/tensorrt-edgellm-workspace/InternVL3_5-2B-INT4/engines/reasoning",
-    "profile": "INT4 · caption 508 ms · yes/no 172 ms · 2.22 GB · person 83%, count 51%, boxes 37% (its own format) on this house's cameras · Apache-2.0"
+    "profile": "INT4 · caption 508 ms · yes/no 172 ms · 2.22 GB · person 83%, count 51%, boxes 37% (its own format) on this house's cameras · Apache-2.0",
+    "group": "Other VLMs"
   },
   "cosmosr2": {
     "name": "Cosmos-Reason2 2B",
     "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos-Reason2-2B-INT4/engines/reasoning",
-    "profile": "INT4 · caption 677 ms · yes/no 132 ms · 2.74 GB · person 75%, count 71%, boxes 93% on this house's cameras · NVIDIA Open Model License"
+    "profile": "INT4 · caption 677 ms · yes/no 132 ms · 2.74 GB · person 75%, count 71%, boxes 93% on this house's cameras · NVIDIA Open Model License",
+    "group": "Other VLMs"
   },
   "gemma4": {
     "name": "Gemma 4 E2B",
     "path": "/home/orin/tensorrt-edgellm-workspace/Gemma-4-E2B-it-llamacpp/engines/reasoning",
-    "profile": "llama.cpp Q4_K_S, newer build with --lazy-mode · caption 1341 ms · yes/no 495 ms · 3.05 GB · person 83%, count 58%, boxes 37% (its own box_2d) on this house's cameras · Apache-2.0"
+    "profile": "llama.cpp Q4_K_S, newer build with --lazy-mode · caption 1341 ms · yes/no 495 ms · 3.05 GB · person 83%, count 58%, boxes 37% (its own box_2d) on this house's cameras · Apache-2.0",
+    "group": "Other VLMs"
   },
   "locateanything": {
     "name": "LocateAnything 3B",
     "path": "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-GGUF/engines/reasoning",
     "profile": "llama.cpp Q4_K_M (PR #24749), boxes one token at a time · ~1.4 s a query · boxes 100% at IoU 0.5 (mean 0.85) on 69 frames of this house's cameras · NVIDIA non-commercial license",
     "needs_demo_mode": true,
-    "demo_reason": "beside the NVR, a 960x540 frame pushed it past 3 GB and the kernel ran out of memory; with the NVR stopped it runs at full resolution"
+    "demo_reason": "beside the NVR, a 960x540 frame pushed it past 3 GB and the kernel ran out of memory; with the NVR stopped it runs at full resolution",
+    "group": "Grounding"
   },
   "nemotron4b": {
     "name": "Nemotron 3 Nano 4B · text",
     "path": "/home/orin/tensorrt-edgellm-workspace/Nemotron-3-Nano-4B-llamacpp/engines/reasoning",
-    "profile": "Text only - the image is dropped · llama.cpp Q4_K_M · ~380 ms per short answer · 2.63 GB · reading Cosmos3-Edge's captions: person 97%, count 95% · NVIDIA Nemotron Open Model License"
+    "profile": "Text only - the image is dropped · llama.cpp Q4_K_M · ~380 ms per short answer · 2.63 GB · reading Cosmos3-Edge's captions: person 97%, count 95% · NVIDIA Nemotron Open Model License",
+    "group": "Other VLMs"
   },
   "skshmjn": {
     "kind": "classifier",
     "name": "Pokémon · Skshmjn ViT-B/16",
     "model_id": "skshmjn",
     "path": "/home/orin/nvr/classifier/models/skshmjn",
-    "profile": "Classifier · 1,025 species · 67.7% top-1, 82.0% top-5 on the 189-image sample set · Apache-2.0 · saliency: attention rollout"
+    "profile": "Classifier · 1,025 species · 67.7% top-1, 82.0% top-5 on the 189-image sample set · Apache-2.0 · saliency: attention rollout",
+    "group": "Pokémon",
+    "subject": "pokemon"
   },
   "bierny": {
     "kind": "classifier",
     "name": "Pokémon · Bierny DenseNet121",
     "model_id": "bierny",
     "path": "/home/orin/nvr/classifier/models/bierny",
-    "profile": "Classifier · the 151 Gen-1 species only · 64.2% top-1 on the sample set's Gen-1 images, 40.7% on all · MIT, but its card also says non-commercial · saliency: Grad-CAM"
+    "profile": "Classifier · the 151 Gen-1 species only · 64.2% top-1 on the sample set's Gen-1 images, 40.7% on all · MIT, but its card also says non-commercial · saliency: Grad-CAM",
+    "group": "Pokémon",
+    "subject": "pokemon"
+  },
+  "imagenet-vit": {
+    "kind": "classifier",
+    "name": "Dog breeds · ImageNet ViT-B/16",
+    "model_id": "imagenet-vit",
+    "path": "/home/orin/nvr/classifier/models/imagenet-vit",
+    "profile": "Classifier · 1,000 ImageNet classes, 121 of them dogs: the Bernese mode's breed scorer · on the daycare crops its top label named the Bernese on 11 of its 36 crops and no other dog; Swiss mountain dog PR-AUC 0.74 · Apache-2.0 · saliency: attention rollout",
+    "group": "Dog breeds",
+    "subject": "dog"
+  },
+  "wesleyacheng": {
+    "kind": "classifier",
+    "name": "Dog breeds · wesleyacheng ViT-B/16",
+    "model_id": "wesleyacheng",
+    "path": "/home/orin/nvr/classifier/models/wesleyacheng",
+    "profile": "Classifier · 120 breeds, ViT-B/16 fine-tuned on Stanford Dogs · on the daycare crops its top label named the Bernese on 18 of its 36 crops and 1 of 955 other dogs; its probabilities run low · MIT · saliency: attention rollout",
+    "group": "Dog breeds",
+    "subject": "dog"
+  },
+  "dogbreed120": {
+    "kind": "classifier",
+    "name": "Dog breeds · Dog-Breed-120 SigLIP2",
+    "model_id": "dogbreed120",
+    "path": "/home/orin/nvr/classifier/models/dogbreed120",
+    "profile": "Classifier · 120 breeds, SigLIP2-base fine-tuned on undisclosed data · on the daycare crops its top label named the Bernese on 19 of its 36 crops but also 26 of 955 other dogs · Apache-2.0 · saliency: class activation map, spread over the whole picture (no box or point)",
+    "group": "Dog breeds",
+    "subject": "dog"
   }
 }

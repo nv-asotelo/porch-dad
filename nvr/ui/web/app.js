@@ -46,22 +46,53 @@ const PROMPT_PRESETS = [
   }
 ];
 
-// This repo's own quick presets, after the Live VLM WebUI ones: name the Pokémon and locate it.
-// Cosmos3-Edge answers them with JSON (parseGrounding) and per-token logprobs (nameProbability); a
-// classifier answers them with its top species and a location derived from its saliency map
-// (saliencyLocation). "locate" says which mark the preset draws.
-const POKEMON_PRESETS = [
-  {label: "🔎 Name the Pokémon · box", locate: "box",
+// This repo's own quick presets, after the Live VLM WebUI ones: name what the picture shows - a
+// Pokémon, or a dog's breed - and locate it. Cosmos3-Edge answers them with JSON (parseGrounding)
+// and per-token logprobs (nameProbability); a classifier answers them with its top label and a
+// location derived from its saliency map (saliencyLocation). "locate" says which mark the preset
+// draws; "subject" which classifiers answer it: those whose registry entry has the same "subject".
+// Per subject: the preset menu's group, what the presets are called, and what a classifier's derived
+// mark means. On Pokémon photos it was close to Cosmos3-Edge's own box; on the daycare footage the
+// dog classifiers' marks landed on a dog no more often than a mark at the frame's centre
+// (nvr/classifier/README.md, "What the overlay shows").
+const NAME_SUBJECTS = Object.freeze({
+  pokemon: Object.freeze({menu: "Pokémon · Cosmos3-Edge and the Pokémon classifiers", preset: "Pokémon",
+    mark: "so it is an estimate of where the Pokémon is, not a detection"}),
+  dog: Object.freeze({menu: "Dog breeds · Cosmos3-Edge and the dog-breed classifiers", preset: "dog breed",
+    mark: "so it marks where the classifier looked, which need not be the dog"}),
+});
+const NAME_PRESETS = [
+  {label: "🔎 Name the Pokémon · box", subject: "pokemon", locate: "box",
     prompt: "Which Pokémon is this? Reply with only a JSON object with \"name\" (its English name) and \"bbox_2d\" (its bounding box [x1, y1, x2, y2])."},
-  {label: "🔎 Name the Pokémon · point", locate: "point",
+  {label: "🔎 Name the Pokémon · point", subject: "pokemon", locate: "point",
     prompt: "Which Pokémon is this? Reply with only a JSON object with \"name\" (its English name) and \"point_2d\" (a point [x, y] on it)."},
+  {label: "🔎 Name the dog breed · box", subject: "dog", locate: "box",
+    prompt: "Which dog breed is this? Reply with only a JSON object with \"name\" (the breed's English name) and \"bbox_2d\" (the dog's bounding box [x1, y1, x2, y2])."},
+  {label: "🔎 Name the dog breed · point", subject: "dog", locate: "point",
+    prompt: "Which dog breed is this? Reply with only a JSON object with \"name\" (the breed's English name) and \"point_2d\" (a point [x, y] on the dog)."},
 ];
+// The sample set (nvr/classifier/samples.json) is Pokémon: only those presets score it.
+const SAMPLE_SUBJECT = "pokemon";
 // Per generated token, the shim's top alternatives with their logprobs (log-softmax of the raw logits).
 // The presets decode greedily, so the chosen token is the first; 5 keeps it in the list through ties.
-const POKEMON_TOP_LOGPROBS = 5;
+const NAME_TOP_LOGPROBS = 5;
 
-function pokemonPreset(prompt) {
-  return POKEMON_PRESETS.find(preset => preset.prompt === prompt) ?? null;
+function namePreset(prompt) {
+  return NAME_PRESETS.find(preset => preset.prompt === prompt) ?? null;
+}
+
+// Whether a Name preset suits a classifier about `subject`: its own subject's, or any when the
+// registry gives the classifier none.
+function presetFits(preset, subject) {
+  return Boolean(preset) && (!subject || preset.subject === subject);
+}
+
+// The same preset for another subject: Name the Pokémon · box -> Name the dog breed · box, so
+// selecting a classifier keeps the mark you chose. null when there is nothing to change.
+function presetForSubject(prompt, subject) {
+  const current = namePreset(prompt);
+  if (!current || presetFits(current, subject)) return null;
+  return NAME_PRESETS.find(preset => preset.subject === subject && preset.locate === current.locate) ?? null;
 }
 
 // Where a classifier's evidence is: ONE box [x1, y1, x2, y2] and ONE point [x, y], normalized 0-1
@@ -77,12 +108,17 @@ function pokemonPreset(prompt) {
 //     the centroid weighted by value ("centroid") or by how far each exceeds T ("excess").
 // An estimate of where the evidence is, not a detection. Tuned on the 189-image sample set against
 // Cosmos3-Edge's boxes (a pseudo-reference): Skshmjn median IoU 0.74, point inside the Cosmos box 99%;
-// Bierny (a coarse 7x7 Grad-CAM) median IoU 0.41, point inside 76%.
+// Bierny (a coarse 7x7 Grad-CAM) median IoU 0.41, point inside 76%. The dog-breed ViTs use Skshmjn's
+// settings (Bierny's keep nearly every cell of their maps, a box no better than a fixed one). null: no
+// mark at all - Dog-Breed-120's map is nearly flat, so its box would be the whole picture
+// (nvr/classifier/README.md, "What the overlay shows").
+const PEAK_REGION = Object.freeze({threshold: 0.35, relative: "range", upsample: 9, connectivity: 4,
+  component: "peak", pad: -0.25, point: "excess"});
 const SALIENCY_LOCATION_PARAMS = Object.freeze({
-  skshmjn: Object.freeze({threshold: 0.35, relative: "range", upsample: 9, connectivity: 4,
-    component: "peak", pad: -0.25, point: "excess"}),
+  skshmjn: PEAK_REGION,
   bierny: Object.freeze({threshold: 0.05, relative: "max", upsample: 9, connectivity: 4,
     component: "all", pad: -0.5, point: "centroid"}),
+  "imagenet-vit": PEAK_REGION, wesleyacheng: PEAK_REGION, dogbreed120: null,
 });
 const SALIENCY_LOCATION_DEFAULT = Object.freeze({threshold: 0.5, relative: "max", upsample: 9,
   connectivity: 4, component: "peak", pad: 0, point: "centroid"});
@@ -205,9 +241,9 @@ function saliencyLocation(saliency, params = SALIENCY_LOCATION_DEFAULT) {
   return {box, point};
 }
 
-// A Name-the-Pokémon answer from Cosmos3-Edge: each grounding item with the probability of the name
-// it wrote, a caption, and overlay marks. Null when the answer holds no grounding JSON.
-function readPokemonAnswer(text, logprobs) {
+// Cosmos3-Edge's answer to a Name preset: each grounding item with the probability of the name it
+// wrote, a caption, and overlay marks. Null when the answer holds no grounding JSON.
+function readNameAnswer(text, logprobs) {
   const items = parseGrounding(text);
   if (!items) return null;
   const percent = p => p === null ? "" : ` ${percentText(p)}`;
@@ -384,24 +420,78 @@ function demoWarning(engine) {
     "mode here. Live Vision, the Reachy camera and the classifiers keep running.\n\nContinue?";
 }
 
-function renderEngineChoices(container, data, switching, onSwitch) {
-  const nodes = engineChoices(data).map(engine => {
-    const card = container.ownerDocument.createElement("div"); card.className = "model-choice";
-    const button = container.ownerDocument.createElement("button"); button.type = "button";
-    const active = engine.id === data.active?.id;
-    const demo = needsDemoMode(engine, data);
-    button.textContent = engine.name; button.dataset.modelId = engine.id;
-    button.className = active ? "active" : "";
-    button.setAttribute("aria-pressed", String(active));
-    button.disabled = switching || active || !engine.available;
-    button.title = !engine.available ? engine.reason
-      : demo ? `Needs demo mode: ${engine.demo_reason || "does not fit beside the NVR"}` : (engine.profile || engine.name);
-    button.addEventListener("click", () => { if (!button.disabled) onSwitch(engine.id); });
-    const note = container.ownerDocument.createElement("small"); note.className = "model-availability";
-    note.textContent = !engine.available ? engine.reason : active ? "Active" : demo ? "Needs demo mode" : "Available";
-    card.append(button, note); return card;
-  });
+// The model list is grouped so it fits: one tab per kind (vision-language models, classifiers),
+// then the registry's own "group" within it, in registry order. Only the shown tab's groups are on
+// screen; it opens on the tab holding the active model, and a tab click only changes the view.
+const ENGINE_TABS = [["vlm", "Vision-language models"], ["classifier", "Classifiers"]];
+
+function engineTab(engine) {
+  return engine.kind === "classifier" ? "classifier" : "vlm";
+}
+
+function engineGroups(choices, tab) {
+  const groups = new Map();
+  for (const engine of choices) {
+    if (engineTab(engine) !== tab) continue;
+    const group = typeof engine.group === "string" && engine.group.trim() ? engine.group.trim()
+      : tab === "classifier" ? "Classifiers" : "Models";
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(engine);
+  }
+  return [...groups];
+}
+
+function renderEngineChoices(container, data, switching, onSwitch, tab = null, onTab = null) {
+  const doc = container.ownerDocument;
+  const choices = engineChoices(data);
+  const active = choices.find(engine => engine.id === data.active?.id);
+  const tabs = ENGINE_TABS.filter(([key]) => choices.some(engine => engineTab(engine) === key));
+  const shown = tabs.some(([key]) => key === tab) ? tab : active ? engineTab(active) : tabs[0]?.[0];
+  const nodes = [];
+  if (tabs.length > 1) {
+    const bar = doc.createElement("div"); bar.className = "model-tabs"; bar.setAttribute("role", "tablist");
+    for (const [key, label] of tabs) {
+      const button = doc.createElement("button"); button.type = "button"; button.dataset.tab = key;
+      button.className = "model-tab" + (key === shown ? " selected" : "");
+      button.setAttribute("role", "tab"); button.setAttribute("aria-selected", String(key === shown));
+      const count = choices.filter(engine => engineTab(engine) === key).length;
+      button.textContent = `${label} (${count})` + (active && engineTab(active) === key ? " · active" : "");
+      button.addEventListener("click", () => { if (onTab) onTab(key); });
+      bar.append(button);
+    }
+    nodes.push(bar);
+  }
+  for (const [group, engines] of engineGroups(choices, shown)) {
+    const section = doc.createElement("div"); section.className = "model-group";
+    const name = doc.createElement("div"); name.className = "model-group-name"; name.textContent = group;
+    const row = doc.createElement("div"); row.className = "model-group-row";
+    row.append(...engines.map(engine => engineCard(doc, engine, data, switching, onSwitch, group)));
+    section.append(name, row); nodes.push(section);
+  }
   container.replaceChildren(...nodes);
+  return shown;
+}
+
+function engineCard(doc, engine, data, switching, onSwitch, group) {
+  const card = doc.createElement("div"); card.className = "model-choice";
+  const button = doc.createElement("button"); button.type = "button";
+  const active = engine.id === data.active?.id;
+  const demo = needsDemoMode(engine, data);
+  // The group heading already says "Pokémon" or "Dog breeds"; the button need not say it again.
+  const prefix = `${group} · `;
+  button.textContent = engine.name.startsWith(prefix) ? engine.name.slice(prefix.length) : engine.name;
+  button.dataset.modelId = engine.id;
+  button.className = active ? "active" : "";
+  button.setAttribute("aria-pressed", String(active));
+  button.disabled = switching || active || !engine.available;
+  button.title = !engine.available ? engine.reason
+    : demo ? `Needs demo mode: ${engine.demo_reason || "does not fit beside the NVR"}` : (engine.profile || engine.name);
+  button.addEventListener("click", () => { if (!button.disabled) onSwitch(engine.id); });
+  // A note only when it says something: why not, needs demo mode, or active. "Available" on every
+  // button was most of the panel's height.
+  const note = doc.createElement("small"); note.className = "model-availability";
+  note.textContent = !engine.available ? engine.reason : active ? "Active" : demo ? "Needs demo mode" : "";
+  card.append(button, note); return card;
 }
 
 function validateAdvancedSettings(imageTokens, topP, limit = ADVANCED_DEFAULTS.imageTokenLimit) {
@@ -760,7 +850,7 @@ function speciesKey(name) {
   return key || null;
 }
 
-// 2D grounding in a Name-the-Pokémon answer: the first name and the first box or point Cosmos3-Edge
+// 2D grounding in an answer to a Name preset: the first name and the first box or point Cosmos3-Edge
 // wrote, as [{name, box, point}], or null. A plain JSON.parse fails on about 1 answer in 20 (extra
 // "]]", a second object after the first, a cut-off answer) and keeps the LAST of a duplicated key,
 // where the model's first is the one it meant. So this reads values directly: the first "name" (or
@@ -817,7 +907,7 @@ function nameProbability(content, name) {
   return used ? Math.exp(logprob) : null;
 }
 
-// A Name-the-Pokémon answer as a sample result, in the classifiers' shape: the first name it gave as
+// An answer to a Name preset as a sample result, in the classifiers' shape: the first name it gave as
 // the ranking's only entry, scored by that name's probability (null without logprobs).
 function cosmosResult(named) {
   const item = named?.items.find(entry => entry.name) ?? null;
@@ -837,7 +927,7 @@ function scoreSamples(rows) {
   return score;
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, POKEMON_PRESETS, pokemonPreset, saliencyLocation, SALIENCY_LOCATION_PARAMS, readPokemonAnswer, cosmosResult, percentText};
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, SAMPLE_SUBJECT, namePreset, presetFits, presetForSubject, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -847,14 +937,15 @@ if (typeof document !== "undefined") {
     liveStreaming: true, activeTrigger: null, engineId: null, timingGroup: 0,
     advanced: {...ADVANCED_DEFAULTS}, advancedValid: true, source: "camera",
     policy: null, activeEngineId: null, remoteSwitching: false,
-    kind: "cosmos", overlays: true, sampleId: null};
+    kind: "cosmos", subject: null, overlays: true, sampleId: null};
   const engineRequests = new EngineRequestScope(), policySettings = new EnginePolicySettings();
   let engineSwitching = false, engineData = null, switchProgressTimer = null;
+  let engineTabChoice = null;    // the model tab the user picked; null follows the active model
   // The latest classifier saliency and where it was captured, redrawn over the preview on resize.
   let overlay = null;
   // The sample set (/api/samples): its images, coverage for the selected classifier, and that
   // classifier's results so far. A run is cancelled by Stop, a model switch or a new run.
-  const samples = {list: [], byId: new Map(), results: new Map(), model: null, run: null};
+  const samples = {list: [], byId: new Map(), results: new Map(), model: null, run: null, unscorable: false};
   // ?model=<id> (a bookmarkable/kiosk link) requests a switch once the backend is confirmed
   // ready, the same one-shot pattern as ?source=reachy below - honoured once, and only if
   // nothing else was chosen while the page was loading.
@@ -1009,21 +1100,23 @@ if (typeof document !== "undefined") {
     option.value = preset.prompt; option.textContent = preset.label;
     $("promptPreset").append(option);
   }
-  const pokemonGroup = document.createElement("optgroup");
-  pokemonGroup.label = "Pokémon · Cosmos3-Edge and the classifiers";
-  for (const preset of POKEMON_PRESETS) {
-    const option = document.createElement("option");
-    option.value = preset.prompt; option.textContent = preset.label;
-    pokemonGroup.append(option);
+  for (const [subject, about] of Object.entries(NAME_SUBJECTS)) {
+    const group = document.createElement("optgroup");
+    group.label = about.menu;
+    for (const preset of NAME_PRESETS.filter(preset => preset.subject === subject)) {
+      const option = document.createElement("option");
+      option.value = preset.prompt; option.textContent = preset.label;
+      group.append(option);
+    }
+    $("promptPreset").append(group);
   }
-  $("promptPreset").append(pokemonGroup);
   function matchPromptPreset() {
-    $("promptPreset").value = PROMPT_PRESETS.some(preset => preset.prompt === $("prompt").value)
+    $("promptPreset").value = [...PROMPT_PRESETS, ...NAME_PRESETS].some(preset => preset.prompt === $("prompt").value)
       ? $("prompt").value : "";
   }
   $("promptPreset").addEventListener("change", () => {
     if ($("promptPreset").value) $("prompt").value = $("promptPreset").value;
-    if (pokemonPreset($("prompt").value) && Number($("maxTokens").value) < 96) $("maxTokens").value = "96";
+    if (namePreset($("prompt").value) && Number($("maxTokens").value) < 96) $("maxTokens").value = "96";
     resetSampleResults();
     controls();
   });
@@ -1041,21 +1134,21 @@ if (typeof document !== "undefined") {
     for (const id of ["prompt", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"]) {
       $(id).disabled = Boolean(state.policy) || state.kind === "classifier" || switchingEngine();
     }
-    // A classifier has no prompt, but the Name-the-Pokémon presets say what it returns: its
-    // species, plus a box or point derived from its saliency map.
+    // A classifier has no prompt, but the Name presets for its subject say what it returns: its
+    // top label, plus a box or point derived from its saliency map.
     $("promptPreset").disabled = Boolean(state.policy) || switchingEngine();
     for (const option of $("promptPreset").querySelectorAll("option")) {
-      option.disabled = state.kind === "classifier" && option.value !== "" && !pokemonPreset(option.value);
+      option.disabled = state.kind === "classifier" && option.value !== "" && !presetFits(namePreset(option.value), state.subject);
     }
     for (const id of ["lightweightPreset", "liveVlmPreset"]) $(id).disabled = Boolean(state.policy) || switchingEngine();
-    const pokemon = pokemonPreset($("prompt").value.trim());
-    $("overlayToggleButton").hidden = state.kind !== "classifier" && !pokemon;
+    const named = namePreset($("prompt").value.trim());
+    $("overlayToggleButton").hidden = state.kind !== "classifier" && !named;
     $("overlayToggleButton").setAttribute("aria-pressed", String(state.overlays));
     $("overlayToggleButton").textContent = `Saliency overlay: ${state.overlays ? "On" : "Off"}`;
-    $("sampleRunAll").disabled = !(state.kind === "classifier" || pokemon) || !state.ready || state.busy ||
-      switchingEngine() || !samples.list.length;
-    $("sampleRunAll").title = state.kind === "classifier" || pokemon ? ""
-      : "Choose a Name the Pokémon quick preset to score Cosmos3-Edge on the sample set";
+    const scorable = state.kind === "classifier" ? !samples.unscorable : named?.subject === SAMPLE_SUBJECT;
+    $("sampleRunAll").disabled = !scorable || !state.ready || state.busy || switchingEngine() || !samples.list.length;
+    $("sampleRunAll").title = scorable ? ""
+      : `Choose a Name the ${NAME_SUBJECTS[SAMPLE_SUBJECT].preset} quick preset to score this model on the sample set`;
     $("sampleStop").hidden = !samples.run;
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
@@ -1126,7 +1219,10 @@ if (typeof document !== "undefined") {
       const changed = (active?.id ?? null) !== state.activeEngineId;
       state.activeEngineId = active?.id ?? null;
       state.kind = active?.kind === "classifier" ? "classifier" : "cosmos";
-      if (changed) loadSamples(state.kind === "classifier" ? active.model_id : null);
+      state.subject = state.kind === "classifier" && typeof active.subject === "string" ? active.subject : null;
+      // The help under the picture was drawn for the previous model (retireEngineAnswer).
+      if (changed) drawOverlay();
+      if (changed) loadSamples(state.kind === "classifier" ? active.model_id : null, state.subject);
       if (state.kind === "classifier") {
         // Served by the classifier service, not the shim: the shim's health does not gate it.
         if (active.available === false) throw new Error(active.reason || "The selected classifier is not available");
@@ -1138,8 +1234,15 @@ if (typeof document !== "undefined") {
         $("staticClocksValue").textContent = "Not applicable"; $("encoderCacheValue").textContent = "Not applicable";
         $("runtimeStatus").textContent = "A classifier has no engine settings: prompt, token limits and sampling do not apply to it.";
         applyModelPolicy(null, restored);
+        // A Name preset for another subject becomes this classifier's own, with the same mark.
+        const twin = presetForSubject($("prompt").value.trim(), state.subject);
+        if (twin) { $("prompt").value = twin.prompt; matchPromptPreset(); }
         $("modelPolicyStatus").hidden = false;
-        $("modelPolicyStatus").textContent = "A Pokémon classifier is selected. It takes no prompt and has no token or sampling settings: each image gets its most likely species, the next four, and a saliency overlay.";
+        const presets = NAME_SUBJECTS[state.subject] ? `the Name the ${NAME_SUBJECTS[state.subject].preset} presets` : null;
+        $("modelPolicyStatus").textContent = `A classifier is selected: ${active.name}. It takes no prompt and has no token or sampling settings: each image gets its most likely label, the next four, and a saliency overlay` +
+          (!presets ? "." : SALIENCY_LOCATION_PARAMS[active.model_id] === null
+            ? `; its overlay is spread over the whole picture, so ${presets} add no box or point.`
+            : `; ${presets} add a box or point derived from that overlay.`);
         $("firstTextLabel").textContent = "Token timing unavailable";
         $("serverTtftHelp").textContent = "A classifier answers in one step: Latency is its inference time on the server, and TTFT does not apply.";
       } else {
@@ -1237,7 +1340,7 @@ if (typeof document !== "undefined") {
     const policy = state.policy;
     const prompt = policy?.prompt ?? $("prompt").value.trim();
     const maxTokens = policy?.max_tokens ?? Number($("maxTokens").value);
-    const pokemon = policy ? null : pokemonPreset(prompt);
+    const named = policy ? null : namePreset(prompt);
     if (!prompt || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 512) {
       error("Enter a prompt and an output token limit from 1 to 512.");
       if (!keepSource) stop();
@@ -1249,7 +1352,7 @@ if (typeof document !== "undefined") {
     try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
     if (policy) advanced = {topP: 1, imageTokens: policy.image_tokens};
     const timingGroup = state.timingGroup;
-    const temperature = policy?.temperature ?? (pokemon ? 0 : CAPTURE_PRESETS[state.preset].temperature);
+    const temperature = policy?.temperature ?? (named ? 0 : CAPTURE_PRESETS[state.preset].temperature);
     const ticket = engineRequests.begin(), controller = ticket.controller;
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
     $("ttft").textContent = "—"; $("totalTime").textContent = "—";
@@ -1271,7 +1374,7 @@ if (typeof document !== "undefined") {
         body: JSON.stringify({model: state.model, stream: true, temperature,
           top_p: advanced.topP, max_image_tokens_per_image: advanced.imageTokens,
           stream_options: {include_usage: true},
-          ...(pokemon ? {logprobs: true, top_logprobs: POKEMON_TOP_LOGPROBS} : {}),
+          ...(named ? {logprobs: true, top_logprobs: NAME_TOP_LOGPROBS} : {}),
           max_tokens: maxTokens, messages: [{role: "user", content: [
             {type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}
           ]}]})
@@ -1330,20 +1433,21 @@ if (typeof document !== "undefined") {
       }
       $("runStatus").textContent = finishReason === "length" ? "Output token limit reached" : "Answer complete";
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
-      // A Name-the-Pokémon answer is JSON: show the name and how likely the model found it, draw
+      // An answer to a Name preset is JSON: show the name and how likely the model found it, draw
       // its box or point, and keep the raw answer one hover away.
       let spoken = output;
-      const named = pokemon ? readPokemonAnswer(output, tokenLogprobs) : null;
-      $("answer").title = named ? output : "";
-      if (named) {
-        $("answer").textContent = named.caption;
-        spoken = named.items.map(item => item.name).filter(Boolean).join(", ") || output;
-        overlay = named.marks.length ? {natural: image.natural, sent: image.sent, marks: named.marks} : null;
+      const answer = named ? readNameAnswer(output, tokenLogprobs) : null;
+      $("answer").title = answer ? output : "";
+      if (answer) {
+        $("answer").textContent = answer.caption;
+        spoken = answer.items.map(item => item.name).filter(Boolean).join(", ") || output;
+        overlay = answer.marks.length ? {natural: image.natural, sent: image.sent, marks: answer.marks} : null;
         drawOverlay();
-        const sample = source === $("uploadedImage") ? state.sampleId : null;
+        // Scored against the sample's label only when the preset asks about what the set shows.
+        const sample = source === $("uploadedImage") && named.subject === SAMPLE_SUBJECT ? state.sampleId : null;
         const key = `${state.model}|${prompt}`;
         if (sample && samples.byId.has(sample) && (samples.model === null || samples.model === key)) {
-          samples.model = key; samples.results.set(sample, cosmosResult(named)); renderSampleTiles();
+          samples.model = key; samples.results.set(sample, cosmosResult(answer)); renderSampleTiles();
         }
       }
       // speakText() itself no-ops while a previous utterance is still in flight (see its own
@@ -1384,10 +1488,10 @@ if (typeof document !== "undefined") {
   // exactly as a sample-set run does, rather than a re-encoded capture of it.
   async function classify(source, trigger = "manual", sampleId = null) {
     if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return null; }
-    // A Name-the-Pokémon preset needs the saliency map even with the overlay off: it is where the
-    // box or point comes from.
-    const pokemon = pokemonPreset($("prompt").value.trim());
-    const saliency = state.overlays || Boolean(pokemon);
+    // A Name preset needs the saliency map even with the overlay off: it is where the box or point
+    // comes from.
+    const named = namePreset($("prompt").value.trim());
+    const saliency = state.overlays || Boolean(named);
     const keepSource = trigger === "live" && state.source === "reachy";
     const timingGroup = state.timingGroup;
     const ticket = engineRequests.begin(), controller = ticket.controller;
@@ -1433,11 +1537,12 @@ if (typeof document !== "undefined") {
         $("timingStatus").textContent = "Classifier inference on the server · excludes image decoding and preprocessing.";
         renderLatency();
       }
-      const location = pokemon && result.saliency
-        ? (() => { try { return saliencyLocation(result.saliency, SALIENCY_LOCATION_PARAMS[state.model] ?? SALIENCY_LOCATION_DEFAULT); } catch (_) { return null; } })()
+      const params = SALIENCY_LOCATION_PARAMS[state.model] === null ? null : SALIENCY_LOCATION_PARAMS[state.model] ?? SALIENCY_LOCATION_DEFAULT;
+      const location = named && result.saliency && params
+        ? (() => { try { return saliencyLocation(result.saliency, params); } catch (_) { return null; } })()
         : null;
-      const marks = location ? [{box: pokemon.locate === "box" ? location.box : null,
-        point: pokemon.locate === "point" ? location.point : null,
+      const marks = location ? [{box: named.locate === "box" ? location.box : null,
+        point: named.locate === "point" ? location.point : null,
         label: `${speciesName(result.species, result.label)} ${percentText(result.score)}`, derived: true}] : [];
       overlay = result.saliency ? {...placement, saliency: result.saliency, marks} : null;
       drawOverlay();
@@ -1483,17 +1588,22 @@ if (typeof document !== "undefined") {
       overlay.natural.width && overlay.natural.height);
     layer.hidden = !show;
     const help = [];
+    // The active entry's id, not state.model: a model switch redraws this before state.model moves.
+    const flat = state.kind === "classifier" && SALIENCY_LOCATION_PARAMS[engineData?.active?.model_id] === null;
     if (overlay?.saliency) {
       help.push(`${overlay.saliency.method ? `Saliency: ${overlay.saliency.method}. ` : ""}The heatmap shows where the classifier's evidence came from: brighter is more. It is not a detection.`);
     }
     if (overlay?.marks?.some(mark => mark.derived)) {
-      help.push("The dashed box or point is derived from that heatmap - the region around its peak - so it is an estimate of where the Pokémon is, not a detection: none of these classifiers outputs boxes or points.");
+      help.push(`The dashed box or point is derived from that heatmap - the region around its peak - ${NAME_SUBJECTS[state.subject]?.mark ?? "so it is an estimate of where the evidence is, not a detection"}: none of these classifiers outputs boxes or points.`);
+    } else if (overlay?.saliency && flat && namePreset($("prompt").value.trim())) {
+      help.push("This classifier's evidence is spread over the whole picture, so no box or point is derived from it.");
     }
     if (overlay?.marks?.some(mark => !mark.derived)) {
       help.push("The box or point is Cosmos3-Edge's own 2D grounding: coordinates it wrote in its answer, normalized 0-1000 over the picture it was sent. Its percentage is how likely the model found the name it wrote.");
     }
     if (!help.length && state.kind === "classifier") {
-      help.push("None of these classifiers outputs boxes, points or masks: their 2D grounding is a saliency heatmap, and the Name the Pokémon presets add a box or point derived from it.");
+      help.push(`None of these classifiers outputs boxes, points or masks: their 2D grounding is a saliency heatmap` +
+        (flat ? "." : `, and the Name the ${NAME_SUBJECTS[state.subject]?.preset ?? "Pokémon or dog breed"} presets add a box or point derived from it.`));
     }
     $("overlayHelp").hidden = !help.length;
     $("overlayHelp").textContent = help.join(" ");
@@ -1566,7 +1676,7 @@ if (typeof document !== "undefined") {
   // model: the selected classifier's id, for which species it can name; null for a Cosmos engine.
   // Only the latest request lands: a quick second switch must not get the first one's coverage.
   let samplesRequest = 0;
-  async function loadSamples(model) {
+  async function loadSamples(model, subject = null) {
     const request = ++samplesRequest;
     try {
       const response = await fetch(`/api/samples${model ? `?model=${encodeURIComponent(model)}` : ""}`, {cache: "no-store"});
@@ -1575,7 +1685,12 @@ if (typeof document !== "undefined") {
       if (!response.ok || !Array.isArray(data?.images)) throw new Error("Sample set unavailable");
       samples.list = data.images.filter(item => typeof item?.id === "string" && typeof item.species === "string");
       samples.byId = new Map(samples.list.map(item => [item.id, item]));
-      $("samplePanel").hidden = !data.configured;
+      // A classifier for another subject, or one that can name none of the set's species, has
+      // nothing in it to score: the panel stays hidden while it is selected. The registry's subject
+      // decides even when the classifier service is down and the images carry no coverage.
+      samples.unscorable = Boolean(model) && ((Boolean(subject) && subject !== SAMPLE_SUBJECT) ||
+        (samples.list.length > 0 && samples.list.every(item => item.covered === false)));
+      $("samplePanel").hidden = !data.configured || samples.unscorable;
       $("sampleGrid").replaceChildren(...samples.list.map(sampleTile));
       renderSampleTiles();
     } catch (_) { /* keep what was shown; the next model change asks again */ }
@@ -1677,12 +1792,13 @@ if (typeof document !== "undefined") {
     return {output, logprobs};
   }
   // Every sample through the selected model, scored as each answer lands: a classifier by sample id
-  // (the server's own copy of the file), or Cosmos3-Edge with a Name-the-Pokémon preset, sent the
+  // (the server's own copy of the file), or Cosmos3-Edge with a Name the Pokémon preset, sent the
   // way this page sends any picture, with that preset's prompt and the current settings.
   async function runSamples() {
-    const prompt = $("prompt").value.trim(), pokemon = pokemonPreset(prompt);
+    const prompt = $("prompt").value.trim(), named = namePreset(prompt);
     const classifier = state.kind === "classifier";
-    if (!(classifier || pokemon) || !state.ready || state.busy || samples.run || switchingEngine()) return;
+    if (!(classifier ? !samples.unscorable : named?.subject === SAMPLE_SUBJECT) || !state.ready || state.busy ||
+        samples.run || switchingEngine()) return;
     let advanced;
     try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
     stop(); error();
@@ -1710,10 +1826,10 @@ if (typeof document !== "undefined") {
           const answer = await streamAnswer({model: run.model, stream: true,
             temperature: 0, top_p: advanced.topP,
             max_image_tokens_per_image: advanced.imageTokens, stream_options: {include_usage: true},
-            logprobs: true, top_logprobs: POKEMON_TOP_LOGPROBS, max_tokens: Number($("maxTokens").value),
+            logprobs: true, top_logprobs: NAME_TOP_LOGPROBS, max_tokens: Number($("maxTokens").value),
             messages: [{role: "user", content: [{type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}]}]},
             ticket.controller.signal);
-          result = cosmosResult(readPokemonAnswer(answer.output, answer.logprobs));
+          result = cosmosResult(readNameAnswer(answer.output, answer.logprobs));
         }
         if (run.cancelled || !engineRequests.current(ticket)) break;
         samples.results.set(item.id, result);
@@ -2481,7 +2597,8 @@ if (typeof document !== "undefined") {
     if (!engineData) return;
     $("engineSwitchRow").hidden = false;
     $("engineSwitchHint").hidden = false;
-    renderEngineChoices($("modelButtons"), engineData, switchingEngine(), switchToEngine);
+    renderEngineChoices($("modelButtons"), engineData, switchingEngine(), switchToEngine, engineTabChoice,
+      key => { engineTabChoice = key; renderEngines(); });
     $("engineSwitchStatus").textContent = switchingEngine()
       ? "Switching model… Preview stays connected; inference is paused."
       : `Current model: ${engineData.active?.name || "Unavailable"}`;

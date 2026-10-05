@@ -1,5 +1,5 @@
 [Unit]
-Description=Pokemon classifiers for Live Vision (loopback :8094)
+Description=Image classifiers for Live Vision, Pokemon and dog breeds (loopback :8094)
 After=network.target
 StartLimitIntervalSec=300
 StartLimitBurst=3

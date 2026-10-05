@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices,
-  renderEngineChoices, needsDemoMode, demoWarning, runEngineSwitch, SSEParser, readCompletionEvent} = require("../web/app.js");
+  renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, SSEParser, readCompletionEvent} = require("../web/app.js");
 
 const policy = {prompt: "Synthetic fixed identification prompt.", max_tokens: 64,
   temperature: 0, image_tokens: 512, stream: false};
@@ -82,6 +82,11 @@ test("only the configured engines are offered - no placeholders for unconfigured
   assert.throws(() => engineChoices(duplicated), /Invalid/);
 });
 
+// Every model card, across the groups the panel renders.
+function cards(container) {
+  return container.children.filter(c => c.className === "model-group").flatMap(g => g.children[1].children);
+}
+
 function element(tag, document) {
   return {tag, ownerDocument: document, children: [], dataset: {}, attributes: {}, events: {},
     setAttribute(k, v) { this.attributes[k] = v; }, addEventListener(k, v) { this.events[k] = v; },
@@ -95,16 +100,17 @@ test("buttons use safe text, visible reasons, active state and availability", ()
   engines.engines[1].name = '<img src=x onerror="bad()">';
   engines.engines[1].available = false; engines.engines[1].reason = "Target qualification pending";
   renderEngineChoices(container, engines, false, id => calls.push(id));
-  const [active, unavailable] = container.children.map(c => c.children[0]);
+  const [active, unavailable] = cards(container).map(c => c.children[0]);
   assert.equal(active.disabled, true); assert.equal(active.attributes["aria-pressed"], "true");
   assert.equal(unavailable.textContent, engines.engines[1].name);
-  assert.equal(container.children[1].children[1].textContent, "Target qualification pending");
+  assert.equal(cards(container)[1].children[1].textContent, "Target qualification pending");
   unavailable.events.click(); assert.deepEqual(calls, []);
   engines.engines[1].available = true;
   renderEngineChoices(container, engines, false, id => calls.push(id));
-  container.children[1].children[0].events.click(); assert.deepEqual(calls, ["alt"]);
+  assert.equal(cards(container)[1].children[1].textContent, "");   // no "Available" filler
+  cards(container)[1].children[0].events.click(); assert.deepEqual(calls, ["alt"]);
   renderEngineChoices(container, engines, true, id => calls.push(id));
-  assert.ok(container.children.every(c => c.children[0].disabled));
+  assert.ok(cards(container).every(c => c.children[0].disabled));
 });
 
 test("a model that only fits in demo mode says so, and asks before the NVR stops", () => {
@@ -115,7 +121,7 @@ test("a model that only fits in demo mode says so, and asks before the NVR stops
   assert.equal(needsDemoMode(engines.engines[1], engines), true);
   assert.equal(needsDemoMode(engines.engines[0], engines), false);
   renderEngineChoices(container, engines, false, id => calls.push(id));
-  const [, card] = container.children;
+  const [, card] = cards(container);
   assert.equal(card.children[1].textContent, "Needs demo mode");
   assert.match(card.children[0].title, /Needs demo mode: 3\.6 GB/);
   card.children[0].events.click(); assert.deepEqual(calls, ["alt"]);   // the page then asks first
@@ -124,7 +130,32 @@ test("a model that only fits in demo mode says so, and asks before the NVR stops
   engines.demo.on = true;
   assert.equal(needsDemoMode(engines.engines[1], engines), false);
   renderEngineChoices(container, engines, false, () => {});
-  assert.equal(container.children[1].children[1].textContent, "Available");
+  assert.equal(cards(container)[1].children[1].textContent, "");
+});
+
+test("models are grouped: a tab per kind, the registry's groups inside, prefixes dropped", () => {
+  const document = {createElement: tag => element(tag, document)};
+  const container = element("div", document), tabs = [];
+  const engines = {configured: true, switching: false, active: {id: "v3", name: "Cosmos v3"}, engines: [
+    {id: "v3", name: "Cosmos v3", group: "Cosmos3-Edge", available: true},
+    {id: "qwen", name: "Qwen3-VL 2B", group: "Other VLMs", available: true},
+    {id: "v2", name: "Cosmos v2", group: "Cosmos3-Edge", available: true},
+    {id: "pk", name: "Pokémon · Skshmjn ViT-B/16", group: "Pokémon", kind: "classifier", available: true},
+    {id: "dog", name: "Dog breeds · Dog-Breed-120", group: "Dog breeds", kind: "classifier", available: true}]};
+  assert.deepEqual(engineGroups(engineChoices(engines), "vlm").map(([g, es]) => [g, es.map(e => e.id)]),
+    [["Cosmos3-Edge", ["v3", "v2"]], ["Other VLMs", ["qwen"]]]);
+  // Opens on the active model's tab; the tab bar counts each kind and marks where the active one is.
+  assert.equal(renderEngineChoices(container, engines, false, () => {}, null, key => tabs.push(key)), "vlm");
+  const [bar, ...groups] = container.children;
+  assert.deepEqual(bar.children.map(t => t.textContent), ["Vision-language models (3) · active", "Classifiers (2)"]);
+  assert.deepEqual(groups.map(g => g.children[0].textContent), ["Cosmos3-Edge", "Other VLMs"]);
+  bar.children[1].events.click(); assert.deepEqual(tabs, ["classifier"]);   // the view only: no switch
+  assert.equal(renderEngineChoices(container, engines, false, () => {}, "classifier"), "classifier");
+  assert.deepEqual(cards(container).map(c => c.children[0].textContent), ["Skshmjn ViT-B/16", "Dog-Breed-120"]);
+  // One kind only: no tab bar at all.
+  engines.engines = engines.engines.filter(e => e.kind !== "classifier");
+  renderEngineChoices(container, engines, false, () => {});
+  assert.equal(container.children[0].className, "model-group");
 });
 
 test("complete-answer SSE is compatible without fabricating token metrics", () => {

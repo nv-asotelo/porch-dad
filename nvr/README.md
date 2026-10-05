@@ -1188,7 +1188,7 @@ and draws a contact sheet. That is how the numbers above were taken.
    looking. A mode's `url` can also point at a second device. A second VLM does not fit on this
    Orin.
 
-## Live Vision: models, Pokémon classifiers, Reachy Mini control and Piper speech
+## Live Vision: models, classifiers, Reachy Mini control and Piper speech
 
 Live Vision (`nvr/ui`, `cosmos-edge-ui.service`) captions a browser camera, or the Reachy Mini's
 through the bridge (deploy/07 §5), with the shim. The unit binds loopback `:8092`; with the LAN
@@ -1196,9 +1196,10 @@ drop-in from `enable_lan_ui.sh` it serves the LAN on `:8092` and `:8443`, and a 
 `/` on `:8092` is redirected to HTTPS, the only place a browser grants a camera (deploy/07 §3).
 Since 2026-10-03 it is the Live UI the board starts at boot, in place of the Live VLM WebUI, and it
 also drives the robot: motors, head pose, antennas, onboard apps, volume, and speech through the
-robot's speaker. Its model buttons switch the shim between the board's Cosmos3-Edge engines, or pick
-one of two Pokémon classifiers, which draw a saliency overlay over the picture and can be scored on a
-labelled sample set ("Models" below).
+robot's speaker. Its model panel switches the shim between the board's Cosmos3-Edge engines and peer
+VLMs, or picks one of five image classifiers - two for Pokémon, three for dog breeds - which draw a
+saliency overlay over the picture; the Pokémon ones can be scored on a labelled sample set ("Models"
+below).
 
 Its code is the [live-vision-cosmos-demo](https://github.com/nv-asotelo/live-vision-cosmos-demo)
 repo at `e84cd37`, plus this repo's model switching and classifiers. `nvr/ui/scripts/engine_backends.py`,
@@ -1243,7 +1244,7 @@ which repeats `lan.conf`'s command and adds:
 | `--reachy-daemon-url http://<reachy-ip>:8000` | The robot daemon's REST API: motors, pose, apps, volume, sound upload and play. Not the camera: video and audio come from the bridge, relayed under `/reachy/` (`--reachy-url`, default `http://127.0.0.1:8099`) with or without this flag. Needs `requests`, which this interpreter has: porch-feed runs on it too |
 | `--piper-bin`, `--piper-model` | Speech: Piper synthesizes on the Orin and the robot's speaker plays it ("Piper" below). Refused without `--reachy-daemon-url`, so with no robot leave out all three |
 | `--engine-link /opt/tensorrt-edgellm/models/default`, `--engines-config /home/orin/nvr/ui/config/engines.json` | The model buttons, from [`ui/config/engines.orin.json`](ui/config/engines.orin.json) ("Models" below) |
-| `--classifier-url http://127.0.0.1:8094`, `--samples-dir /home/orin/nvr/classifier/samples` | The Pokémon classifiers' service and the labelled sample set ([`classifier/README.md`](classifier/README.md)) |
+| `--classifier-url http://127.0.0.1:8094`, `--samples-dir /home/orin/nvr/classifier/samples` | The classifiers' service and the labelled Pokémon sample set ([`classifier/README.md`](classifier/README.md)) |
 | `--services-config /home/orin/nvr/ui/config/services.json` | Adds the classifier service to the page's status bar, from [`ui/config/services.orin.json`](ui/config/services.orin.json) |
 
 Without `--reachy-daemon-url` the robot panel is not shown at all, which is also what a drop-in that
@@ -1290,9 +1291,15 @@ cross-origin, so any LAN client can move the robot or make it speak through Live
 daemon answers on the LAN at `:8000` anyway, which is how this UI reaches it: this adds a browser
 route to the robot, not new reach.
 
-### Models: Cosmos3-Edge engines and Pokémon classifiers
+### Models: VLMs and classifiers
 
-The model buttons come from `engines.json`. Its Cosmos entries are the command centre's engines
+The model buttons come from `engines.json`. There are 17 of them, so the panel groups them: one tab
+per kind, "Vision-language models" and "Classifiers", each with its count and the active model's tab
+marked, and inside a tab the registry's own groups, in its order (`"group"`: Cosmos3-Edge, Other
+VLMs, Grounding; Pokémon, Dog breeds). A button drops a leading group name from its registry name ("Skshmjn ViT-B/16",
+not "Pokémon · Skshmjn ViT-B/16"), and its tooltip has the full profile. The panel shows the active
+model's tab until you pick another, and an entry without a `"group"` falls in "Models" or
+"Classifiers". Its Cosmos entries are the command centre's engines
 under the command centre's names, and switching one does what the command centre's switch does:
 relink `/opt/tensorrt-edgellm/models/default` and restart `cosmos3-edge-shim`. That restart also
 restarts `porch-dad.service` (`Requires=`), and both UIs read the same link, so either shows the
@@ -1323,13 +1330,24 @@ options like `-t <dir>`, and with them a root-owned link anywhere. A new engine 
 Choosing one asks that service to load it, in seconds, and leaves the shim and its engine running,
 so porch-dad keeps captioning; choosing a Cosmos engine again frees the classifier's memory, and
 returns to the engine the shim still holds without a restart. With a classifier selected, every
-frame, upload or sample gets its species, the next four, and a saliency overlay, which **Saliency
-overlay** turns off. None of the classifiers outputs boxes, points or masks: the overlay is
-saliency, where the evidence came from, and the page says so under the picture. The **Sample Pokémon
-set** panel lists 189 labelled photos: choose one to show it and run the selected model on it, or run
-the selected classifier over all of them and read its top-1 and top-5 score as the answers land.
-Samples are classified from the server's copy of each file, so the score does not depend on the
-browser's capture settings.
+frame, upload or sample gets its most likely label - the species or the breed - the next four, and
+a saliency overlay, which **Saliency overlay** turns off. None of the classifiers outputs boxes,
+points or masks: the overlay is saliency, where the evidence came from, and the page says so under
+the picture. The **Sample Pokémon set** panel lists 189 labelled photos: choose one to show it and run
+the selected model on it, or run the selected classifier over all of them and read its top-1 and
+top-5 score as the answers land. Samples are classified from the server's copy of each file, so the
+score does not depend on the browser's capture settings. The panel is hidden while a classifier that
+can name none of its species is selected: the dog-breed ones.
+
+**Dog-breed classifiers.** The "Dog breeds" group has three: the ImageNet ViT-B/16 the Bernese mode
+scores with (1,000 ImageNet classes, 121 of them dogs), wesleyacheng's ViT-B/16 fine-tuned on Stanford
+Dogs, and Dog-Breed-120, a SigLIP2-base fine-tuned on undisclosed data (120 breeds each). On the
+daycare footage the ImageNet ViT and wesleyacheng ranked the Bernese's crops about equally and
+Dog-Breed-120 significantly worse; as a top label, which is what this page shows, wesleyacheng named
+the Bernese most reliably ([`vlmbench/README.md`](vlmbench/README.md), "Which breed classifier"). On
+the Orin each holds about 265 MB of GPU memory while selected, and its inference takes 15-19 ms
+(median) after 10-13 ms of preprocessing ([`classifier/README.md`](classifier/README.md), "Measured on
+the Orin").
 
 **Peer VLMs.** Seven more buttons put the models benchmarked against Cosmos3-Edge one click away
 ([`vlmbench/README.md`](vlmbench/README.md) has the method and the numbers): Qwen3-VL 2B, Qwen3.5 2B,
@@ -1354,8 +1372,8 @@ per-layer embedding table from disk on demand (`--lazy-mode`), which NVIDIA's Je
 predates; `vlmbench/build_llama_upstream.sh` builds it on the workstation, and it runs inside the
 same image.
 
-**Name the Pokémon presets.** Two quick presets, after the Live VLM WebUI ones, ask for the species
-and a box or a point. Cosmos3-Edge answers with JSON - `{"name": ..., "bbox_2d": [x1, y1, x2, y2]}` or
+**Name presets.** Four quick presets, after the Live VLM WebUI ones, ask for a Pokémon's species or
+a dog's breed, and a box or a point. Cosmos3-Edge answers with JSON - `{"name": ..., "bbox_2d": [x1, y1, x2, y2]}` or
 `"point_2d": [x, y]`, normalized 0-1000 over the picture it was sent - which the page parses
 tolerantly (first value of a repeated key, fences, lists and cut-off answers; checked against 378 real
 answers) and draws over the picture, the caption reading "Pikachu · 72%". The percentage is the
@@ -1364,11 +1382,18 @@ per-token logprobs (`logprobs`, `top_logprobs`; nvr/shim, `47ca180`), and the na
 multiplied. It is a probability of that exact spelling, not calibrated. The presets are worded from a
 measured comparison of eleven prompts on the 189 samples; Cosmos3-Edge names the species on 35 of them
 (18.5%; 33 of the 120 Gen-1 images, 2 of the other 69). Through the page's own captures a run scored
-32/189, its probability averaging 60% on right answers and 10% on wrong ones.
+32/189, its probability averaging 60% on right answers and 10% on wrong ones. The two dog-breed
+presets were added on 2026-10-05 in the same form and were not compared that way; on a Commons photo
+of a Bernese, Cosmos v3 answered `{"name": "Bernese Mountain Dog", "bbox_2d": [0, 195, 998, 948]}`, at
+74%. Only the Pokémon presets score the sample set.
 
-A classifier answers the same presets with its species and a box or point derived from its saliency
-map, drawn dashed and labelled as an estimate (classifier/README.md, "What the overlay shows"); the
-other presets are disabled while a classifier is selected.
+A classifier answers the presets for its own subject - the registry's `"subject"`, `"pokemon"` or
+`"dog"` - with its top label and a box or point derived from its saliency map, drawn dashed and
+labelled as an estimate (classifier/README.md, "What the overlay shows"). For the dog-breed ViTs the
+page says the mark shows where the classifier looked, which need not be the dog: on the daycare
+footage it landed on a dog no more often than the frame's centre. Dog-Breed-120's map is nearly flat,
+so it gets no mark. The other presets are disabled while a classifier is selected, and selecting one
+swaps a preset for the other subject to its own, box for box and point for point.
 
 ### Piper
 

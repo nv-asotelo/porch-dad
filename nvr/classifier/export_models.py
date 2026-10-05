@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export the two Live Vision classifiers to the ONNX files their meta.json names. Run on a workstation.
+"""Export the Live Vision classifiers to the ONNX files their meta.json names. Run on a workstation.
 
 Downloads each model at its pinned revision, checks the weights' SHA-256, and exports ONNX opset 17
 with two outputs: logits, and a saliency map computed in the graph, so the Orin needs no PyTorch:
@@ -10,15 +10,24 @@ with two outputs: logits, and a saliency map computed in the graph, so the Orin 
   bierny   DenseNet121 (ONNX on Hugging Face, MIT): Grad-CAM for the top class at the last
            convolution (1024x7x7). Its head is global average pool then one linear layer, so the
            Grad-CAM channel weights are that class's row of the linear weights.
+  imagenet-vit  google/vit-base-patch16-224 (ImageNet-1k, Apache-2.0), the breed scorer of the
+           Bernese mountain dog mode: the same rollout as skshmjn - the same architecture.
+  wesleyacheng  ViT-B/16 fine-tuned on Stanford Dogs (Hugging Face, MIT): the same rollout too.
+  dogbreed120   SigLIP2-base/16 fine-tuned on 120 dog breeds (prithivMLmods/Dog-Breed-120,
+           Apache-2.0): a class activation map for the top breed. SigLIP has no class token: its
+           classifier averages the 196 patch tokens and applies one linear layer, so the top
+           logit is exactly the mean of each token's dot product with that breed's weight row -
+           each token's share, as a 14x14 map. Rollout does not work for it: on the daycare
+           footage its peak sat on the same border cells (attention sinks) whatever the picture.
 
 Then zeroes FP32 weights below the smallest normal float (Bierny carries 77,581, which only slow
 CPU kernels down; outputs unchanged), and converts to FP16 with float32 inputs and outputs. The
 Orin builds its TensorRT engines from those files (build_engines.py).
 
-Needs torch, transformers, onnx, onnxruntime and huggingface_hub. No Hugging Face token: both
-repositories are public.
+Needs torch, transformers, onnx, onnxruntime and huggingface_hub. No Hugging Face token: every
+repository is public.
 
-  python export_models.py [--out-dir nvr/classifier/models] [skshmjn] [bierny]
+  python export_models.py [--out-dir nvr/classifier/models] [skshmjn] [bierny] [imagenet-vit] [wesleyacheng] [dogbreed120]
 """
 import argparse
 import hashlib
@@ -36,6 +45,16 @@ PINS = {
                  "config.json": None, "preprocessor_config.json": None}),
     "bierny": ("BiernyVR/pokemon-classifier-mobilenetv3", "3bf528cf0f6ab8464ea3bac0f70d84886e8dab25",
                {"pokemon_classifier.onnx": "ede506ccbded53eb7867f081417d721dbd32e3aa0f12f73683307f3f6b81d69f"}),
+    "imagenet-vit": ("google/vit-base-patch16-224", "3f49326eb077187dfe1c2a2bb15fbd74e6ab91e3",
+                     {"model.safetensors": "1cea07110a4a47edc51420b2dda6f3b8b58e7256e8f44b4ea6aa9696162ccb5d",
+                      "config.json": None, "preprocessor_config.json": None}),
+    "wesleyacheng": ("wesleyacheng/dog-breeds-multiclass-image-classification-with-vit",
+                     "160ee8611d7974c550bbaaa108378fbe8be9ef9c",
+                     {"model.safetensors": "4e48fcd3783e463b751846ccbe0e8277aff44b5727e907d1c4809437d8caf2a6",
+                      "config.json": None, "preprocessor_config.json": None}),
+    "dogbreed120": ("prithivMLmods/Dog-Breed-120", "59824049f9f56c68f90f4323534d7036d83901ab",
+                    {"model.safetensors": "6814b4780e2822e69ee2c1a33cd522fa7ba74a36789843aeb365254b79112c10",
+                     "config.json": None, "preprocessor_config.json": None}),
 }
 
 
@@ -51,7 +70,8 @@ def download(mid: str) -> Path:
     return paths[next(iter(files))].parent
 
 
-def export_skshmjn(source: Path, out: Path):
+def export_vit(source: Path, out: Path):
+    """Logits plus attention rollout from the class token to the 14x14 patches."""
     import torch
     from transformers import ViTForImageClassification
 
@@ -74,6 +94,31 @@ def export_skshmjn(source: Path, out: Path):
     model = ViTForImageClassification.from_pretrained(source, attn_implementation="eager").eval()
     with torch.no_grad():
         torch.onnx.export(WithRollout(model).eval(), (torch.randn(1, 3, 224, 224),), str(out),
+                          input_names=["pixel_values"], output_names=["logits", "saliency"],
+                          dynamic_axes={"pixel_values": {0: "batch"}, "logits": {0: "batch"}, "saliency": {0: "batch"}},
+                          opset_version=17, dynamo=False, do_constant_folding=True)
+
+
+def export_siglip(source: Path, out: Path):
+    """Logits plus the top class's activation map over the 14x14 patch tokens."""
+    import torch
+    from transformers import SiglipForImageClassification
+
+    class WithCAM(torch.nn.Module):
+        def __init__(self, model):
+            super().__init__()
+            self.model = model
+
+        def forward(self, pixel_values):
+            tokens = self.model.vision_model(pixel_values=pixel_values).last_hidden_state   # (B, 196, 768)
+            logits = self.model.classifier(tokens.mean(1))
+            weight = self.model.classifier.weight[logits.argmax(-1)]                       # (B, 768)
+            return logits, torch.matmul(tokens, weight.unsqueeze(-1)).reshape(-1, 14, 14)
+
+    model = SiglipForImageClassification.from_pretrained(source, attn_implementation="eager").eval()
+    model.vision_model.use_head = False      # its attention-pooling head is not on the logits' path
+    with torch.no_grad():
+        torch.onnx.export(WithCAM(model).eval(), (torch.randn(1, 3, 224, 224),), str(out),
                           input_names=["pixel_values"], output_names=["logits", "saliency"],
                           dynamic_axes={"pixel_values": {0: "batch"}, "logits": {0: "batch"}, "saliency": {0: "batch"}},
                           opset_version=17, dynamo=False, do_constant_folding=True)
@@ -122,9 +167,13 @@ def flush_denormals(path: Path) -> int:
     return count
 
 
+EXPORTERS = {"skshmjn": export_vit, "bierny": export_bierny, "imagenet-vit": export_vit,
+             "wesleyacheng": export_vit, "dogbreed120": export_siglip}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("models", nargs="*", help=f"any of {', '.join(PINS)}; default both")
+    parser.add_argument("models", nargs="*", help=f"any of {', '.join(PINS)}; default all")
     parser.add_argument("--out-dir", type=Path, default=HERE / "models")
     args = parser.parse_args()
     if set(args.models) - set(PINS):
@@ -134,7 +183,7 @@ def main():
         target = args.out_dir / mid
         target.mkdir(parents=True, exist_ok=True)
         fp32 = target / "model_fp32.onnx"
-        (export_skshmjn if mid == "skshmjn" else export_bierny)(download(mid), fp32)
+        EXPORTERS[mid](download(mid), fp32)
         zeroed = flush_denormals(fp32)
         onnx.save(convert_float_to_float16(onnx.load(fp32), keep_io_types=True), target / "model_fp16.onnx")
         fp32.unlink()

@@ -1,0 +1,4032 @@
+{
+ "id": "imagenet-vit",
+ "name": "ImageNet ViT-B/16",
+ "architecture": "ViT-B/16 · ImageNet-1k, 121 of its 1,000 classes are dogs",
+ "input": "pixel_values",
+ "preprocess": {
+  "size": 224,
+  "resample": "bilinear",
+  "mean": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "std": [
+   0.5,
+   0.5,
+   0.5
+  ]
+ },
+ "saliency": "attention rollout (class-agnostic: where the model looked, whatever it decided)",
+ "onnx": "model_fp16.onnx",
+ "engine": "model_fp16.plan",
+ "outputs": {
+  "logits": "logits",
+  "saliency": "saliency"
+ },
+ "labels": [
+  [
+   "tench, Tinca tinca",
+   null
+  ],
+  [
+   "goldfish, Carassius auratus",
+   null
+  ],
+  [
+   "great white shark, white shark, man-eater, man-eating shark, Carcharodon carcharias",
+   null
+  ],
+  [
+   "tiger shark, Galeocerdo cuvieri",
+   null
+  ],
+  [
+   "hammerhead, hammerhead shark",
+   null
+  ],
+  [
+   "electric ray, crampfish, numbfish, torpedo",
+   null
+  ],
+  [
+   "stingray",
+   null
+  ],
+  [
+   "cock",
+   null
+  ],
+  [
+   "hen",
+   null
+  ],
+  [
+   "ostrich, Struthio camelus",
+   null
+  ],
+  [
+   "brambling, Fringilla montifringilla",
+   null
+  ],
+  [
+   "goldfinch, Carduelis carduelis",
+   null
+  ],
+  [
+   "house finch, linnet, Carpodacus mexicanus",
+   null
+  ],
+  [
+   "junco, snowbird",
+   null
+  ],
+  [
+   "indigo bunting, indigo finch, indigo bird, Passerina cyanea",
+   null
+  ],
+  [
+   "robin, American robin, Turdus migratorius",
+   null
+  ],
+  [
+   "bulbul",
+   null
+  ],
+  [
+   "jay",
+   null
+  ],
+  [
+   "magpie",
+   null
+  ],
+  [
+   "chickadee",
+   null
+  ],
+  [
+   "water ouzel, dipper",
+   null
+  ],
+  [
+   "kite",
+   null
+  ],
+  [
+   "bald eagle, American eagle, Haliaeetus leucocephalus",
+   null
+  ],
+  [
+   "vulture",
+   null
+  ],
+  [
+   "great grey owl, great gray owl, Strix nebulosa",
+   null
+  ],
+  [
+   "European fire salamander, Salamandra salamandra",
+   null
+  ],
+  [
+   "common newt, Triturus vulgaris",
+   null
+  ],
+  [
+   "eft",
+   null
+  ],
+  [
+   "spotted salamander, Ambystoma maculatum",
+   null
+  ],
+  [
+   "axolotl, mud puppy, Ambystoma mexicanum",
+   null
+  ],
+  [
+   "bullfrog, Rana catesbeiana",
+   null
+  ],
+  [
+   "tree frog, tree-frog",
+   null
+  ],
+  [
+   "tailed frog, bell toad, ribbed toad, tailed toad, Ascaphus trui",
+   null
+  ],
+  [
+   "loggerhead, loggerhead turtle, Caretta caretta",
+   null
+  ],
+  [
+   "leatherback turtle, leatherback, leathery turtle, Dermochelys coriacea",
+   null
+  ],
+  [
+   "mud turtle",
+   null
+  ],
+  [
+   "terrapin",
+   null
+  ],
+  [
+   "box turtle, box tortoise",
+   null
+  ],
+  [
+   "banded gecko",
+   null
+  ],
+  [
+   "common iguana, iguana, Iguana iguana",
+   null
+  ],
+  [
+   "American chameleon, anole, Anolis carolinensis",
+   null
+  ],
+  [
+   "whiptail, whiptail lizard",
+   null
+  ],
+  [
+   "agama",
+   null
+  ],
+  [
+   "frilled lizard, Chlamydosaurus kingi",
+   null
+  ],
+  [
+   "alligator lizard",
+   null
+  ],
+  [
+   "Gila monster, Heloderma suspectum",
+   null
+  ],
+  [
+   "green lizard, Lacerta viridis",
+   null
+  ],
+  [
+   "African chameleon, Chamaeleo chamaeleon",
+   null
+  ],
+  [
+   "Komodo dragon, Komodo lizard, dragon lizard, giant lizard, Varanus komodoensis",
+   null
+  ],
+  [
+   "African crocodile, Nile crocodile, Crocodylus niloticus",
+   null
+  ],
+  [
+   "American alligator, Alligator mississipiensis",
+   null
+  ],
+  [
+   "triceratops",
+   null
+  ],
+  [
+   "thunder snake, worm snake, Carphophis amoenus",
+   null
+  ],
+  [
+   "ringneck snake, ring-necked snake, ring snake",
+   null
+  ],
+  [
+   "hognose snake, puff adder, sand viper",
+   null
+  ],
+  [
+   "green snake, grass snake",
+   null
+  ],
+  [
+   "king snake, kingsnake",
+   null
+  ],
+  [
+   "garter snake, grass snake",
+   null
+  ],
+  [
+   "water snake",
+   null
+  ],
+  [
+   "vine snake",
+   null
+  ],
+  [
+   "night snake, Hypsiglena torquata",
+   null
+  ],
+  [
+   "boa constrictor, Constrictor constrictor",
+   null
+  ],
+  [
+   "rock python, rock snake, Python sebae",
+   null
+  ],
+  [
+   "Indian cobra, Naja naja",
+   null
+  ],
+  [
+   "green mamba",
+   null
+  ],
+  [
+   "sea snake",
+   null
+  ],
+  [
+   "horned viper, cerastes, sand viper, horned asp, Cerastes cornutus",
+   null
+  ],
+  [
+   "diamondback, diamondback rattlesnake, Crotalus adamanteus",
+   null
+  ],
+  [
+   "sidewinder, horned rattlesnake, Crotalus cerastes",
+   null
+  ],
+  [
+   "trilobite",
+   null
+  ],
+  [
+   "harvestman, daddy longlegs, Phalangium opilio",
+   null
+  ],
+  [
+   "scorpion",
+   null
+  ],
+  [
+   "black and gold garden spider, Argiope aurantia",
+   null
+  ],
+  [
+   "barn spider, Araneus cavaticus",
+   null
+  ],
+  [
+   "garden spider, Aranea diademata",
+   null
+  ],
+  [
+   "black widow, Latrodectus mactans",
+   null
+  ],
+  [
+   "tarantula",
+   null
+  ],
+  [
+   "wolf spider, hunting spider",
+   null
+  ],
+  [
+   "tick",
+   null
+  ],
+  [
+   "centipede",
+   null
+  ],
+  [
+   "black grouse",
+   null
+  ],
+  [
+   "ptarmigan",
+   null
+  ],
+  [
+   "ruffed grouse, partridge, Bonasa umbellus",
+   null
+  ],
+  [
+   "prairie chicken, prairie grouse, prairie fowl",
+   null
+  ],
+  [
+   "peacock",
+   null
+  ],
+  [
+   "quail",
+   null
+  ],
+  [
+   "partridge",
+   null
+  ],
+  [
+   "African grey, African gray, Psittacus erithacus",
+   null
+  ],
+  [
+   "macaw",
+   null
+  ],
+  [
+   "sulphur-crested cockatoo, Kakatoe galerita, Cacatua galerita",
+   null
+  ],
+  [
+   "lorikeet",
+   null
+  ],
+  [
+   "coucal",
+   null
+  ],
+  [
+   "bee eater",
+   null
+  ],
+  [
+   "hornbill",
+   null
+  ],
+  [
+   "hummingbird",
+   null
+  ],
+  [
+   "jacamar",
+   null
+  ],
+  [
+   "toucan",
+   null
+  ],
+  [
+   "drake",
+   null
+  ],
+  [
+   "red-breasted merganser, Mergus serrator",
+   null
+  ],
+  [
+   "goose",
+   null
+  ],
+  [
+   "black swan, Cygnus atratus",
+   null
+  ],
+  [
+   "tusker",
+   null
+  ],
+  [
+   "echidna, spiny anteater, anteater",
+   null
+  ],
+  [
+   "platypus, duckbill, duckbilled platypus, duck-billed platypus, Ornithorhynchus anatinus",
+   null
+  ],
+  [
+   "wallaby, brush kangaroo",
+   null
+  ],
+  [
+   "koala, koala bear, kangaroo bear, native bear, Phascolarctos cinereus",
+   null
+  ],
+  [
+   "wombat",
+   null
+  ],
+  [
+   "jellyfish",
+   null
+  ],
+  [
+   "sea anemone, anemone",
+   null
+  ],
+  [
+   "brain coral",
+   null
+  ],
+  [
+   "flatworm, platyhelminth",
+   null
+  ],
+  [
+   "nematode, nematode worm, roundworm",
+   null
+  ],
+  [
+   "conch",
+   null
+  ],
+  [
+   "snail",
+   null
+  ],
+  [
+   "slug",
+   null
+  ],
+  [
+   "sea slug, nudibranch",
+   null
+  ],
+  [
+   "chiton, coat-of-mail shell, sea cradle, polyplacophore",
+   null
+  ],
+  [
+   "chambered nautilus, pearly nautilus, nautilus",
+   null
+  ],
+  [
+   "Dungeness crab, Cancer magister",
+   null
+  ],
+  [
+   "rock crab, Cancer irroratus",
+   null
+  ],
+  [
+   "fiddler crab",
+   null
+  ],
+  [
+   "king crab, Alaska crab, Alaskan king crab, Alaska king crab, Paralithodes camtschatica",
+   null
+  ],
+  [
+   "American lobster, Northern lobster, Maine lobster, Homarus americanus",
+   null
+  ],
+  [
+   "spiny lobster, langouste, rock lobster, crawfish, crayfish, sea crawfish",
+   null
+  ],
+  [
+   "crayfish, crawfish, crawdad, crawdaddy",
+   null
+  ],
+  [
+   "hermit crab",
+   null
+  ],
+  [
+   "isopod",
+   null
+  ],
+  [
+   "white stork, Ciconia ciconia",
+   null
+  ],
+  [
+   "black stork, Ciconia nigra",
+   null
+  ],
+  [
+   "spoonbill",
+   null
+  ],
+  [
+   "flamingo",
+   null
+  ],
+  [
+   "little blue heron, Egretta caerulea",
+   null
+  ],
+  [
+   "American egret, great white heron, Egretta albus",
+   null
+  ],
+  [
+   "bittern",
+   null
+  ],
+  [
+   "crane",
+   null
+  ],
+  [
+   "limpkin, Aramus pictus",
+   null
+  ],
+  [
+   "European gallinule, Porphyrio porphyrio",
+   null
+  ],
+  [
+   "American coot, marsh hen, mud hen, water hen, Fulica americana",
+   null
+  ],
+  [
+   "bustard",
+   null
+  ],
+  [
+   "ruddy turnstone, Arenaria interpres",
+   null
+  ],
+  [
+   "red-backed sandpiper, dunlin, Erolia alpina",
+   null
+  ],
+  [
+   "redshank, Tringa totanus",
+   null
+  ],
+  [
+   "dowitcher",
+   null
+  ],
+  [
+   "oystercatcher, oyster catcher",
+   null
+  ],
+  [
+   "pelican",
+   null
+  ],
+  [
+   "king penguin, Aptenodytes patagonica",
+   null
+  ],
+  [
+   "albatross, mollymawk",
+   null
+  ],
+  [
+   "grey whale, gray whale, devilfish, Eschrichtius gibbosus, Eschrichtius robustus",
+   null
+  ],
+  [
+   "killer whale, killer, orca, grampus, sea wolf, Orcinus orca",
+   null
+  ],
+  [
+   "dugong, Dugong dugon",
+   null
+  ],
+  [
+   "sea lion",
+   null
+  ],
+  [
+   "Chihuahua",
+   "chihuahua"
+  ],
+  [
+   "Japanese spaniel",
+   "japanese-spaniel"
+  ],
+  [
+   "Maltese dog, Maltese terrier, Maltese",
+   "maltese-dog"
+  ],
+  [
+   "Pekinese, Pekingese, Peke",
+   "pekinese"
+  ],
+  [
+   "Shih-Tzu",
+   "shih-tzu"
+  ],
+  [
+   "Blenheim spaniel",
+   "blenheim-spaniel"
+  ],
+  [
+   "papillon",
+   "papillon"
+  ],
+  [
+   "toy terrier",
+   "toy-terrier"
+  ],
+  [
+   "Rhodesian ridgeback",
+   "rhodesian-ridgeback"
+  ],
+  [
+   "Afghan hound, Afghan",
+   "afghan-hound"
+  ],
+  [
+   "basset, basset hound",
+   "basset"
+  ],
+  [
+   "beagle",
+   "beagle"
+  ],
+  [
+   "bloodhound, sleuthhound",
+   "bloodhound"
+  ],
+  [
+   "bluetick",
+   "bluetick"
+  ],
+  [
+   "black-and-tan coonhound",
+   "black-and-tan-coonhound"
+  ],
+  [
+   "Walker hound, Walker foxhound",
+   "walker-hound"
+  ],
+  [
+   "English foxhound",
+   "english-foxhound"
+  ],
+  [
+   "redbone",
+   "redbone"
+  ],
+  [
+   "borzoi, Russian wolfhound",
+   "borzoi"
+  ],
+  [
+   "Irish wolfhound",
+   "irish-wolfhound"
+  ],
+  [
+   "Italian greyhound",
+   "italian-greyhound"
+  ],
+  [
+   "whippet",
+   "whippet"
+  ],
+  [
+   "Ibizan hound, Ibizan Podenco",
+   "ibizan-hound"
+  ],
+  [
+   "Norwegian elkhound, elkhound",
+   "norwegian-elkhound"
+  ],
+  [
+   "otterhound, otter hound",
+   "otterhound"
+  ],
+  [
+   "Saluki, gazelle hound",
+   "saluki"
+  ],
+  [
+   "Scottish deerhound, deerhound",
+   "scottish-deerhound"
+  ],
+  [
+   "Weimaraner",
+   "weimaraner"
+  ],
+  [
+   "Staffordshire bullterrier, Staffordshire bull terrier",
+   "staffordshire-bullterrier"
+  ],
+  [
+   "American Staffordshire terrier, Staffordshire terrier, American pit bull terrier, pit bull terrier",
+   "american-staffordshire-terrier"
+  ],
+  [
+   "Bedlington terrier",
+   "bedlington-terrier"
+  ],
+  [
+   "Border terrier",
+   "border-terrier"
+  ],
+  [
+   "Kerry blue terrier",
+   "kerry-blue-terrier"
+  ],
+  [
+   "Irish terrier",
+   "irish-terrier"
+  ],
+  [
+   "Norfolk terrier",
+   "norfolk-terrier"
+  ],
+  [
+   "Norwich terrier",
+   "norwich-terrier"
+  ],
+  [
+   "Yorkshire terrier",
+   "yorkshire-terrier"
+  ],
+  [
+   "wire-haired fox terrier",
+   "wire-haired-fox-terrier"
+  ],
+  [
+   "Lakeland terrier",
+   "lakeland-terrier"
+  ],
+  [
+   "Sealyham terrier, Sealyham",
+   "sealyham-terrier"
+  ],
+  [
+   "Airedale, Airedale terrier",
+   "airedale"
+  ],
+  [
+   "cairn, cairn terrier",
+   "cairn"
+  ],
+  [
+   "Australian terrier",
+   "australian-terrier"
+  ],
+  [
+   "Dandie Dinmont, Dandie Dinmont terrier",
+   "dandie-dinmont"
+  ],
+  [
+   "Boston bull, Boston terrier",
+   "boston-bull"
+  ],
+  [
+   "miniature schnauzer",
+   "miniature-schnauzer"
+  ],
+  [
+   "giant schnauzer",
+   "giant-schnauzer"
+  ],
+  [
+   "standard schnauzer",
+   "standard-schnauzer"
+  ],
+  [
+   "Scotch terrier, Scottish terrier, Scottie",
+   "scotch-terrier"
+  ],
+  [
+   "Tibetan terrier, chrysanthemum dog",
+   "tibetan-terrier"
+  ],
+  [
+   "silky terrier, Sydney silky",
+   "silky-terrier"
+  ],
+  [
+   "soft-coated wheaten terrier",
+   "soft-coated-wheaten-terrier"
+  ],
+  [
+   "West Highland white terrier",
+   "west-highland-white-terrier"
+  ],
+  [
+   "Lhasa, Lhasa apso",
+   "lhasa"
+  ],
+  [
+   "flat-coated retriever",
+   "flat-coated-retriever"
+  ],
+  [
+   "curly-coated retriever",
+   "curly-coated-retriever"
+  ],
+  [
+   "golden retriever",
+   "golden-retriever"
+  ],
+  [
+   "Labrador retriever",
+   "labrador-retriever"
+  ],
+  [
+   "Chesapeake Bay retriever",
+   "chesapeake-bay-retriever"
+  ],
+  [
+   "German short-haired pointer",
+   "german-short-haired-pointer"
+  ],
+  [
+   "vizsla, Hungarian pointer",
+   "vizsla"
+  ],
+  [
+   "English setter",
+   "english-setter"
+  ],
+  [
+   "Irish setter, red setter",
+   "irish-setter"
+  ],
+  [
+   "Gordon setter",
+   "gordon-setter"
+  ],
+  [
+   "Brittany spaniel",
+   "brittany-spaniel"
+  ],
+  [
+   "clumber, clumber spaniel",
+   "clumber"
+  ],
+  [
+   "English springer, English springer spaniel",
+   "english-springer"
+  ],
+  [
+   "Welsh springer spaniel",
+   "welsh-springer-spaniel"
+  ],
+  [
+   "cocker spaniel, English cocker spaniel, cocker",
+   "cocker-spaniel"
+  ],
+  [
+   "Sussex spaniel",
+   "sussex-spaniel"
+  ],
+  [
+   "Irish water spaniel",
+   "irish-water-spaniel"
+  ],
+  [
+   "kuvasz",
+   "kuvasz"
+  ],
+  [
+   "schipperke",
+   "schipperke"
+  ],
+  [
+   "groenendael",
+   "groenendael"
+  ],
+  [
+   "malinois",
+   "malinois"
+  ],
+  [
+   "briard",
+   "briard"
+  ],
+  [
+   "kelpie",
+   "kelpie"
+  ],
+  [
+   "komondor",
+   "komondor"
+  ],
+  [
+   "Old English sheepdog, bobtail",
+   "old-english-sheepdog"
+  ],
+  [
+   "Shetland sheepdog, Shetland sheep dog, Shetland",
+   "shetland-sheepdog"
+  ],
+  [
+   "collie",
+   "collie"
+  ],
+  [
+   "Border collie",
+   "border-collie"
+  ],
+  [
+   "Bouvier des Flandres, Bouviers des Flandres",
+   "bouvier-des-flandres"
+  ],
+  [
+   "Rottweiler",
+   "rottweiler"
+  ],
+  [
+   "German shepherd, German shepherd dog, German police dog, alsatian",
+   "german-shepherd"
+  ],
+  [
+   "Doberman, Doberman pinscher",
+   "doberman"
+  ],
+  [
+   "miniature pinscher",
+   "miniature-pinscher"
+  ],
+  [
+   "Greater Swiss Mountain dog",
+   "greater-swiss-mountain-dog"
+  ],
+  [
+   "Bernese mountain dog",
+   "bernese-mountain-dog"
+  ],
+  [
+   "Appenzeller",
+   "appenzeller"
+  ],
+  [
+   "EntleBucher",
+   "entlebucher"
+  ],
+  [
+   "boxer",
+   "boxer"
+  ],
+  [
+   "bull mastiff",
+   "bull-mastiff"
+  ],
+  [
+   "Tibetan mastiff",
+   "tibetan-mastiff"
+  ],
+  [
+   "French bulldog",
+   "french-bulldog"
+  ],
+  [
+   "Great Dane",
+   "great-dane"
+  ],
+  [
+   "Saint Bernard, St Bernard",
+   "saint-bernard"
+  ],
+  [
+   "Eskimo dog, husky",
+   "eskimo-dog"
+  ],
+  [
+   "malamute, malemute, Alaskan malamute",
+   "malamute"
+  ],
+  [
+   "Siberian husky",
+   "siberian-husky"
+  ],
+  [
+   "dalmatian, coach dog, carriage dog",
+   "dalmatian"
+  ],
+  [
+   "affenpinscher, monkey pinscher, monkey dog",
+   "affenpinscher"
+  ],
+  [
+   "basenji",
+   "basenji"
+  ],
+  [
+   "pug, pug-dog",
+   "pug"
+  ],
+  [
+   "Leonberg",
+   "leonberg"
+  ],
+  [
+   "Newfoundland, Newfoundland dog",
+   "newfoundland"
+  ],
+  [
+   "Great Pyrenees",
+   "great-pyrenees"
+  ],
+  [
+   "Samoyed, Samoyede",
+   "samoyed"
+  ],
+  [
+   "Pomeranian",
+   "pomeranian"
+  ],
+  [
+   "chow, chow chow",
+   "chow"
+  ],
+  [
+   "keeshond",
+   "keeshond"
+  ],
+  [
+   "Brabancon griffon",
+   "brabancon-griffon"
+  ],
+  [
+   "Pembroke, Pembroke Welsh corgi",
+   "pembroke"
+  ],
+  [
+   "Cardigan, Cardigan Welsh corgi",
+   "cardigan"
+  ],
+  [
+   "toy poodle",
+   "toy-poodle"
+  ],
+  [
+   "miniature poodle",
+   "miniature-poodle"
+  ],
+  [
+   "standard poodle",
+   "standard-poodle"
+  ],
+  [
+   "Mexican hairless",
+   "mexican-hairless"
+  ],
+  [
+   "timber wolf, grey wolf, gray wolf, Canis lupus",
+   null
+  ],
+  [
+   "white wolf, Arctic wolf, Canis lupus tundrarum",
+   null
+  ],
+  [
+   "red wolf, maned wolf, Canis rufus, Canis niger",
+   null
+  ],
+  [
+   "coyote, prairie wolf, brush wolf, Canis latrans",
+   null
+  ],
+  [
+   "dingo, warrigal, warragal, Canis dingo",
+   "dingo"
+  ],
+  [
+   "dhole, Cuon alpinus",
+   "dhole"
+  ],
+  [
+   "African hunting dog, hyena dog, Cape hunting dog, Lycaon pictus",
+   "african-hunting-dog"
+  ],
+  [
+   "hyena, hyaena",
+   null
+  ],
+  [
+   "red fox, Vulpes vulpes",
+   null
+  ],
+  [
+   "kit fox, Vulpes macrotis",
+   null
+  ],
+  [
+   "Arctic fox, white fox, Alopex lagopus",
+   null
+  ],
+  [
+   "grey fox, gray fox, Urocyon cinereoargenteus",
+   null
+  ],
+  [
+   "tabby, tabby cat",
+   null
+  ],
+  [
+   "tiger cat",
+   null
+  ],
+  [
+   "Persian cat",
+   null
+  ],
+  [
+   "Siamese cat, Siamese",
+   null
+  ],
+  [
+   "Egyptian cat",
+   null
+  ],
+  [
+   "cougar, puma, catamount, mountain lion, painter, panther, Felis concolor",
+   null
+  ],
+  [
+   "lynx, catamount",
+   null
+  ],
+  [
+   "leopard, Panthera pardus",
+   null
+  ],
+  [
+   "snow leopard, ounce, Panthera uncia",
+   null
+  ],
+  [
+   "jaguar, panther, Panthera onca, Felis onca",
+   null
+  ],
+  [
+   "lion, king of beasts, Panthera leo",
+   null
+  ],
+  [
+   "tiger, Panthera tigris",
+   null
+  ],
+  [
+   "cheetah, chetah, Acinonyx jubatus",
+   null
+  ],
+  [
+   "brown bear, bruin, Ursus arctos",
+   null
+  ],
+  [
+   "American black bear, black bear, Ursus americanus, Euarctos americanus",
+   null
+  ],
+  [
+   "ice bear, polar bear, Ursus Maritimus, Thalarctos maritimus",
+   null
+  ],
+  [
+   "sloth bear, Melursus ursinus, Ursus ursinus",
+   null
+  ],
+  [
+   "mongoose",
+   null
+  ],
+  [
+   "meerkat, mierkat",
+   null
+  ],
+  [
+   "tiger beetle",
+   null
+  ],
+  [
+   "ladybug, ladybeetle, lady beetle, ladybird, ladybird beetle",
+   null
+  ],
+  [
+   "ground beetle, carabid beetle",
+   null
+  ],
+  [
+   "long-horned beetle, longicorn, longicorn beetle",
+   null
+  ],
+  [
+   "leaf beetle, chrysomelid",
+   null
+  ],
+  [
+   "dung beetle",
+   null
+  ],
+  [
+   "rhinoceros beetle",
+   null
+  ],
+  [
+   "weevil",
+   null
+  ],
+  [
+   "fly",
+   null
+  ],
+  [
+   "bee",
+   null
+  ],
+  [
+   "ant, emmet, pismire",
+   null
+  ],
+  [
+   "grasshopper, hopper",
+   null
+  ],
+  [
+   "cricket",
+   null
+  ],
+  [
+   "walking stick, walkingstick, stick insect",
+   null
+  ],
+  [
+   "cockroach, roach",
+   null
+  ],
+  [
+   "mantis, mantid",
+   null
+  ],
+  [
+   "cicada, cicala",
+   null
+  ],
+  [
+   "leafhopper",
+   null
+  ],
+  [
+   "lacewing, lacewing fly",
+   null
+  ],
+  [
+   "dragonfly, darning needle, devil's darning needle, sewing needle, snake feeder, snake doctor, mosquito hawk, skeeter hawk",
+   null
+  ],
+  [
+   "damselfly",
+   null
+  ],
+  [
+   "admiral",
+   null
+  ],
+  [
+   "ringlet, ringlet butterfly",
+   null
+  ],
+  [
+   "monarch, monarch butterfly, milkweed butterfly, Danaus plexippus",
+   null
+  ],
+  [
+   "cabbage butterfly",
+   null
+  ],
+  [
+   "sulphur butterfly, sulfur butterfly",
+   null
+  ],
+  [
+   "lycaenid, lycaenid butterfly",
+   null
+  ],
+  [
+   "starfish, sea star",
+   null
+  ],
+  [
+   "sea urchin",
+   null
+  ],
+  [
+   "sea cucumber, holothurian",
+   null
+  ],
+  [
+   "wood rabbit, cottontail, cottontail rabbit",
+   null
+  ],
+  [
+   "hare",
+   null
+  ],
+  [
+   "Angora, Angora rabbit",
+   null
+  ],
+  [
+   "hamster",
+   null
+  ],
+  [
+   "porcupine, hedgehog",
+   null
+  ],
+  [
+   "fox squirrel, eastern fox squirrel, Sciurus niger",
+   null
+  ],
+  [
+   "marmot",
+   null
+  ],
+  [
+   "beaver",
+   null
+  ],
+  [
+   "guinea pig, Cavia cobaya",
+   null
+  ],
+  [
+   "sorrel",
+   null
+  ],
+  [
+   "zebra",
+   null
+  ],
+  [
+   "hog, pig, grunter, squealer, Sus scrofa",
+   null
+  ],
+  [
+   "wild boar, boar, Sus scrofa",
+   null
+  ],
+  [
+   "warthog",
+   null
+  ],
+  [
+   "hippopotamus, hippo, river horse, Hippopotamus amphibius",
+   null
+  ],
+  [
+   "ox",
+   null
+  ],
+  [
+   "water buffalo, water ox, Asiatic buffalo, Bubalus bubalis",
+   null
+  ],
+  [
+   "bison",
+   null
+  ],
+  [
+   "ram, tup",
+   null
+  ],
+  [
+   "bighorn, bighorn sheep, cimarron, Rocky Mountain bighorn, Rocky Mountain sheep, Ovis canadensis",
+   null
+  ],
+  [
+   "ibex, Capra ibex",
+   null
+  ],
+  [
+   "hartebeest",
+   null
+  ],
+  [
+   "impala, Aepyceros melampus",
+   null
+  ],
+  [
+   "gazelle",
+   null
+  ],
+  [
+   "Arabian camel, dromedary, Camelus dromedarius",
+   null
+  ],
+  [
+   "llama",
+   null
+  ],
+  [
+   "weasel",
+   null
+  ],
+  [
+   "mink",
+   null
+  ],
+  [
+   "polecat, fitch, foulmart, foumart, Mustela putorius",
+   null
+  ],
+  [
+   "black-footed ferret, ferret, Mustela nigripes",
+   null
+  ],
+  [
+   "otter",
+   null
+  ],
+  [
+   "skunk, polecat, wood pussy",
+   null
+  ],
+  [
+   "badger",
+   null
+  ],
+  [
+   "armadillo",
+   null
+  ],
+  [
+   "three-toed sloth, ai, Bradypus tridactylus",
+   null
+  ],
+  [
+   "orangutan, orang, orangutang, Pongo pygmaeus",
+   null
+  ],
+  [
+   "gorilla, Gorilla gorilla",
+   null
+  ],
+  [
+   "chimpanzee, chimp, Pan troglodytes",
+   null
+  ],
+  [
+   "gibbon, Hylobates lar",
+   null
+  ],
+  [
+   "siamang, Hylobates syndactylus, Symphalangus syndactylus",
+   null
+  ],
+  [
+   "guenon, guenon monkey",
+   null
+  ],
+  [
+   "patas, hussar monkey, Erythrocebus patas",
+   null
+  ],
+  [
+   "baboon",
+   null
+  ],
+  [
+   "macaque",
+   null
+  ],
+  [
+   "langur",
+   null
+  ],
+  [
+   "colobus, colobus monkey",
+   null
+  ],
+  [
+   "proboscis monkey, Nasalis larvatus",
+   null
+  ],
+  [
+   "marmoset",
+   null
+  ],
+  [
+   "capuchin, ringtail, Cebus capucinus",
+   null
+  ],
+  [
+   "howler monkey, howler",
+   null
+  ],
+  [
+   "titi, titi monkey",
+   null
+  ],
+  [
+   "spider monkey, Ateles geoffroyi",
+   null
+  ],
+  [
+   "squirrel monkey, Saimiri sciureus",
+   null
+  ],
+  [
+   "Madagascar cat, ring-tailed lemur, Lemur catta",
+   null
+  ],
+  [
+   "indri, indris, Indri indri, Indri brevicaudatus",
+   null
+  ],
+  [
+   "Indian elephant, Elephas maximus",
+   null
+  ],
+  [
+   "African elephant, Loxodonta africana",
+   null
+  ],
+  [
+   "lesser panda, red panda, panda, bear cat, cat bear, Ailurus fulgens",
+   null
+  ],
+  [
+   "giant panda, panda, panda bear, coon bear, Ailuropoda melanoleuca",
+   null
+  ],
+  [
+   "barracouta, snoek",
+   null
+  ],
+  [
+   "eel",
+   null
+  ],
+  [
+   "coho, cohoe, coho salmon, blue jack, silver salmon, Oncorhynchus kisutch",
+   null
+  ],
+  [
+   "rock beauty, Holocanthus tricolor",
+   null
+  ],
+  [
+   "anemone fish",
+   null
+  ],
+  [
+   "sturgeon",
+   null
+  ],
+  [
+   "gar, garfish, garpike, billfish, Lepisosteus osseus",
+   null
+  ],
+  [
+   "lionfish",
+   null
+  ],
+  [
+   "puffer, pufferfish, blowfish, globefish",
+   null
+  ],
+  [
+   "abacus",
+   null
+  ],
+  [
+   "abaya",
+   null
+  ],
+  [
+   "academic gown, academic robe, judge's robe",
+   null
+  ],
+  [
+   "accordion, piano accordion, squeeze box",
+   null
+  ],
+  [
+   "acoustic guitar",
+   null
+  ],
+  [
+   "aircraft carrier, carrier, flattop, attack aircraft carrier",
+   null
+  ],
+  [
+   "airliner",
+   null
+  ],
+  [
+   "airship, dirigible",
+   null
+  ],
+  [
+   "altar",
+   null
+  ],
+  [
+   "ambulance",
+   null
+  ],
+  [
+   "amphibian, amphibious vehicle",
+   null
+  ],
+  [
+   "analog clock",
+   null
+  ],
+  [
+   "apiary, bee house",
+   null
+  ],
+  [
+   "apron",
+   null
+  ],
+  [
+   "ashcan, trash can, garbage can, wastebin, ash bin, ash-bin, ashbin, dustbin, trash barrel, trash bin",
+   null
+  ],
+  [
+   "assault rifle, assault gun",
+   null
+  ],
+  [
+   "backpack, back pack, knapsack, packsack, rucksack, haversack",
+   null
+  ],
+  [
+   "bakery, bakeshop, bakehouse",
+   null
+  ],
+  [
+   "balance beam, beam",
+   null
+  ],
+  [
+   "balloon",
+   null
+  ],
+  [
+   "ballpoint, ballpoint pen, ballpen, Biro",
+   null
+  ],
+  [
+   "Band Aid",
+   null
+  ],
+  [
+   "banjo",
+   null
+  ],
+  [
+   "bannister, banister, balustrade, balusters, handrail",
+   null
+  ],
+  [
+   "barbell",
+   null
+  ],
+  [
+   "barber chair",
+   null
+  ],
+  [
+   "barbershop",
+   null
+  ],
+  [
+   "barn",
+   null
+  ],
+  [
+   "barometer",
+   null
+  ],
+  [
+   "barrel, cask",
+   null
+  ],
+  [
+   "barrow, garden cart, lawn cart, wheelbarrow",
+   null
+  ],
+  [
+   "baseball",
+   null
+  ],
+  [
+   "basketball",
+   null
+  ],
+  [
+   "bassinet",
+   null
+  ],
+  [
+   "bassoon",
+   null
+  ],
+  [
+   "bathing cap, swimming cap",
+   null
+  ],
+  [
+   "bath towel",
+   null
+  ],
+  [
+   "bathtub, bathing tub, bath, tub",
+   null
+  ],
+  [
+   "beach wagon, station wagon, wagon, estate car, beach waggon, station waggon, waggon",
+   null
+  ],
+  [
+   "beacon, lighthouse, beacon light, pharos",
+   null
+  ],
+  [
+   "beaker",
+   null
+  ],
+  [
+   "bearskin, busby, shako",
+   null
+  ],
+  [
+   "beer bottle",
+   null
+  ],
+  [
+   "beer glass",
+   null
+  ],
+  [
+   "bell cote, bell cot",
+   null
+  ],
+  [
+   "bib",
+   null
+  ],
+  [
+   "bicycle-built-for-two, tandem bicycle, tandem",
+   null
+  ],
+  [
+   "bikini, two-piece",
+   null
+  ],
+  [
+   "binder, ring-binder",
+   null
+  ],
+  [
+   "binoculars, field glasses, opera glasses",
+   null
+  ],
+  [
+   "birdhouse",
+   null
+  ],
+  [
+   "boathouse",
+   null
+  ],
+  [
+   "bobsled, bobsleigh, bob",
+   null
+  ],
+  [
+   "bolo tie, bolo, bola tie, bola",
+   null
+  ],
+  [
+   "bonnet, poke bonnet",
+   null
+  ],
+  [
+   "bookcase",
+   null
+  ],
+  [
+   "bookshop, bookstore, bookstall",
+   null
+  ],
+  [
+   "bottlecap",
+   null
+  ],
+  [
+   "bow",
+   null
+  ],
+  [
+   "bow tie, bow-tie, bowtie",
+   null
+  ],
+  [
+   "brass, memorial tablet, plaque",
+   null
+  ],
+  [
+   "brassiere, bra, bandeau",
+   null
+  ],
+  [
+   "breakwater, groin, groyne, mole, bulwark, seawall, jetty",
+   null
+  ],
+  [
+   "breastplate, aegis, egis",
+   null
+  ],
+  [
+   "broom",
+   null
+  ],
+  [
+   "bucket, pail",
+   null
+  ],
+  [
+   "buckle",
+   null
+  ],
+  [
+   "bulletproof vest",
+   null
+  ],
+  [
+   "bullet train, bullet",
+   null
+  ],
+  [
+   "butcher shop, meat market",
+   null
+  ],
+  [
+   "cab, hack, taxi, taxicab",
+   null
+  ],
+  [
+   "caldron, cauldron",
+   null
+  ],
+  [
+   "candle, taper, wax light",
+   null
+  ],
+  [
+   "cannon",
+   null
+  ],
+  [
+   "canoe",
+   null
+  ],
+  [
+   "can opener, tin opener",
+   null
+  ],
+  [
+   "cardigan",
+   null
+  ],
+  [
+   "car mirror",
+   null
+  ],
+  [
+   "carousel, carrousel, merry-go-round, roundabout, whirligig",
+   null
+  ],
+  [
+   "carpenter's kit, tool kit",
+   null
+  ],
+  [
+   "carton",
+   null
+  ],
+  [
+   "car wheel",
+   null
+  ],
+  [
+   "cash machine, cash dispenser, automated teller machine, automatic teller machine, automated teller, automatic teller, ATM",
+   null
+  ],
+  [
+   "cassette",
+   null
+  ],
+  [
+   "cassette player",
+   null
+  ],
+  [
+   "castle",
+   null
+  ],
+  [
+   "catamaran",
+   null
+  ],
+  [
+   "CD player",
+   null
+  ],
+  [
+   "cello, violoncello",
+   null
+  ],
+  [
+   "cellular telephone, cellular phone, cellphone, cell, mobile phone",
+   null
+  ],
+  [
+   "chain",
+   null
+  ],
+  [
+   "chainlink fence",
+   null
+  ],
+  [
+   "chain mail, ring mail, mail, chain armor, chain armour, ring armor, ring armour",
+   null
+  ],
+  [
+   "chain saw, chainsaw",
+   null
+  ],
+  [
+   "chest",
+   null
+  ],
+  [
+   "chiffonier, commode",
+   null
+  ],
+  [
+   "chime, bell, gong",
+   null
+  ],
+  [
+   "china cabinet, china closet",
+   null
+  ],
+  [
+   "Christmas stocking",
+   null
+  ],
+  [
+   "church, church building",
+   null
+  ],
+  [
+   "cinema, movie theater, movie theatre, movie house, picture palace",
+   null
+  ],
+  [
+   "cleaver, meat cleaver, chopper",
+   null
+  ],
+  [
+   "cliff dwelling",
+   null
+  ],
+  [
+   "cloak",
+   null
+  ],
+  [
+   "clog, geta, patten, sabot",
+   null
+  ],
+  [
+   "cocktail shaker",
+   null
+  ],
+  [
+   "coffee mug",
+   null
+  ],
+  [
+   "coffeepot",
+   null
+  ],
+  [
+   "coil, spiral, volute, whorl, helix",
+   null
+  ],
+  [
+   "combination lock",
+   null
+  ],
+  [
+   "computer keyboard, keypad",
+   null
+  ],
+  [
+   "confectionery, confectionary, candy store",
+   null
+  ],
+  [
+   "container ship, containership, container vessel",
+   null
+  ],
+  [
+   "convertible",
+   null
+  ],
+  [
+   "corkscrew, bottle screw",
+   null
+  ],
+  [
+   "cornet, horn, trumpet, trump",
+   null
+  ],
+  [
+   "cowboy boot",
+   null
+  ],
+  [
+   "cowboy hat, ten-gallon hat",
+   null
+  ],
+  [
+   "cradle",
+   null
+  ],
+  [
+   "crane",
+   null
+  ],
+  [
+   "crash helmet",
+   null
+  ],
+  [
+   "crate",
+   null
+  ],
+  [
+   "crib, cot",
+   null
+  ],
+  [
+   "Crock Pot",
+   null
+  ],
+  [
+   "croquet ball",
+   null
+  ],
+  [
+   "crutch",
+   null
+  ],
+  [
+   "cuirass",
+   null
+  ],
+  [
+   "dam, dike, dyke",
+   null
+  ],
+  [
+   "desk",
+   null
+  ],
+  [
+   "desktop computer",
+   null
+  ],
+  [
+   "dial telephone, dial phone",
+   null
+  ],
+  [
+   "diaper, nappy, napkin",
+   null
+  ],
+  [
+   "digital clock",
+   null
+  ],
+  [
+   "digital watch",
+   null
+  ],
+  [
+   "dining table, board",
+   null
+  ],
+  [
+   "dishrag, dishcloth",
+   null
+  ],
+  [
+   "dishwasher, dish washer, dishwashing machine",
+   null
+  ],
+  [
+   "disk brake, disc brake",
+   null
+  ],
+  [
+   "dock, dockage, docking facility",
+   null
+  ],
+  [
+   "dogsled, dog sled, dog sleigh",
+   null
+  ],
+  [
+   "dome",
+   null
+  ],
+  [
+   "doormat, welcome mat",
+   null
+  ],
+  [
+   "drilling platform, offshore rig",
+   null
+  ],
+  [
+   "drum, membranophone, tympan",
+   null
+  ],
+  [
+   "drumstick",
+   null
+  ],
+  [
+   "dumbbell",
+   null
+  ],
+  [
+   "Dutch oven",
+   null
+  ],
+  [
+   "electric fan, blower",
+   null
+  ],
+  [
+   "electric guitar",
+   null
+  ],
+  [
+   "electric locomotive",
+   null
+  ],
+  [
+   "entertainment center",
+   null
+  ],
+  [
+   "envelope",
+   null
+  ],
+  [
+   "espresso maker",
+   null
+  ],
+  [
+   "face powder",
+   null
+  ],
+  [
+   "feather boa, boa",
+   null
+  ],
+  [
+   "file, file cabinet, filing cabinet",
+   null
+  ],
+  [
+   "fireboat",
+   null
+  ],
+  [
+   "fire engine, fire truck",
+   null
+  ],
+  [
+   "fire screen, fireguard",
+   null
+  ],
+  [
+   "flagpole, flagstaff",
+   null
+  ],
+  [
+   "flute, transverse flute",
+   null
+  ],
+  [
+   "folding chair",
+   null
+  ],
+  [
+   "football helmet",
+   null
+  ],
+  [
+   "forklift",
+   null
+  ],
+  [
+   "fountain",
+   null
+  ],
+  [
+   "fountain pen",
+   null
+  ],
+  [
+   "four-poster",
+   null
+  ],
+  [
+   "freight car",
+   null
+  ],
+  [
+   "French horn, horn",
+   null
+  ],
+  [
+   "frying pan, frypan, skillet",
+   null
+  ],
+  [
+   "fur coat",
+   null
+  ],
+  [
+   "garbage truck, dustcart",
+   null
+  ],
+  [
+   "gasmask, respirator, gas helmet",
+   null
+  ],
+  [
+   "gas pump, gasoline pump, petrol pump, island dispenser",
+   null
+  ],
+  [
+   "goblet",
+   null
+  ],
+  [
+   "go-kart",
+   null
+  ],
+  [
+   "golf ball",
+   null
+  ],
+  [
+   "golfcart, golf cart",
+   null
+  ],
+  [
+   "gondola",
+   null
+  ],
+  [
+   "gong, tam-tam",
+   null
+  ],
+  [
+   "gown",
+   null
+  ],
+  [
+   "grand piano, grand",
+   null
+  ],
+  [
+   "greenhouse, nursery, glasshouse",
+   null
+  ],
+  [
+   "grille, radiator grille",
+   null
+  ],
+  [
+   "grocery store, grocery, food market, market",
+   null
+  ],
+  [
+   "guillotine",
+   null
+  ],
+  [
+   "hair slide",
+   null
+  ],
+  [
+   "hair spray",
+   null
+  ],
+  [
+   "half track",
+   null
+  ],
+  [
+   "hammer",
+   null
+  ],
+  [
+   "hamper",
+   null
+  ],
+  [
+   "hand blower, blow dryer, blow drier, hair dryer, hair drier",
+   null
+  ],
+  [
+   "hand-held computer, hand-held microcomputer",
+   null
+  ],
+  [
+   "handkerchief, hankie, hanky, hankey",
+   null
+  ],
+  [
+   "hard disc, hard disk, fixed disk",
+   null
+  ],
+  [
+   "harmonica, mouth organ, harp, mouth harp",
+   null
+  ],
+  [
+   "harp",
+   null
+  ],
+  [
+   "harvester, reaper",
+   null
+  ],
+  [
+   "hatchet",
+   null
+  ],
+  [
+   "holster",
+   null
+  ],
+  [
+   "home theater, home theatre",
+   null
+  ],
+  [
+   "honeycomb",
+   null
+  ],
+  [
+   "hook, claw",
+   null
+  ],
+  [
+   "hoopskirt, crinoline",
+   null
+  ],
+  [
+   "horizontal bar, high bar",
+   null
+  ],
+  [
+   "horse cart, horse-cart",
+   null
+  ],
+  [
+   "hourglass",
+   null
+  ],
+  [
+   "iPod",
+   null
+  ],
+  [
+   "iron, smoothing iron",
+   null
+  ],
+  [
+   "jack-o'-lantern",
+   null
+  ],
+  [
+   "jean, blue jean, denim",
+   null
+  ],
+  [
+   "jeep, landrover",
+   null
+  ],
+  [
+   "jersey, T-shirt, tee shirt",
+   null
+  ],
+  [
+   "jigsaw puzzle",
+   null
+  ],
+  [
+   "jinrikisha, ricksha, rickshaw",
+   null
+  ],
+  [
+   "joystick",
+   null
+  ],
+  [
+   "kimono",
+   null
+  ],
+  [
+   "knee pad",
+   null
+  ],
+  [
+   "knot",
+   null
+  ],
+  [
+   "lab coat, laboratory coat",
+   null
+  ],
+  [
+   "ladle",
+   null
+  ],
+  [
+   "lampshade, lamp shade",
+   null
+  ],
+  [
+   "laptop, laptop computer",
+   null
+  ],
+  [
+   "lawn mower, mower",
+   null
+  ],
+  [
+   "lens cap, lens cover",
+   null
+  ],
+  [
+   "letter opener, paper knife, paperknife",
+   null
+  ],
+  [
+   "library",
+   null
+  ],
+  [
+   "lifeboat",
+   null
+  ],
+  [
+   "lighter, light, igniter, ignitor",
+   null
+  ],
+  [
+   "limousine, limo",
+   null
+  ],
+  [
+   "liner, ocean liner",
+   null
+  ],
+  [
+   "lipstick, lip rouge",
+   null
+  ],
+  [
+   "Loafer",
+   null
+  ],
+  [
+   "lotion",
+   null
+  ],
+  [
+   "loudspeaker, speaker, speaker unit, loudspeaker system, speaker system",
+   null
+  ],
+  [
+   "loupe, jeweler's loupe",
+   null
+  ],
+  [
+   "lumbermill, sawmill",
+   null
+  ],
+  [
+   "magnetic compass",
+   null
+  ],
+  [
+   "mailbag, postbag",
+   null
+  ],
+  [
+   "mailbox, letter box",
+   null
+  ],
+  [
+   "maillot",
+   null
+  ],
+  [
+   "maillot, tank suit",
+   null
+  ],
+  [
+   "manhole cover",
+   null
+  ],
+  [
+   "maraca",
+   null
+  ],
+  [
+   "marimba, xylophone",
+   null
+  ],
+  [
+   "mask",
+   null
+  ],
+  [
+   "matchstick",
+   null
+  ],
+  [
+   "maypole",
+   null
+  ],
+  [
+   "maze, labyrinth",
+   null
+  ],
+  [
+   "measuring cup",
+   null
+  ],
+  [
+   "medicine chest, medicine cabinet",
+   null
+  ],
+  [
+   "megalith, megalithic structure",
+   null
+  ],
+  [
+   "microphone, mike",
+   null
+  ],
+  [
+   "microwave, microwave oven",
+   null
+  ],
+  [
+   "military uniform",
+   null
+  ],
+  [
+   "milk can",
+   null
+  ],
+  [
+   "minibus",
+   null
+  ],
+  [
+   "miniskirt, mini",
+   null
+  ],
+  [
+   "minivan",
+   null
+  ],
+  [
+   "missile",
+   null
+  ],
+  [
+   "mitten",
+   null
+  ],
+  [
+   "mixing bowl",
+   null
+  ],
+  [
+   "mobile home, manufactured home",
+   null
+  ],
+  [
+   "Model T",
+   null
+  ],
+  [
+   "modem",
+   null
+  ],
+  [
+   "monastery",
+   null
+  ],
+  [
+   "monitor",
+   null
+  ],
+  [
+   "moped",
+   null
+  ],
+  [
+   "mortar",
+   null
+  ],
+  [
+   "mortarboard",
+   null
+  ],
+  [
+   "mosque",
+   null
+  ],
+  [
+   "mosquito net",
+   null
+  ],
+  [
+   "motor scooter, scooter",
+   null
+  ],
+  [
+   "mountain bike, all-terrain bike, off-roader",
+   null
+  ],
+  [
+   "mountain tent",
+   null
+  ],
+  [
+   "mouse, computer mouse",
+   null
+  ],
+  [
+   "mousetrap",
+   null
+  ],
+  [
+   "moving van",
+   null
+  ],
+  [
+   "muzzle",
+   null
+  ],
+  [
+   "nail",
+   null
+  ],
+  [
+   "neck brace",
+   null
+  ],
+  [
+   "necklace",
+   null
+  ],
+  [
+   "nipple",
+   null
+  ],
+  [
+   "notebook, notebook computer",
+   null
+  ],
+  [
+   "obelisk",
+   null
+  ],
+  [
+   "oboe, hautboy, hautbois",
+   null
+  ],
+  [
+   "ocarina, sweet potato",
+   null
+  ],
+  [
+   "odometer, hodometer, mileometer, milometer",
+   null
+  ],
+  [
+   "oil filter",
+   null
+  ],
+  [
+   "organ, pipe organ",
+   null
+  ],
+  [
+   "oscilloscope, scope, cathode-ray oscilloscope, CRO",
+   null
+  ],
+  [
+   "overskirt",
+   null
+  ],
+  [
+   "oxcart",
+   null
+  ],
+  [
+   "oxygen mask",
+   null
+  ],
+  [
+   "packet",
+   null
+  ],
+  [
+   "paddle, boat paddle",
+   null
+  ],
+  [
+   "paddlewheel, paddle wheel",
+   null
+  ],
+  [
+   "padlock",
+   null
+  ],
+  [
+   "paintbrush",
+   null
+  ],
+  [
+   "pajama, pyjama, pj's, jammies",
+   null
+  ],
+  [
+   "palace",
+   null
+  ],
+  [
+   "panpipe, pandean pipe, syrinx",
+   null
+  ],
+  [
+   "paper towel",
+   null
+  ],
+  [
+   "parachute, chute",
+   null
+  ],
+  [
+   "parallel bars, bars",
+   null
+  ],
+  [
+   "park bench",
+   null
+  ],
+  [
+   "parking meter",
+   null
+  ],
+  [
+   "passenger car, coach, carriage",
+   null
+  ],
+  [
+   "patio, terrace",
+   null
+  ],
+  [
+   "pay-phone, pay-station",
+   null
+  ],
+  [
+   "pedestal, plinth, footstall",
+   null
+  ],
+  [
+   "pencil box, pencil case",
+   null
+  ],
+  [
+   "pencil sharpener",
+   null
+  ],
+  [
+   "perfume, essence",
+   null
+  ],
+  [
+   "Petri dish",
+   null
+  ],
+  [
+   "photocopier",
+   null
+  ],
+  [
+   "pick, plectrum, plectron",
+   null
+  ],
+  [
+   "pickelhaube",
+   null
+  ],
+  [
+   "picket fence, paling",
+   null
+  ],
+  [
+   "pickup, pickup truck",
+   null
+  ],
+  [
+   "pier",
+   null
+  ],
+  [
+   "piggy bank, penny bank",
+   null
+  ],
+  [
+   "pill bottle",
+   null
+  ],
+  [
+   "pillow",
+   null
+  ],
+  [
+   "ping-pong ball",
+   null
+  ],
+  [
+   "pinwheel",
+   null
+  ],
+  [
+   "pirate, pirate ship",
+   null
+  ],
+  [
+   "pitcher, ewer",
+   null
+  ],
+  [
+   "plane, carpenter's plane, woodworking plane",
+   null
+  ],
+  [
+   "planetarium",
+   null
+  ],
+  [
+   "plastic bag",
+   null
+  ],
+  [
+   "plate rack",
+   null
+  ],
+  [
+   "plow, plough",
+   null
+  ],
+  [
+   "plunger, plumber's helper",
+   null
+  ],
+  [
+   "Polaroid camera, Polaroid Land camera",
+   null
+  ],
+  [
+   "pole",
+   null
+  ],
+  [
+   "police van, police wagon, paddy wagon, patrol wagon, wagon, black Maria",
+   null
+  ],
+  [
+   "poncho",
+   null
+  ],
+  [
+   "pool table, billiard table, snooker table",
+   null
+  ],
+  [
+   "pop bottle, soda bottle",
+   null
+  ],
+  [
+   "pot, flowerpot",
+   null
+  ],
+  [
+   "potter's wheel",
+   null
+  ],
+  [
+   "power drill",
+   null
+  ],
+  [
+   "prayer rug, prayer mat",
+   null
+  ],
+  [
+   "printer",
+   null
+  ],
+  [
+   "prison, prison house",
+   null
+  ],
+  [
+   "projectile, missile",
+   null
+  ],
+  [
+   "projector",
+   null
+  ],
+  [
+   "puck, hockey puck",
+   null
+  ],
+  [
+   "punching bag, punch bag, punching ball, punchball",
+   null
+  ],
+  [
+   "purse",
+   null
+  ],
+  [
+   "quill, quill pen",
+   null
+  ],
+  [
+   "quilt, comforter, comfort, puff",
+   null
+  ],
+  [
+   "racer, race car, racing car",
+   null
+  ],
+  [
+   "racket, racquet",
+   null
+  ],
+  [
+   "radiator",
+   null
+  ],
+  [
+   "radio, wireless",
+   null
+  ],
+  [
+   "radio telescope, radio reflector",
+   null
+  ],
+  [
+   "rain barrel",
+   null
+  ],
+  [
+   "recreational vehicle, RV, R.V.",
+   null
+  ],
+  [
+   "reel",
+   null
+  ],
+  [
+   "reflex camera",
+   null
+  ],
+  [
+   "refrigerator, icebox",
+   null
+  ],
+  [
+   "remote control, remote",
+   null
+  ],
+  [
+   "restaurant, eating house, eating place, eatery",
+   null
+  ],
+  [
+   "revolver, six-gun, six-shooter",
+   null
+  ],
+  [
+   "rifle",
+   null
+  ],
+  [
+   "rocking chair, rocker",
+   null
+  ],
+  [
+   "rotisserie",
+   null
+  ],
+  [
+   "rubber eraser, rubber, pencil eraser",
+   null
+  ],
+  [
+   "rugby ball",
+   null
+  ],
+  [
+   "rule, ruler",
+   null
+  ],
+  [
+   "running shoe",
+   null
+  ],
+  [
+   "safe",
+   null
+  ],
+  [
+   "safety pin",
+   null
+  ],
+  [
+   "saltshaker, salt shaker",
+   null
+  ],
+  [
+   "sandal",
+   null
+  ],
+  [
+   "sarong",
+   null
+  ],
+  [
+   "sax, saxophone",
+   null
+  ],
+  [
+   "scabbard",
+   null
+  ],
+  [
+   "scale, weighing machine",
+   null
+  ],
+  [
+   "school bus",
+   null
+  ],
+  [
+   "schooner",
+   null
+  ],
+  [
+   "scoreboard",
+   null
+  ],
+  [
+   "screen, CRT screen",
+   null
+  ],
+  [
+   "screw",
+   null
+  ],
+  [
+   "screwdriver",
+   null
+  ],
+  [
+   "seat belt, seatbelt",
+   null
+  ],
+  [
+   "sewing machine",
+   null
+  ],
+  [
+   "shield, buckler",
+   null
+  ],
+  [
+   "shoe shop, shoe-shop, shoe store",
+   null
+  ],
+  [
+   "shoji",
+   null
+  ],
+  [
+   "shopping basket",
+   null
+  ],
+  [
+   "shopping cart",
+   null
+  ],
+  [
+   "shovel",
+   null
+  ],
+  [
+   "shower cap",
+   null
+  ],
+  [
+   "shower curtain",
+   null
+  ],
+  [
+   "ski",
+   null
+  ],
+  [
+   "ski mask",
+   null
+  ],
+  [
+   "sleeping bag",
+   null
+  ],
+  [
+   "slide rule, slipstick",
+   null
+  ],
+  [
+   "sliding door",
+   null
+  ],
+  [
+   "slot, one-armed bandit",
+   null
+  ],
+  [
+   "snorkel",
+   null
+  ],
+  [
+   "snowmobile",
+   null
+  ],
+  [
+   "snowplow, snowplough",
+   null
+  ],
+  [
+   "soap dispenser",
+   null
+  ],
+  [
+   "soccer ball",
+   null
+  ],
+  [
+   "sock",
+   null
+  ],
+  [
+   "solar dish, solar collector, solar furnace",
+   null
+  ],
+  [
+   "sombrero",
+   null
+  ],
+  [
+   "soup bowl",
+   null
+  ],
+  [
+   "space bar",
+   null
+  ],
+  [
+   "space heater",
+   null
+  ],
+  [
+   "space shuttle",
+   null
+  ],
+  [
+   "spatula",
+   null
+  ],
+  [
+   "speedboat",
+   null
+  ],
+  [
+   "spider web, spider's web",
+   null
+  ],
+  [
+   "spindle",
+   null
+  ],
+  [
+   "sports car, sport car",
+   null
+  ],
+  [
+   "spotlight, spot",
+   null
+  ],
+  [
+   "stage",
+   null
+  ],
+  [
+   "steam locomotive",
+   null
+  ],
+  [
+   "steel arch bridge",
+   null
+  ],
+  [
+   "steel drum",
+   null
+  ],
+  [
+   "stethoscope",
+   null
+  ],
+  [
+   "stole",
+   null
+  ],
+  [
+   "stone wall",
+   null
+  ],
+  [
+   "stopwatch, stop watch",
+   null
+  ],
+  [
+   "stove",
+   null
+  ],
+  [
+   "strainer",
+   null
+  ],
+  [
+   "streetcar, tram, tramcar, trolley, trolley car",
+   null
+  ],
+  [
+   "stretcher",
+   null
+  ],
+  [
+   "studio couch, day bed",
+   null
+  ],
+  [
+   "stupa, tope",
+   null
+  ],
+  [
+   "submarine, pigboat, sub, U-boat",
+   null
+  ],
+  [
+   "suit, suit of clothes",
+   null
+  ],
+  [
+   "sundial",
+   null
+  ],
+  [
+   "sunglass",
+   null
+  ],
+  [
+   "sunglasses, dark glasses, shades",
+   null
+  ],
+  [
+   "sunscreen, sunblock, sun blocker",
+   null
+  ],
+  [
+   "suspension bridge",
+   null
+  ],
+  [
+   "swab, swob, mop",
+   null
+  ],
+  [
+   "sweatshirt",
+   null
+  ],
+  [
+   "swimming trunks, bathing trunks",
+   null
+  ],
+  [
+   "swing",
+   null
+  ],
+  [
+   "switch, electric switch, electrical switch",
+   null
+  ],
+  [
+   "syringe",
+   null
+  ],
+  [
+   "table lamp",
+   null
+  ],
+  [
+   "tank, army tank, armored combat vehicle, armoured combat vehicle",
+   null
+  ],
+  [
+   "tape player",
+   null
+  ],
+  [
+   "teapot",
+   null
+  ],
+  [
+   "teddy, teddy bear",
+   null
+  ],
+  [
+   "television, television system",
+   null
+  ],
+  [
+   "tennis ball",
+   null
+  ],
+  [
+   "thatch, thatched roof",
+   null
+  ],
+  [
+   "theater curtain, theatre curtain",
+   null
+  ],
+  [
+   "thimble",
+   null
+  ],
+  [
+   "thresher, thrasher, threshing machine",
+   null
+  ],
+  [
+   "throne",
+   null
+  ],
+  [
+   "tile roof",
+   null
+  ],
+  [
+   "toaster",
+   null
+  ],
+  [
+   "tobacco shop, tobacconist shop, tobacconist",
+   null
+  ],
+  [
+   "toilet seat",
+   null
+  ],
+  [
+   "torch",
+   null
+  ],
+  [
+   "totem pole",
+   null
+  ],
+  [
+   "tow truck, tow car, wrecker",
+   null
+  ],
+  [
+   "toyshop",
+   null
+  ],
+  [
+   "tractor",
+   null
+  ],
+  [
+   "trailer truck, tractor trailer, trucking rig, rig, articulated lorry, semi",
+   null
+  ],
+  [
+   "tray",
+   null
+  ],
+  [
+   "trench coat",
+   null
+  ],
+  [
+   "tricycle, trike, velocipede",
+   null
+  ],
+  [
+   "trimaran",
+   null
+  ],
+  [
+   "tripod",
+   null
+  ],
+  [
+   "triumphal arch",
+   null
+  ],
+  [
+   "trolleybus, trolley coach, trackless trolley",
+   null
+  ],
+  [
+   "trombone",
+   null
+  ],
+  [
+   "tub, vat",
+   null
+  ],
+  [
+   "turnstile",
+   null
+  ],
+  [
+   "typewriter keyboard",
+   null
+  ],
+  [
+   "umbrella",
+   null
+  ],
+  [
+   "unicycle, monocycle",
+   null
+  ],
+  [
+   "upright, upright piano",
+   null
+  ],
+  [
+   "vacuum, vacuum cleaner",
+   null
+  ],
+  [
+   "vase",
+   null
+  ],
+  [
+   "vault",
+   null
+  ],
+  [
+   "velvet",
+   null
+  ],
+  [
+   "vending machine",
+   null
+  ],
+  [
+   "vestment",
+   null
+  ],
+  [
+   "viaduct",
+   null
+  ],
+  [
+   "violin, fiddle",
+   null
+  ],
+  [
+   "volleyball",
+   null
+  ],
+  [
+   "waffle iron",
+   null
+  ],
+  [
+   "wall clock",
+   null
+  ],
+  [
+   "wallet, billfold, notecase, pocketbook",
+   null
+  ],
+  [
+   "wardrobe, closet, press",
+   null
+  ],
+  [
+   "warplane, military plane",
+   null
+  ],
+  [
+   "washbasin, handbasin, washbowl, lavabo, wash-hand basin",
+   null
+  ],
+  [
+   "washer, automatic washer, washing machine",
+   null
+  ],
+  [
+   "water bottle",
+   null
+  ],
+  [
+   "water jug",
+   null
+  ],
+  [
+   "water tower",
+   null
+  ],
+  [
+   "whiskey jug",
+   null
+  ],
+  [
+   "whistle",
+   null
+  ],
+  [
+   "wig",
+   null
+  ],
+  [
+   "window screen",
+   null
+  ],
+  [
+   "window shade",
+   null
+  ],
+  [
+   "Windsor tie",
+   null
+  ],
+  [
+   "wine bottle",
+   null
+  ],
+  [
+   "wing",
+   null
+  ],
+  [
+   "wok",
+   null
+  ],
+  [
+   "wooden spoon",
+   null
+  ],
+  [
+   "wool, woolen, woollen",
+   null
+  ],
+  [
+   "worm fence, snake fence, snake-rail fence, Virginia fence",
+   null
+  ],
+  [
+   "wreck",
+   null
+  ],
+  [
+   "yawl",
+   null
+  ],
+  [
+   "yurt",
+   null
+  ],
+  [
+   "web site, website, internet site, site",
+   null
+  ],
+  [
+   "comic book",
+   null
+  ],
+  [
+   "crossword puzzle, crossword",
+   null
+  ],
+  [
+   "street sign",
+   null
+  ],
+  [
+   "traffic light, traffic signal, stoplight",
+   null
+  ],
+  [
+   "book jacket, dust cover, dust jacket, dust wrapper",
+   null
+  ],
+  [
+   "menu",
+   null
+  ],
+  [
+   "plate",
+   null
+  ],
+  [
+   "guacamole",
+   null
+  ],
+  [
+   "consomme",
+   null
+  ],
+  [
+   "hot pot, hotpot",
+   null
+  ],
+  [
+   "trifle",
+   null
+  ],
+  [
+   "ice cream, icecream",
+   null
+  ],
+  [
+   "ice lolly, lolly, lollipop, popsicle",
+   null
+  ],
+  [
+   "French loaf",
+   null
+  ],
+  [
+   "bagel, beigel",
+   null
+  ],
+  [
+   "pretzel",
+   null
+  ],
+  [
+   "cheeseburger",
+   null
+  ],
+  [
+   "hotdog, hot dog, red hot",
+   null
+  ],
+  [
+   "mashed potato",
+   null
+  ],
+  [
+   "head cabbage",
+   null
+  ],
+  [
+   "broccoli",
+   null
+  ],
+  [
+   "cauliflower",
+   null
+  ],
+  [
+   "zucchini, courgette",
+   null
+  ],
+  [
+   "spaghetti squash",
+   null
+  ],
+  [
+   "acorn squash",
+   null
+  ],
+  [
+   "butternut squash",
+   null
+  ],
+  [
+   "cucumber, cuke",
+   null
+  ],
+  [
+   "artichoke, globe artichoke",
+   null
+  ],
+  [
+   "bell pepper",
+   null
+  ],
+  [
+   "cardoon",
+   null
+  ],
+  [
+   "mushroom",
+   null
+  ],
+  [
+   "Granny Smith",
+   null
+  ],
+  [
+   "strawberry",
+   null
+  ],
+  [
+   "orange",
+   null
+  ],
+  [
+   "lemon",
+   null
+  ],
+  [
+   "fig",
+   null
+  ],
+  [
+   "pineapple, ananas",
+   null
+  ],
+  [
+   "banana",
+   null
+  ],
+  [
+   "jackfruit, jak, jack",
+   null
+  ],
+  [
+   "custard apple",
+   null
+  ],
+  [
+   "pomegranate",
+   null
+  ],
+  [
+   "hay",
+   null
+  ],
+  [
+   "carbonara",
+   null
+  ],
+  [
+   "chocolate sauce, chocolate syrup",
+   null
+  ],
+  [
+   "dough",
+   null
+  ],
+  [
+   "meat loaf, meatloaf",
+   null
+  ],
+  [
+   "pizza, pizza pie",
+   null
+  ],
+  [
+   "potpie",
+   null
+  ],
+  [
+   "burrito",
+   null
+  ],
+  [
+   "red wine",
+   null
+  ],
+  [
+   "espresso",
+   null
+  ],
+  [
+   "cup",
+   null
+  ],
+  [
+   "eggnog",
+   null
+  ],
+  [
+   "alp",
+   null
+  ],
+  [
+   "bubble",
+   null
+  ],
+  [
+   "cliff, drop, drop-off",
+   null
+  ],
+  [
+   "coral reef",
+   null
+  ],
+  [
+   "geyser",
+   null
+  ],
+  [
+   "lakeside, lakeshore",
+   null
+  ],
+  [
+   "promontory, headland, head, foreland",
+   null
+  ],
+  [
+   "sandbar, sand bar",
+   null
+  ],
+  [
+   "seashore, coast, seacoast, sea-coast",
+   null
+  ],
+  [
+   "valley, vale",
+   null
+  ],
+  [
+   "volcano",
+   null
+  ],
+  [
+   "ballplayer, baseball player",
+   null
+  ],
+  [
+   "groom, bridegroom",
+   null
+  ],
+  [
+   "scuba diver",
+   null
+  ],
+  [
+   "rapeseed",
+   null
+  ],
+  [
+   "daisy",
+   null
+  ],
+  [
+   "yellow lady's slipper, yellow lady-slipper, Cypripedium calceolus, Cypripedium parviflorum",
+   null
+  ],
+  [
+   "corn",
+   null
+  ],
+  [
+   "acorn",
+   null
+  ],
+  [
+   "hip, rose hip, rosehip",
+   null
+  ],
+  [
+   "buckeye, horse chestnut, conker",
+   null
+  ],
+  [
+   "coral fungus",
+   null
+  ],
+  [
+   "agaric",
+   null
+  ],
+  [
+   "gyromitra",
+   null
+  ],
+  [
+   "stinkhorn, carrion fungus",
+   null
+  ],
+  [
+   "earthstar",
+   null
+  ],
+  [
+   "hen-of-the-woods, hen of the woods, Polyporus frondosus, Grifola frondosa",
+   null
+  ],
+  [
+   "bolete",
+   null
+  ],
+  [
+   "ear, spike, capitulum",
+   null
+  ],
+  [
+   "toilet tissue, toilet paper, bathroom tissue",
+   null
+  ]
+ ],
+ "source": "https://huggingface.co/google/vit-base-patch16-224/tree/3f49326eb077187dfe1c2a2bb15fbd74e6ab91e3",
+ "sha256_of_original_weights": "1cea07110a4a47edc51420b2dda6f3b8b58e7256e8f44b4ea6aa9696162ccb5d",
+ "license": "Apache-2.0"
+}
