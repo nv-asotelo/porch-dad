@@ -8,16 +8,16 @@
 # demand-paging the mmapped file from the SD card. This measures that, inside fences that keep the
 # NVR safe: CPU only (CUDA_VISIBLE_DEVICES empty, so the GPU's NvMap allocator is never touched),
 # a hard memory cap (EXPLORE_MEMORY_MAX - page cache for the mapped file counts against it, so the
-# weights stream instead of crowding Frigate out), a read-bandwidth cap on the SD card so recording
-# writes are not starved, three CPU cores, and a deadline. The shim is stopped for the window and
+# weights stream instead of crowding Frigate out), two CPU cores, and a deadline. (A read-bandwidth cap
+# on the SD card would be better still, but docker's --device-read-bps needs the cgroup io controller
+# delegated below system.slice, which it is not here; Frigate's recording backlog is watched instead.) The shim is stopped for the window and
 # everything that was running is started again on the way out.
 set -u
 IMAGE=${LLAMA_CPP_IMAGE:-ghcr.io/nvidia-ai-iot/llama_cpp:latest-jetson-orin}
 GGUF_DIR=${GGUF_30B_DIR:-/home/orin/vlm-sweep/gguf-30b}
 MODEL=${GGUF_30B:-Nemotron-3-Nano-30B-A3B-Q4_0.gguf}
 CAP=${EXPLORE_MEMORY_MAX:-2500m}
-READ_BPS=${EXPLORE_READ_BPS:-40mb}
-DEADLINE=${EXPLORE_DEADLINE_S:-480}
+DEADLINE=${EXPLORE_DEADLINE_S:-300}
 PORT=8093
 NAME=vlmbench-30b
 
@@ -37,12 +37,11 @@ trap restore EXIT
 
 systemctl stop cosmos3-edge-shim
 echo "shim stopped; MemAvailable $(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo) MiB; model $(du -h "$GGUF_DIR/$MODEL" | cut -f1)"
-dev=$(findmnt -n -o SOURCE --target "$GGUF_DIR" | sed 's/p[0-9]*$//')
 t0=$(date +%s.%N)
 cid=$(docker run -d --name "$NAME" --runtime nvidia --network host -e CUDA_VISIBLE_DEVICES= \
-  --memory "$CAP" --memory-swap "$CAP" --cpus 3 --device-read-bps "$dev:$READ_BPS" \
+  --memory "$CAP" --memory-swap "$CAP" --cpus 2 \
   -v "$GGUF_DIR:/models:ro" "$IMAGE" \
-  llama-server -m "/models/$MODEL" --host 127.0.0.1 --port "$PORT" -ngl 0 -c 512 -t 3 -np 1 --no-warmup) || exit 1
+  llama-server -m "/models/$MODEL" --host 127.0.0.1 --port "$PORT" -ngl 0 -c 512 -t 2 -np 1 --no-warmup) || exit 1
 cg=/sys/fs/cgroup/system.slice/docker-$cid.scope
 up=0
 while [ "$(echo "$(date +%s.%N) - $t0 < $DEADLINE" | bc)" = 1 ]; do
@@ -81,6 +80,7 @@ if n > 1:
     print(f"decode {(n - 1) / (stamps[-1] - stamps[0]):.3f} tok/s; text so far: {text[:120]!r}")
 EOF
 fi
+echo "Frigate recording warnings during the run: $(docker logs --since 6m frigate 2>&1 | grep -c -i -E 'unprocessed recording|too many|cache full')"
 echo "peak $(( $(cat $cg/memory.peak 2>/dev/null || echo 0) / 1048576 )) MiB, oom_kill=$(awk '/oom_kill / {print $2}' $cg/memory.events 2>/dev/null)," \
      "read $(awk '/rbytes=/ {for (i=1;i<=NF;i++) if ($i ~ /^rbytes=/) {split($i,a,"="); s+=a[2]}} END {print int(s/1048576)}' $cg/io.stat 2>/dev/null) MiB from storage"
 docker logs "$NAME" 2>&1 | grep -E "model size|n_params|mmap|error|CPU_Mapped|load time" | tail -6 | sed 's/^/   /'

@@ -1697,7 +1697,7 @@ class Handler(BaseHTTPRequestHandler):
         if not switcher:
             self.json_error(503, "engine switching not configured (--engine-link/--engines-config)")
             return
-        # Can take up to 120s (symlink + service restart + readiness poll) - see EngineSwitcher.
+        # Can take up to switch_timeout (180 s: symlink + service restart + readiness poll).
         # No separate ack-then-poll: a slow synchronous response is simpler for a demo UI and this
         # server already has one thread per request (ThreadingHTTPServer).
         ok, msg = switcher.switch(eid)

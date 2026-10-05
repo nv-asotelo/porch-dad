@@ -152,9 +152,13 @@ def score_run(meta, answers, labels, boxes, judgments):
 
     lab = meta.get("label")
     if judgments and lab in judgments:
-        scores = [s for s in judgments[lab].values() if s is not None]
+        # A judgment is a 0-2 score, or {"score", "hallucination", "why"} from the blind judging pass.
+        vals = [v if isinstance(v, dict) else {"score": v} for v in judgments[lab].values() if v is not None]
+        scores = [v["score"] for v in vals]
+        hall = [v["hallucination"] for v in vals if "hallucination" in v]
         out["caption"] = {"mean": statistics.mean(scores) if scores else None,
                           "good": sum(s == 2 for s in scores) / len(scores) if scores else None,
+                          "hallucinated": sum(hall) / len(hall) if hall else None,
                           "n": len(scores)}
 
     lat = {}

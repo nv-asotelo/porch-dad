@@ -1,0 +1,22 @@
+{
+ "model_id": "nvidia/LocateAnything-3B (INT4, PyTorch)",
+ "url": "http://127.0.0.1:8105",
+ "ready_path": "/health",
+ "start": [
+  "/home/orin/TensorRT-Edge-LLM/.venv/bin/python",
+  "/home/orin/nvr/vlmbench/locateanything/la_server.py",
+  "--model",
+  "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/model",
+  "--weights",
+  "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/LocateAnything-3B-int4.safetensors",
+  "--port",
+  "8105"
+ ],
+ "env": {
+  "PYTHONPATH": "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/overlay:/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/model",
+  "HF_HUB_OFFLINE": "1",
+  "LA_FLASH_ATTN": "sdpa",
+  "MALLOC_ARENA_MAX": "2"
+ },
+ "ready_timeout_s": 300
+}

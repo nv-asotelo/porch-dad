@@ -16,6 +16,9 @@ import re
 import sys
 import time
 
+# Not PYTORCH_CUDA_ALLOC_CONF=expandable_segments: on Jetson the first allocation then fails
+# (PyTorch asks NVML for GPU fabric info, which the integrated GPU does not have).
+
 BOX = re.compile(r"<ref>(.*?)</ref>((?:<box>.*?</box>)+)")
 NUMS = re.compile(r"<(\d+)>")
 QUERIES = {"person": "person", "vehicle": "car</c>truck</c>bus</c>motorcycle", "animal": "dog</c>cat"}
@@ -33,6 +36,15 @@ def parse(text):
             elif len(nums) == 2:  # a point
                 out[label].append(nums + nums)
     return out
+
+
+def fit_side(im, max_side):
+    """Shrink so the long side is at most max_side px (LA_MAX_SIDE): MoonViT runs at native resolution,
+    and on the Orin its activations for a 960x540 frame do not fit beside the NVR."""
+    if not max_side or max(im.size) <= max_side:
+        return im
+    s = max_side / max(im.size)
+    return im.resize((max(14, round(im.size[0] * s)), max(14, round(im.size[1] * s))))
 
 
 def cgroup_memory():
@@ -71,6 +83,8 @@ def main():
     os.environ.setdefault("LA_FLASH_MODEL", args.model)
     os.environ.setdefault("LA_FLASH_ATTN", "sdpa")
     sys.path.insert(0, args.model)
+    # This directory's la_int4 wins over any copy that ended up beside the model.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import torch
     from transformers import AutoProcessor, AutoTokenizer
     from batch_utils import generate_batch_hybrid
@@ -99,18 +113,19 @@ def main():
     manifest = json.load(open(os.path.join(args.data, "manifest.json")))
     items = manifest["items"][: args.limit]
     labels = json.load(open(args.labels))["items"] if args.labels else {}
-    warm = load_pil(os.path.join(args.data, items[0]["image"]))
+    max_side = int(os.environ.get("LA_MAX_SIDE", "0"))
+    warm = fit_side(load_pil(os.path.join(args.data, items[0]["image"])), max_side)
     for _ in range(2):
         run(warm, "person")
 
     mem_before = cgroup_memory()
     with open(args.out, "w") as out:
         out.write(json.dumps({"kind": "meta", "label": args.label, "family": "locateanything", "memory_before": mem_before,
-                              "load_seconds": round(load_s, 1), "items": len(items),
+                              "load_seconds": round(load_s, 1), "items": len(items), "max_side": max_side,
                               "tasks": ["person", "count", "vehicle", "animal", "ground"]}) + "\n")
         n, t_start = 0, time.time()
         for item in items:
-            im = load_pil(os.path.join(args.data, item["image"]))
+            im = fit_side(load_pil(os.path.join(args.data, item["image"])), max_side)
             for qname, query in QUERIES.items():
                 text, ms = run(im, query)
                 found = parse(text)

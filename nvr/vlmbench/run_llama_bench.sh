@@ -47,9 +47,13 @@ trap restore EXIT
 
 systemctl stop cosmos3-edge-shim
 echo "shim stopped; MemAvailable $(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo) MiB"
-args=(-m "/models/$model" --host 127.0.0.1 --port "$PORT" -ngl 999 -c "$CTX" -b 512 -ub 512 -np 1
+args=(-m "/models/$model" --host 127.0.0.1 --port "$PORT" -ngl 999 -c "$CTX" -b "${LLAMA_BATCH:-512}" -ub "${LLAMA_UBATCH:-512}" -np 1
       --fit off --cache-ram 0 --jinja)
 [ "$mmproj" != "-" ] && args+=(--mmproj "/models/$mmproj")
+# Extra llama-server flags, e.g. LLAMA_EXTRA="--reasoning off": every model in the benchmark answers
+# directly, the way the others' default (non-thinking) chat templates do.
+read -r -a extra <<< "${LLAMA_EXTRA:-}"
+args+=("${extra[@]}")
 t0=$(date +%s)
 cid=$(docker run -d --name "$NAME" --runtime nvidia --network host --memory "$CAP" --memory-swap "$CAP" \
   -e GGML_CUDA_ENABLE_UNIFIED_MEMORY=1 -v "$GGUF_DIR:/models:ro" "$IMAGE" llama-server "${args[@]}") || exit 1
@@ -61,8 +65,10 @@ for _ in $(seq 1 120); do
 done
 cgroup=/sys/fs/cgroup/system.slice/docker-$cid.scope
 if [ $up -ne 1 ]; then
-  echo "== $label did not come up in $(( $(date +%s) - t0 ))s (oom_kill=$(awk '/oom_kill / {print $2}' "$cgroup/memory.events" 2>/dev/null)):"
-  docker logs --tail 15 "$NAME" 2>&1 | sed 's/^/   /'
+  echo "== $label did not come up in $(( $(date +%s) - t0 ))s:"
+  docker logs "$NAME" 2>&1 | grep -E "buffer size|error|Error|failed|ERROR" | tail -20 | sed 's/^/   /'
+  # The container's cgroup is gone once it dies, so a memory kill is read from the kernel instead.
+  journalctl -k --since "-3min" --no-pager 2>/dev/null | grep "Memory cgroup out of memory" | tail -1 | sed 's/^/   /'
   exit 1
 fi
 echo "== $label up in $(( $(date +%s) - t0 ))s; memory.current $(( $(cat "$cgroup/memory.current") / 1048576 )) MiB"

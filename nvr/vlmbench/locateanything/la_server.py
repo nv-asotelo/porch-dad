@@ -8,7 +8,7 @@ visible..." for one - falls back to people, pets and vehicles, so a caller that 
 still gets a truthful one-line count. The answer is that line plus the boxes as JSON
 ({"label", "bbox_2d"} on the 0-1000 grid, x first), the format Live Vision's overlay reads.
 
-  python la_server.py --model <dir> --weights <int4.safetensors> --port 8092
+  python la_server.py --model <dir> --weights <int4.safetensors> --port 8105
 """
 import argparse
 import base64
@@ -20,10 +20,22 @@ import sys
 import time
 import uuid
 
+# Not PYTORCH_CUDA_ALLOC_CONF=expandable_segments: on Jetson the first allocation then fails
+# (PyTorch asks NVML for GPU fabric info, which the integrated GPU does not have).
+
 DEFAULT_QUERY = "person</c>dog</c>cat</c>car</c>truck"
 ASK = re.compile(r"^\s*(?:please\s+)?(?:locate|find|detect|point (?:to|at)|show me|where (?:is|are))\s+"
                  r"(?:the |a |an |all |every |any )?(.+?)\s*[.?!]*\s*$", re.I)
 DATA_URL = re.compile(r"^data:[\w/+.-]+;base64,(.+)$", re.S)
+
+
+def fit_side(im, max_side):
+    """Shrink so the long side is at most max_side px (LA_MAX_SIDE): MoonViT runs at native resolution,
+    and on the Orin its activations for a 960x540 frame do not fit beside the NVR."""
+    if not max_side or max(im.size) <= max_side:
+        return im
+    s = max_side / max(im.size)
+    return im.resize((max(14, round(im.size[0] * s)), max(14, round(im.size[1] * s))))
 
 
 def query_for(text):
@@ -64,12 +76,14 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--weights", required=True)
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8092)
+    ap.add_argument("--port", type=int, default=8105)
     args = ap.parse_args()
 
     os.environ.setdefault("LA_FLASH_MODEL", args.model)
     os.environ.setdefault("LA_FLASH_ATTN", "sdpa")
     sys.path.insert(0, args.model)
+    # This directory's la_int4 wins over any copy that ended up beside the model.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import torch
     import uvicorn
     from fastapi import FastAPI, Request
@@ -117,6 +131,7 @@ def main():
                     image = Image.open(io.BytesIO(base64.b64decode(d.group(1))) if d else url).convert("RGB")
         if image is None:
             return JSONResponse(status_code=400, content={"error": {"message": "LocateAnything needs an image"}})
+        image = fit_side(image, int(os.environ.get("LA_MAX_SIDE", "0")))
         query = query_for(text)
         torch.cuda.synchronize()
         t0 = time.perf_counter()

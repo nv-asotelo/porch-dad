@@ -1171,7 +1171,7 @@ The model buttons come from `engines.json`. Its Cosmos entries are the command c
 under the command centre's names, and switching one does what the command centre's switch does:
 relink `/opt/tensorrt-edgellm/models/default` and restart `cosmos3-edge-shim`. That restart also
 restarts `porch-dad.service` (`Requires=`), and both UIs read the same link, so either shows the
-other's switch. Live Vision waits up to 120 s for the shim to answer, and puts the previous engine
+other's switch. Live Vision waits up to 180 s for the shim to answer, and puts the previous engine
 back if the new one does not. Measured through Live Vision on 2026-10-03, beside the full NVR:
 
 | Button | Engine | Load | First answer, a new image | Free memory after load |
@@ -1205,6 +1205,22 @@ set** panel lists 189 labelled photos: choose one to show it and run the selecte
 the selected classifier over all of them and read its top-1 and top-5 score as the answers land.
 Samples are classified from the server's copy of each file, so the score does not depend on the
 browser's capture settings.
+
+**Peer VLMs.** Seven more buttons put the models benchmarked against Cosmos3-Edge one click away
+([`vlmbench/README.md`](vlmbench/README.md) has the method and the numbers): Qwen3-VL 2B, Qwen3.5 2B,
+InternVL3.5 2B and Cosmos-Reason2 2B are TensorRT-Edge-LLM engines built with Cosmos3-Edge's own
+recipe; Gemma 4 E2B and Nemotron 3 Nano 4B run in NVIDIA's Jetson llama.cpp container, and
+LocateAnything 3B in PyTorch, because none of the three can be a TensorRT engine on this board. Those
+three are **proxy engines**: their directory holds a `proxy.json` instead of engine files
+([`vlmbench/proxies/`](vlmbench/proxies/) has all three), and the
+shim, restarted by the same switch, starts that model's own server and relays the same OpenAI API to
+it - so Frigate's GenAI, porch-dad and this page reach every model the same way, and switching away
+stops the server before the next model loads. Nemotron 3 Nano 4B reads text only: the shim drops the
+image, so it is there for text prompts. LocateAnything answers boxes, not prose: a short phrase
+("Bernese mountain dog", `person</c>dog`) is its query, and anything longer falls back to people,
+pets and vehicles; its license is non-commercial. On this board Gemma 4 E2B and LocateAnything 3B
+are greyed out, with the measured reason as the tooltip: both were OOM-killed inside the memory left
+beside the NVR. Their proxy engines stay in place for a board with more to spare.
 
 **Name the Pokémon presets.** Two quick presets, after the Live VLM WebUI ones, ask for the species
 and a box or a point. Cosmos3-Edge answers with JSON - `{"name": ..., "bbox_2d": [x1, y1, x2, y2]}` or

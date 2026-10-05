@@ -5,8 +5,10 @@ Decoding is not something TensorRT-Edge-LLM's autoregressive runtime can run). S
 PyTorch and the weights shrink instead: every Linear in the Qwen2.5-3B text tower and in MoonViT
 becomes a group-128 asymmetric INT4 weight served by PyTorch's own tinygemm kernel
 (aten._weight_int4pack_mm, sm80+). The tied lm_head gets its own INT4 copy so each decode step
-reads 0.16 GB of head instead of the 0.62 GB embedding; the embedding itself stays BF16 for the
-lookup. MoonViT's fc1 (in_features 4304) fits no supported group size and stays BF16.
+reads 0.16 GB of head instead of the 0.62 GB embedding; the embedding itself becomes per-row INT8
+(0.31 GB) for the lookup. MoonViT's fc1 (in_features 4304) fits no supported group size and stays
+BF16. 7.7 GB of BF16 becomes 2.2 GB - still too much for the Orin beside the NVR once PyTorch's
+CUDA context and the first inference's activations are added (vlmbench/README.md has the numbers).
 
   quantize (workstation, needs the BF16 checkpoint):   python la_int4.py quantize <model dir> <out.safetensors>
   load (Orin, never materializes the BF16 weights):     model = load_quantized(<model dir>, <out.safetensors>)
@@ -77,6 +79,33 @@ class Int4Linear(nn.Module):
         return y.reshape(*shape[:-1], self.out_features).to(x.dtype)
 
 
+class Int8Embedding(nn.Module):
+    """The token embedding as per-row INT8: 0.31 GB instead of 0.62 GB, dequantized row by row on lookup.
+
+    On the Orin the CPU and the GPU share one 8 GB pool, so the BF16 table was a quarter of the whole
+    model, and loading it made a 0.6 GB transient copy that alone was enough to cross the memory cap.
+    """
+
+    def __init__(self, num, dim, device=None):
+        super().__init__()
+        self.register_buffer("qweight8", torch.empty(num, dim, dtype=torch.int8, device=device))
+        self.register_buffer("scale8", torch.empty(num, dtype=torch.bfloat16, device=device))
+
+    @property
+    def weight(self):
+        return torch.empty(0, dtype=torch.bfloat16, device=self.scale8.device)
+
+    def forward(self, ids):
+        return (self.qweight8[ids].to(torch.bfloat16) * self.scale8[ids].unsqueeze(-1))
+
+
+def quantize_rows_int8(w):
+    w = w.to(torch.float32)
+    scale = w.abs().amax(dim=1).clamp(min=1e-8) / 127.0
+    q = torch.round(w / scale[:, None]).clamp(-127, 127).to(torch.int8)
+    return q, scale.to(torch.bfloat16)
+
+
 def targets(model):
     """(parent, attr, linear) for every Linear to quantize: LM blocks, MoonViT blocks, the projector."""
     out = []
@@ -109,6 +138,10 @@ def quantize(model_dir, out_path):
     pad = -emb.shape[0] % 8
     packed, sz, rel = quantize_weight(torch.cat([emb, emb.new_zeros(pad, emb.shape[1])]) if pad else emb)
     state["language_model.lm_head.qweight"], state["language_model.lm_head.scales_and_zeros"] = packed, sz
+    q8, s8 = quantize_rows_int8(emb)
+    state["language_model.model.embed_tokens.qweight8"], state["language_model.model.embed_tokens.scale8"] = q8, s8
+    rel8 = ((q8.float() * s8.float()[:, None] - emb.float()).abs().mean() / emb.float().abs().mean()).item()
+    print(f"embedding INT8 per row: rel err {rel8 * 100:.2f}%")
     print(f"quantized {len(plan)} linears + lm_head; mean rel err {sum(rels) / len(rels) * 100:.2f}%, "
           f"lm_head {rel * 100:.2f}%")
     # Everything else exactly as it was (parameters are already BF16; persistent buffers keep their
@@ -116,7 +149,7 @@ def quantize(model_dir, out_path):
     # are rebuilt by the model's own __init__ on load, so they are not saved.
     quantized = set(plan) | {"language_model.lm_head"}
     for name, t in model.state_dict().items():
-        if name.rsplit(".", 1)[0] in quantized:
+        if name.rsplit(".", 1)[0] in quantized or name == "language_model.model.embed_tokens.weight":
             continue
         state[name] = t
     from safetensors.torch import save_file
@@ -124,6 +157,18 @@ def quantize(model_dir, out_path):
               metadata={"format": "pt", "plan": json.dumps(plan), "group": str(GROUP)})
     size = sum(v.numel() * v.element_size() for v in state.values())
     print(f"wrote {out_path}: {len(state)} tensors, {size / 2**30:.2f} GiB")
+
+
+def _release_heap():
+    """Hand freed heap back to the OS. glibc keeps it otherwise, and on the Orin that memory is the
+    same pool the GPU allocates from."""
+    import ctypes
+    import gc
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except OSError:
+        pass
 
 
 def load_quantized(model_dir, qpath, device="cuda"):
@@ -136,25 +181,38 @@ def load_quantized(model_dir, qpath, device="cuda"):
     config = AutoConfig.from_pretrained(model_dir, trust_remote_code=True)
     config.text_config._attn_implementation = "sdpa"
     # Each of the 36 layers builds its own float32 RoPE cos/sin table for all 32,768 positions:
-    # 1.1 GiB of identical copies, more than the whole INT4 text tower. Build them for 8,192 (a
+    # 1.1 GiB of identical copies, more than the whole INT4 text tower. Build them for 2,048 (a
     # prompt here is ~350 tokens; Qwen2RotaryEmbedding regrows its table if a longer one comes)
     # and share one table between all layers.
-    config.text_config.max_position_embeddings = min(config.text_config.max_position_embeddings, 8192)
+    config.text_config.max_position_embeddings = min(config.text_config.max_position_embeddings, 2048)
     cls = get_class_from_dynamic_module(config.auto_map["AutoModel"], model_dir)
     with init_empty_weights(include_buffers=False):
         model = cls(config)
     layers = model.language_model.model.layers
     for layer in layers[1:]:
         layer.self_attn.rotary_emb = layers[0].self_attn.rotary_emb
-    with safe_open(qpath, "pt", device=device) as f:
+    _release_heap()
+    # Read on the CPU and copy each tensor over, rather than safe_open(device="cuda"): on Jetson the
+    # direct route goes through pinned staging buffers that PyTorch keeps cached, and every byte of
+    # those is charged to this process's memory too (measured: 2.4 GB charged for 1.8 GB of tensors).
+    with safe_open(qpath, "pt", device="cpu") as f:
         plan = json.loads(f.metadata()["plan"])
         index = dict(model.named_modules())
+        if "language_model.model.embed_tokens.qweight8" in f.keys():
+            old_emb = model.language_model.model.embed_tokens
+            model.language_model.model.embed_tokens = Int8Embedding(old_emb.num_embeddings, old_emb.embedding_dim,
+                                                                    device="meta")
         for full in plan + ["language_model.lm_head"]:
             parent_name, attr = full.rsplit(".", 1)
             old = getattr(index[parent_name], attr)
             new = Int4Linear(old.in_features, old.out_features, old.bias is not None, device="meta")
             setattr(index[parent_name], attr, new)
-        state = {k: f.get_tensor(k) for k in f.keys()}
+        state = {}
+        for k in f.keys():
+            t = f.get_tensor(k)
+            state[k] = t.to(device)
+            del t
+    _release_heap()
     model.load_state_dict(state, strict=False, assign=True)
     del state
     model.to(device)
@@ -165,6 +223,7 @@ def load_quantized(model_dir, qpath, device="cuda"):
     if leftover:
         raise RuntimeError(f"weights never loaded: {leftover[:8]}")
     torch.cuda.empty_cache()
+    _release_heap()
     return model.eval()
 
 

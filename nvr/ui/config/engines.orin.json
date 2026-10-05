@@ -26,6 +26,45 @@
     "enabled": false,
     "unavailable_reason": "Does not fit beside the NVR: 4.8 GB of engine files, 3.6 GB free with the shim stopped"
   },
+  "qwen3vl": {
+    "name": "Qwen3-VL 2B",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Qwen3-VL-2B-INT4/engines/reasoning",
+    "profile": "INT4 · caption 574 ms · yes/no 129 ms · 2.61 GB · person 88%, count 83%, boxes 85% on this house's cameras · Apache-2.0"
+  },
+  "qwen35": {
+    "name": "Qwen3.5 2B",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Qwen3.5-2B-INT4/engines/reasoning",
+    "profile": "INT4 · caption 669 ms · yes/no 202 ms · 2.83 GB · person 89%, count 90%, boxes 44% on this house's cameras · Apache-2.0"
+  },
+  "internvl35": {
+    "name": "InternVL3.5 2B",
+    "path": "/home/orin/tensorrt-edgellm-workspace/InternVL3_5-2B-INT4/engines/reasoning",
+    "profile": "INT4 · caption 508 ms · yes/no 172 ms · 2.22 GB · person 83%, count 51%, boxes 37% (its own format) on this house's cameras · Apache-2.0"
+  },
+  "cosmosr2": {
+    "name": "Cosmos-Reason2 2B",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Cosmos-Reason2-2B-INT4/engines/reasoning",
+    "profile": "INT4 · caption 677 ms · yes/no 132 ms · 2.74 GB · person 75%, count 71%, boxes 93% on this house's cameras · NVIDIA Open Model License"
+  },
+  "gemma4": {
+    "name": "Gemma 4 E2B",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Gemma-4-E2B-it-llamacpp/engines/reasoning",
+    "profile": "llama.cpp Q4_K_S · Jetson AI Lab's Orin Nano path, for an otherwise idle board · Apache-2.0",
+    "enabled": false,
+    "unavailable_reason": "Does not fit beside the NVR: llama.cpp peaks at ~4.1-4.4 GB loading it (OOM-killed inside a 3.3 GB cap, twice); the board has ~3.6-3.9 GB free with the shim stopped"
+  },
+  "locateanything": {
+    "name": "LocateAnything 3B",
+    "path": "/home/orin/tensorrt-edgellm-workspace/LocateAnything-3B-INT4/engines/reasoning",
+    "profile": "PyTorch INT4 (2.2 GB of weights) · NVIDIA non-commercial license",
+    "enabled": false,
+    "unavailable_reason": "Does not fit beside the NVR: loads at 3.1 GB, but its first inference passes 3.6 GB in PyTorch (no sm_87 build for JetPack 7.2). On the workstation GPU: 0.4-0.7 s a query and the best boxes measured (mean IoU 0.85)"
+  },
+  "nemotron4b": {
+    "name": "Nemotron 3 Nano 4B · text",
+    "path": "/home/orin/tensorrt-edgellm-workspace/Nemotron-3-Nano-4B-llamacpp/engines/reasoning",
+    "profile": "Text only - the image is dropped · llama.cpp Q4_K_M · ~380 ms per short answer · 2.63 GB · reading Cosmos3-Edge's captions: person 97%, count 95% · NVIDIA Nemotron Open Model License"
+  },
   "skshmjn": {
     "kind": "classifier",
     "name": "Pokémon · Skshmjn ViT-B/16",
