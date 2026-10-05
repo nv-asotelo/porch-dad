@@ -227,6 +227,65 @@ What the llama.cpp build measured:
 - In 5 minutes it read 23 GB from the SD card and never finished loading, so no token came.
 - Frigate logged no recording warnings during the run. The GGUF was deleted afterwards.
 
+## Bernese mountain dog: finding one dog among many
+
+**The question:** how well does LocateAnything ground one specific dog, and how does it compare with
+the other ways the Bernese mode can identify it?
+
+**The footage:** the Reachy Mini filmed a monitor showing a doggy-daycare feed on 2026-10-04.
+- Frames: one per minute from Frigate's recordings, 149 in all (960x540), 30 s off the frames the
+  mode's gates were tuned on.
+- Of these, 132 show the daycare feed, and the Bernese is in 50 of them.
+
+**Ground truth:** two independent labelling passes per frame, with disagreements (11 of 149)
+settled by hand from enlarged crops.
+- Labellers picked the Bernese from numbered boxes drawn by a strong COCO detector (RT-DETR v2, on
+  the frame and on 2x tiles), or drew a box where none covered it.
+- So no model under test made the ground truth.
+
+**The runs:**
+- LocateAnything: the llama.cpp build, queried with "Bernese mountain dog" at full resolution (the
+  RTX 5070 ran the same GGUF and code the Orin runs in demo mode).
+- The two VLMs: the mode's own two-step question on the Orin, gated at P(yes) 0.6.
+- The breed scores: the mode's breed service run over the RT-DETR boxes.
+
+"Box on the Bernese" counts frames where the box a notification would draw overlaps the labelled
+Bernese at IoU 0.5 or more.
+
+| Method | Said "Bernese" (right / wrong) | Precision | Recall | Box on the Bernese | Wrong dog boxed | Time |
+|---|---|---|---|---|---|---|
+| LocateAnything-3B (llama.cpp) | 121 (50 / 71) | 41% | 100% | 8 of 50 | 40 | 0.4 s (RTX 5070) |
+| Breed scores (ViT-B/16) on detector boxes | 16 (15 / 1) | 94% | 30% | 15 of 50 | 0 | ~0.5 s a dog (Orin CPU) |
+| LocateAnything boxes, then breed scores | 8 (8 / 0) | 100% | 16% | 8 of 50 | 0 | |
+| Qwen3-VL-2B, two-step | 12 (9 / 3) | 75% | 18% | 6 of 50 | 3 | ~1 s (Orin) |
+| Cosmos3-Edge v3, two-step | 60 (24 / 36) | 40% | 48% | 5 of 50 | 19 | ~1 s (Orin) |
+
+**What it says:**
+- **LocateAnything grounds "a dog", not "the Bernese".** It answered "Bernese mountain dog" with a
+  box on 121 of 132 frames, every frame with dogs in it. Its first box was on the Bernese in only 8
+  of the 50 Bernese frames, and on another dog 40 times; any of its boxes hit the Bernese in 13.
+  On this footage it is an excellent dog finder (its person boxes in the benchmark were the
+  tightest measured) and a poor identifier of a breed among look-alikes.
+- **Identity is a classifier's job.** The breed scores on the detector's boxes were wrong once in 16
+  calls. The one miss, at 17:49, is a black dog the two labellers split on; it was settled as not a
+  Bernese (white socks, no rust). They are the only method precise enough to push to a phone.
+  - Recall is 30%. The detector boxed the Bernese in 34 of the 50 frames, and the classifier
+    identified 15 of those 34 crops. The misses are tiny, side-on or half-hidden.
+  - The breed rows share their boxes with the ground truth, so their localization is the
+    detector's by construction. Their precision and recall are not.
+- **The VLMs** sit between: Qwen3-VL is precise but finds few, and Cosmos3-Edge v3 cannot tell breeds.
+- **The real bottleneck is upstream.** In Frigate's own CPU detector (SSD MobileNet, 320x320 regions)
+  run over the same frames:
+  - At the reachy_mini detect size (640x360), it found a track-worthy dog (score 0.7 or more) on the
+    Bernese in 1 of 50 frames.
+  - At 1280x720, it found one in 2.
+  - The Bernese is a dark dog on a dark teal floor, a few dozen pixels high on a filmed monitor.
+  - A mode triggered by Frigate's detection will therefore rarely fire on this camera, however good
+    the identifier.
+  - For a camera like this, the look should be scheduled while the camera is on, with a stronger dog
+    detector in front of the breed scores. RT-DETR, which boxed the Bernese in 34 of 50 frames,
+    runs on the Orin's CPU in about a second a frame.
+
 ## Jetson AI Lab's "runs on Orin Nano", and NVIDIA's jetson-device-skills
 
 **What the listings mean.** Jetson AI Lab's Gemma 4 E2B page lists the Orin Nano 8GB for llama.cpp
