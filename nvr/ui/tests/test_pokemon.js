@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const {speciesKey, parseGrounding, nameProbability, readNameAnswer, saliencyLocation, SALIENCY_LOCATION_PARAMS,
-  cosmosResult, namePreset, presetFits, presetForSubject, NAME_PRESETS, NAME_SUBJECTS, SAMPLE_SUBJECT,
+  cosmosResult, namePreset, presetFits, presetForSubject, NAME_PRESETS, NAME_SUBJECTS,
   readCompletionEvent} = require("../web/app.js");
 
 const encoder = new TextEncoder();
@@ -106,7 +106,6 @@ test("presets are recognised by their exact prompt and locate a box or a point, 
     assert.ok(NAME_SUBJECTS[preset.subject], preset.label);
   }
   assert.equal(namePreset("Describe what you see in this image in one sentence."), null);
-  assert.ok(NAME_SUBJECTS[SAMPLE_SUBJECT]);
 });
 
 test("a classifier answers its own subject's presets, and selecting it swaps in the same mark", () => {

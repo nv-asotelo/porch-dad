@@ -1,4 +1,4 @@
-"""Classifier entries, /api/classify and the sample set against a fake classifier service; no model,
+"""Classifier entries, /api/classify and the sample sets against a fake classifier service; no model,
 systemd or GPU work."""
 import base64
 import http.client
@@ -72,9 +72,20 @@ class Fixture(unittest.TestCase):
         self.samples_dir.mkdir()
         (self.samples_dir / 'pikachu_01.jpg').write_bytes(JPEG)
         (self.samples_dir / 'absol_01.jpg').write_bytes(JPEG)
-        (self.samples_dir / 'manifest.json').write_text(json.dumps({'images': [
+        (self.samples_dir / 'manifest.json').write_text(json.dumps({'title': 'Pokémon', 'subject': 'pokemon', 'images': [
             {'id': 'pikachu_01', 'file': 'pikachu_01.jpg', 'species': 'pikachu', 'license': 'CC BY 2.0', 'credit': 'Someone'},
             {'id': 'absol_01', 'file': 'absol_01.jpg', 'species': 'absol', 'license': 'CC0'}]}))
+        # A spot set: where one target (here an Eevee) is in each picture, if it is there at all.
+        self.spot_dir = self.root / 'park'
+        self.spot_dir.mkdir()
+        (self.spot_dir / 'p-1.jpg').write_bytes(JPEG)
+        (self.spot_dir / 'p-2.jpg').write_bytes(JPEG)
+        self.spot_manifest = {'title': 'Park', 'subject': 'pokemon', 'task': 'spot', 'target': 'eevee',
+                              'target_name': 'our Eevee', 'images': [
+            {'id': 'park-p-1', 'file': 'p-1.jpg', 'caption': '12:00', 'boxes': [[0.1, 0.2, 0.3, 0.4]],
+             'candidates': [[0.1, 0.2, 0.3, 0.4], [0.5, 0.5, 0.9, 0.9]]},
+            {'id': 'park-p-2', 'file': 'p-2.jpg', 'boxes': []}]}
+        (self.spot_dir / 'manifest.json').write_text(json.dumps(self.spot_manifest))
 
 
 class SwitchTests(Fixture):
@@ -139,6 +150,64 @@ class ValidationTests(Fixture):
             with self.subTest(item=item), self.assertRaises(ValueError):
                 ui.load_samples(self.samples_dir)
 
+    def test_a_spot_set_carries_its_target_and_boxes(self):
+        park = ui.load_sample_set(self.spot_dir)
+        self.assertEqual((park['id'], park['title'], park['task'], park['target'], park['target_name']),
+                         ('park', 'Park', 'spot', 'eevee', 'our Eevee'))
+        first, second = park['images']['park-p-1'], park['images']['park-p-2']
+        self.assertEqual((first['caption'], first['boxes'], len(first['candidates']), first['species']),
+                         ('12:00', [[0.1, 0.2, 0.3, 0.4]], 2, None))
+        self.assertEqual((second['caption'], second['boxes'], second['candidates']), ('park-p-2', [], []))
+        pokemon = ui.load_sample_set(self.samples_dir)
+        self.assertEqual((pokemon['id'], pokemon['task'], pokemon['target'], pokemon['subject']),
+                         ('samples', 'species', None, 'pokemon'))
+
+    def test_spot_manifests_are_checked(self):
+        image = self.spot_manifest['images'][0]
+        for change in [{'target': None}, {'task': 'count'}, {'id': 'Bad id'}, {'title': ''}, {'target_name': 'x' * 41},
+                       {'images': [{**image, 'boxes': [[0.3, 0.2, 0.1, 0.4]]}]},
+                       {'images': [{**image, 'boxes': [[0.1, 0.2, 0.3, 1.4]]}]},
+                       {'images': [{**image, 'boxes': [[0.1, 0.2, 0.3]]}]},
+                       {'images': [{**image, 'boxes': None}]},
+                       {'images': [{**image, 'candidates': [[0.1, 0.2, 0.3, 0.4]] * 65}]},
+                       {'images': [{**image, 'species': 'eevee'}]}]:
+            manifest = {**self.spot_manifest, **change}
+            if manifest.get('target') is None:
+                manifest.pop('target')
+            (self.spot_dir / 'manifest.json').write_text(json.dumps(manifest))
+            with self.subTest(change=str(change)[:70]), self.assertRaises(ValueError):
+                ui.load_sample_set(self.spot_dir)
+        # A species set has no target.
+        (self.samples_dir / 'manifest.json').write_text(json.dumps({'target': 'pikachu', 'images': [
+            {'id': 'a', 'file': 'pikachu_01.jpg', 'species': 'pikachu'}]}))
+        with self.assertRaises(ValueError):
+            ui.load_sample_set(self.samples_dir)
+
+    def test_a_set_without_an_id_is_named_after_its_directory(self):
+        manifest = {k: v for k, v in self.spot_manifest.items() if k not in ('id', 'title', 'target_name')}
+        for name, expected in [('park', 'park'), ('Pokemon', 'pokemon'), ('samples.v2', 'samples-v2'),
+                               ('_My Set', 'my-set'), ('x' * 40, 'x' * 32)]:
+            directory = self.root / 'named' / name
+            directory.mkdir(parents=True)
+            (directory / 'p-1.jpg').write_bytes(JPEG)
+            (directory / 'p-2.jpg').write_bytes(JPEG)
+            (directory / 'manifest.json').write_text(json.dumps({**manifest, 'title': None, 'target_name': None}))
+            with self.subTest(name=name):
+                loaded = ui.load_sample_set(directory)
+                # An explicit null is the key left out: the defaults.
+                self.assertEqual((loaded['id'], loaded['title'], loaded['target_name']), (expected, expected, 'the target'))
+
+    def test_sets_need_their_own_ids_and_image_ids(self):
+        sets, samples = ui.load_sample_sets([self.samples_dir, self.spot_dir])
+        self.assertEqual(([s['id'] for s in sets], sorted(samples)),
+                         (['samples', 'park'], ['absol_01', 'park-p-1', 'park-p-2', 'pikachu_01']))
+        with self.assertRaises(ValueError):
+            ui.load_sample_sets([self.samples_dir, self.samples_dir])
+        (self.spot_dir / 'manifest.json').write_text(json.dumps({**self.spot_manifest, 'images': [
+            {**self.spot_manifest['images'][0], 'id': 'absol_01'}]}))
+        with self.assertRaises(ValueError):
+            ui.load_sample_sets([self.samples_dir, self.spot_dir])
+
 
 class HTTPTests(Fixture):
     def setUp(self):
@@ -152,14 +221,14 @@ class HTTPTests(Fixture):
             def close(self): pass
         self.server = ui.Server(('127.0.0.1', 0), Quiet, telemetry=Telemetry())
         self.server.engine_switcher = self.switcher
-        self.server.samples = ui.load_samples(self.samples_dir)
+        self.server.sample_sets, self.server.samples = ui.load_sample_sets([self.samples_dir, self.spot_dir])
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
-    def request(self, method, path, body=None):
+    def request(self, method, path, body=None, headers=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
-        headers = {'Content-Type': 'application/json'} if body is not None else {}
+        headers = {**({'Content-Type': 'application/json'} if body is not None else {}), **(headers or {})}
         connection.request(method, path, json.dumps(body) if body is not None else None, headers)
         response = connection.getresponse()
         result = response.status, response.getheader('Content-Type'), response.read()
@@ -182,13 +251,42 @@ class HTTPTests(Fixture):
 
     def test_samples_list_coverage_and_serve_only_manifest_files(self):
         code, _, raw = self.request('GET', '/api/samples?model=vit')
-        listed = {item['id']: item for item in json.loads(raw)['images']}
+        listed = {item['id']: item for item in json.loads(raw)['sets'][0]['images']}
         self.assertEqual((code, listed['pikachu_01']['covered'], listed['absol_01']['covered']), (200, True, False))
-        self.assertNotIn('covered', json.loads(self.request('GET', '/api/samples')[2])['images'][0])
+        self.assertNotIn('covered', json.loads(self.request('GET', '/api/samples')[2])['sets'][0]['images'][0])
         code, content_type, body = self.request('GET', '/api/samples/pikachu_01')
         self.assertEqual((code, content_type, body), (200, 'image/jpeg', JPEG))
         for path in ['/api/samples/manifest', '/api/samples/..%2Fmanifest.json', '/api/samples/unknown']:
             self.assertEqual(self.request('GET', path)[0], 404, path)
+
+    def test_spot_sets_are_listed_with_their_boxes_and_covered_by_target(self):
+        data = json.loads(self.request('GET', '/api/samples?model=vit')[2])
+        self.assertEqual([(s['id'], s['task']) for s in data['sets']], [('samples', 'species'), ('park', 'spot')])
+        park = data['sets'][1]
+        self.assertEqual((park['title'], park['target'], park['target_name'], park['subject']),
+                         ('Park', 'eevee', 'our Eevee', 'pokemon'))
+        first = park['images'][0]
+        self.assertEqual((first['id'], first['species'], first['caption'], first['boxes'], first['covered']),
+                         ('park-p-1', None, '12:00', [[0.1, 0.2, 0.3, 0.4]], True))
+        self.assertEqual(len(first['candidates']), 2)
+        self.assertNotIn('path', first)
+        # Its images are served and classified by id, like any other sample.
+        self.assertEqual(self.request('GET', '/api/samples/park-p-2')[:2], (200, 'image/jpeg'))
+        self.assertEqual(self.switcher.switch('vit')[0], True)
+        self.assertEqual(self.request('POST', '/api/classify', {'model': 'vit', 'sample': 'park-p-1'})[0], 200)
+
+    def test_a_rebound_host_name_reads_no_sample(self):
+        # DNS rebinding: the attacker's own name, now resolving to this server. Same-origin to the
+        # browser, so only Host gives it away - and a spot set can be private frames.
+        self.assertEqual(self.switcher.switch('vit')[0], True)
+        for host in ('rebind.attacker.example', f'rebind.attacker.example:{self.server.server_port}'):
+            for method, path, body in [('GET', '/api/samples', None), ('GET', '/api/samples/park-p-1', None),
+                                       ('POST', '/api/classify', {'model': 'vit', 'sample': 'park-p-1'})]:
+                code, _, raw = self.request(method, path, body, {'Host': host})
+                self.assertEqual(code, 421, (host, path))
+                self.assertNotIn(JPEG, raw)
+        # The server's own address still works.
+        self.assertEqual(self.request('GET', '/api/samples/park-p-1', None, {'Host': f'127.0.0.1:{self.server.server_port}'})[0], 200)
 
     def test_engine_list_marks_classifiers(self):
         data = json.loads(self.request('GET', '/api/engines')[2])

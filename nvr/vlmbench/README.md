@@ -329,6 +329,11 @@ likely breed is the Bernese mountain dog, which is what Live Vision shows.
   other dogs too. A top-label rule for the mode is worth trying on the next footage; 36 crops are too
   few to switch on.
 - **INT8 costs nothing measurable:** PR-AUC difference 0.000, interval -0.04 to +0.04.
+- **The same rule in Live Vision agrees.** Live Vision's "Doggy daycare" set runs a classifier over
+  every detector box of each frame (`nvr/README.md`, "Sample sets"). There, through TensorRT and the
+  page's own crops, wesleyacheng spotted the Bernese in 18 of the 50 frames with it, with a false alarm
+  in 1 of the 82 without. The ImageNet ViT got 12 and 0, and Dog-Breed-120 20 (plus 1 on the wrong
+  dog) and 15.
 
 All three are in Live Vision's "Dog breeds" group, so any picture can be tried on each
 (`nvr/classifier/README.md`, "Dog breeds"; its "What the overlay shows" has how their saliency maps

@@ -166,11 +166,13 @@
       </section>
     </div>
     <section id="samplePanel" class="samples panel" aria-labelledby="samplesTitle" hidden>
-      <div class="panel-heading"><h2 id="samplesTitle">Sample Pokémon set</h2><span id="sampleStatus" role="status">Loading samples…</span></div>
-      <div class="controls"><button id="sampleRunAll" class="primary" disabled>Run the selected model on every image</button><button id="sampleStop" hidden>Stop the run</button><label class="sample-filter"><input id="sampleMistakes" type="checkbox"> Mistakes only</label></div>
+      <div class="panel-heading"><h2 id="samplesTitle">Sample sets</h2><span id="sampleStatus" role="status">Loading samples…</span></div>
+      <div id="sampleTabs" class="sample-tabs"></div>
+      <div class="controls"><button id="sampleRunAll" class="primary" disabled>Run the selected model on every image</button><button id="sampleStop" hidden>Stop the run</button><label class="sample-filter"><input id="sampleMistakes" type="checkbox"> Mistakes only</label><label id="sampleRevealLabel" class="sample-filter" hidden><input id="sampleReveal" type="checkbox"> <span id="sampleRevealText"></span></label></div>
       <p id="sampleScore" class="sample-score" role="status" hidden></p>
       <div id="sampleGrid" class="sample-grid" aria-label="Sample images"></div>
-      <p class="hint">Openly licensed photos of figures, plush toys, cards and art, each labelled with its species; hover a tile for its credit and licence. Choose one to show it in the live view and run the selected model on it. Run scores every image as the answers land: a classifier on the server's copy of each file, Cosmos3-Edge with a Name the Pokémon preset on the picture as this page sends it. A percentage is the model's own probability for the name it gave.</p>
+      <p id="spotSetHint" class="hint" hidden></p>
+      <p id="speciesSetHint" class="hint">Openly licensed photos of figures, plush toys, cards and art, each labelled with its species; hover a tile for its credit and licence. Choose one to show it in the live view and run the selected model on it. Run scores every image as the answers land: a classifier on the server's copy of each file, Cosmos3-Edge with a Name the Pokémon preset on the picture as this page sends it. A percentage is the model's own probability for the name it gave.</p>
     </section>
     <section class="settings panel" aria-label="Inference settings">
       <fieldset class="capture-presets"><legend>Capture preset</legend><div class="preset-options"><label><input type="radio" name="capturePreset" id="lightweightPreset" value="lightweight" checked> Lightweight <span>First demo default</span></label><label><input type="radio" name="capturePreset" id="liveVlmPreset" value="live-vlm"> Live VLM WebUI capture</label></div></fieldset>

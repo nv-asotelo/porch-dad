@@ -7,8 +7,9 @@ picture. They run on the Orin as TensorRT FP16 engines, in `pokemon-classifier.s
 `:8094` (the unit kept its first name). Selecting one leaves the shim and its engine running, so
 porch-dad's captions carry on, and going back to Cosmos frees the classifier's memory.
 
-A sample set of 189 labelled Pokémon photos lets the page run a Pokémon classifier over every image
-and score it as the answers land.
+Sample sets let the page run the selected model over every image and score it as the answers land,
+one tab each: 189 labelled Pokémon photos, and on this Orin a private doggy-daycare set built with
+`make_spot_set.py` ("Spot sets" below).
 
 ## Pokémon: which two, and why
 
@@ -137,7 +138,8 @@ frame's centre 29% of the time.
 | `export_models.py` | Workstation step: download the models at their pinned revisions, check their SHA-256, export the ONNX files with the saliency output, convert to FP16 |
 | `make_dog_meta.py` | Workstation step: write the dog-breed classifiers' `meta.json` from their pinned configs, each label mapped to the page's breed key, and check each with the service's own loader |
 | `build_engines.py` | Orin step: build each TensorRT engine from its ONNX file, with the TensorRT the service loads |
-| `samples.json`, `fetch_samples.py` | The sample set: each photo's source, creator, licence and attribution, and the script that fetches and prepares them for Live Vision. The photos are not in git |
+| `samples.json`, `fetch_samples.py` | The Pokémon sample set: each photo's source, creator, licence and attribution, and the script that fetches and prepares them for Live Vision. The photos are not in git |
+| `make_spot_set.py` | Builds a spot set - whether one target is in each picture, and where - from your own labelled frames, for a further `--samples-dir`. Its output is yours and stays out of git |
 | `../systemd/pokemon-classifier.service` | The unit |
 
 ## Install
@@ -168,6 +170,39 @@ Then Live Vision needs the classifier entries in its registry
 `--classifier-url http://127.0.0.1:8094 --samples-dir /home/orin/nvr/classifier/samples`, which
 the drop-in `nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf` carries
 ([`../README.md`](../README.md), "Live Vision").
+
+### Spot sets
+
+A spot set asks whether one target - a species, such as one dog breed - is in each picture, and
+where. Each image carries the target's labelled boxes (none when it is not there) and every box a
+detector drew around something of its kind. With a classifier that can name the target, Live Vision
+classifies each of those boxes on its own, as the Bernese mode does, and scores a run by whether it
+named the target on the right box. This Orin's doggy-daycare set was built on the workstation from the
+frames and labels of the Bernese evaluation ([`../vlmbench/README.md`](../vlmbench/README.md)):
+
+```bash
+python nvr/classifier/make_spot_set.py <frames> <labels.json> <out>/samples-daycare \
+  --target bernese-mountain-dog --target-name "your dog" --title "Doggy daycare" --subject dog \
+  --id daycare --candidates <candidates.json> --where daycare --credit "Reachy Mini's view of the doggy-daycare feed, 2026-10-04"
+scp -r <out>/samples-daycare orin@<orin>:/home/orin/nvr/classifier/
+```
+
+then a second `--samples-dir /home/orin/nvr/classifier/samples-daycare` in the drop-in. It holds
+132 frames, the Bernese in 50, and 995 detector boxes: other people's dogs on a private feed, so it is
+on the Orin only.
+
+The Pokémon set's `manifest.json` names its tab (`"title"`) and subject (`"subject": "pokemon"`),
+which `fetch_samples.py` copies from `samples.json`. A manifest written before 2026-10-05 has neither:
+its tab reads "samples", and with no subject the dog-breed presets would score it. Copy the new
+`fetch_samples.py` and `samples.json` over and run it again - it keeps the photos already there and
+rewrites the manifest - then restart Live Vision:
+
+```bash
+scp nvr/classifier/{fetch_samples.py,samples.json} orin@<orin>:/home/orin/nvr/classifier/
+# on the Orin, as orin
+cd /home/orin/nvr/classifier && /home/orin/TensorRT-Edge-LLM/.venv/bin/python fetch_samples.py /home/orin/nvr/classifier/samples
+sudo systemctl restart cosmos-edge-ui
+```
 
 ### Building the engines
 

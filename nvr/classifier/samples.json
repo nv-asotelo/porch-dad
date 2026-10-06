@@ -1,5 +1,7 @@
 {
  "name": "pokemon-openverse-sample-v1",
+ "title": "Pokémon",
+ "subject": "pokemon",
  "description": "Sample of openly licensed (CC0 / Public Domain Mark / CC BY / CC BY-SA) real-world Pokemon images - figures, plush, costumes, drawings, Pokemon GO AR photos, 3D fan renders, crafts - found via the Openverse API (mostly Flickr), species labels verified visually one by one; one species per image (or several instances of the same species).",
  "license_note": "Each photo is licensed by its creator as listed (attribution required for BY/BY-SA; BY-SA share-alike). Pokemon characters themselves are (c) Nintendo / Creatures / GAME FREAK / The Pokemon Company; use here is research evaluation.",
  "selection": "Openverse query per species (license filter cc0,pdm,by,by-sa); title/tags must name the species and no other species; <=1 image per creator per species; manual visual verification (rejected: off-topic, tiny/partial subjects, multi-species scenes, cosplay of humans, abstract art); <=4 images per species; exact/near duplicates of the candidates' downloadable training sets removed; official artwork / promotional renders removed.",

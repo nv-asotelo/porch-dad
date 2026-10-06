@@ -71,8 +71,6 @@ const NAME_PRESETS = [
   {label: "🔎 Name the dog breed · point", subject: "dog", locate: "point",
     prompt: "Which dog breed is this? Reply with only a JSON object with \"name\" (the breed's English name) and \"point_2d\" (a point [x, y] on the dog)."},
 ];
-// The sample set (nvr/classifier/samples.json) is Pokémon: only those presets score it.
-const SAMPLE_SUBJECT = "pokemon";
 // Per generated token, the shim's top alternatives with their logprobs (log-softmax of the raw logits).
 // The presets decode greedily, so the chosen token is the first; 5 keeps it in the list through ties.
 const NAME_TOP_LOGPROBS = 5;
@@ -441,6 +439,35 @@ function engineGroups(choices, tab) {
   return [...groups];
 }
 
+// A tab bar - the model panel's kinds, the sample sets: one button per [key, text], the selected one
+// marked. A click selects a tab, and so do the arrow keys, Home and End, which move the keyboard focus
+// with the selection (the WAI-ARIA tabs pattern, automatic activation); onSelect(key, true) then means
+// "put the focus back on that tab once you have redrawn".
+function tabBar(doc, tabs, selected, onSelect, label = "", disabled = false) {
+  const bar = doc.createElement("div"); bar.className = "model-tabs"; bar.setAttribute("role", "tablist");
+  if (label) bar.setAttribute("aria-label", label);
+  const buttons = tabs.map(([key, text]) => {
+    const button = doc.createElement("button"); button.type = "button"; button.dataset.tab = key;
+    button.className = "model-tab" + (key === selected ? " selected" : "");
+    button.setAttribute("role", "tab"); button.setAttribute("aria-selected", String(key === selected));
+    button.tabIndex = key === selected ? 0 : -1;
+    button.disabled = disabled;
+    button.textContent = text;
+    button.addEventListener("click", () => { if (onSelect && key !== selected) onSelect(key, false); });
+    return button;
+  });
+  bar.addEventListener("keydown", event => {
+    const i = buttons.indexOf(event.target);
+    const next = {ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: buttons.length - 1}[event.key];
+    if (i < 0 || next === undefined || disabled) return;
+    event.preventDefault();
+    const key = buttons[(next + buttons.length) % buttons.length].dataset.tab;
+    if (onSelect && key !== selected) onSelect(key, true);
+  });
+  bar.append(...buttons);
+  return bar;
+}
+
 function renderEngineChoices(container, data, switching, onSwitch, tab = null, onTab = null) {
   const doc = container.ownerDocument;
   const choices = engineChoices(data);
@@ -449,17 +476,9 @@ function renderEngineChoices(container, data, switching, onSwitch, tab = null, o
   const shown = tabs.some(([key]) => key === tab) ? tab : active ? engineTab(active) : tabs[0]?.[0];
   const nodes = [];
   if (tabs.length > 1) {
-    const bar = doc.createElement("div"); bar.className = "model-tabs"; bar.setAttribute("role", "tablist");
-    for (const [key, label] of tabs) {
-      const button = doc.createElement("button"); button.type = "button"; button.dataset.tab = key;
-      button.className = "model-tab" + (key === shown ? " selected" : "");
-      button.setAttribute("role", "tab"); button.setAttribute("aria-selected", String(key === shown));
-      const count = choices.filter(engine => engineTab(engine) === key).length;
-      button.textContent = `${label} (${count})` + (active && engineTab(active) === key ? " · active" : "");
-      button.addEventListener("click", () => { if (onTab) onTab(key); });
-      bar.append(button);
-    }
-    nodes.push(bar);
+    nodes.push(tabBar(doc, tabs.map(([key, label]) => [key,
+      `${label} (${choices.filter(engine => engineTab(engine) === key).length})` +
+      (active && engineTab(active) === key ? " · active" : "")]), shown, onTab, "Model kinds"));
   }
   for (const [group, engines] of engineGroups(choices, shown)) {
     const section = doc.createElement("div"); section.className = "model-group";
@@ -831,6 +850,17 @@ function overlayPlacement(sent, natural, boxWidth, boxHeight) {
     width: sent.canvasWidth * perX, height: sent.canvasHeight * perY}};
 }
 
+// How each kind of mark is drawn: a model's own grounding, a box or point derived from a classifier's
+// saliency (an estimate), a detector box a classifier named the spot set's target, one it named
+// something else, and where the target was labelled.
+const MARK_STYLES = Object.freeze({
+  model: Object.freeze({color: "#b4f679", dash: [], width: 2.5, font: 13}),
+  derived: Object.freeze({color: "#7dd3fc", dash: [7, 5], width: 2.5, font: 13}),
+  spotted: Object.freeze({color: "#b4f679", dash: [], width: 3, font: 13}),
+  candidate: Object.freeze({color: "#c4d3c6", dash: [], width: 1.25, font: 11}),
+  truth: Object.freeze({color: "#fbbf24", dash: [5, 4], width: 2, font: 12}),
+});
+
 // A sequential dark-to-bright ramp (inferno-like), so more evidence always reads brighter; the
 // overlay's alpha also rises with the value, so low-evidence areas leave the picture visible.
 const HEAT_STOPS = [[0, 0, 4], [87, 16, 110], [188, 55, 84], [249, 142, 9], [252, 255, 164]];
@@ -927,7 +957,90 @@ function scoreSamples(rows) {
   return score;
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, SAMPLE_SUBJECT, namePreset, presetFits, presetForSubject, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
+// The crop the Bernese mode's breed scorer (nvr/feed/breed_service.py) cuts around a detector's box:
+// the box plus 10% of its longer side, clamped to the picture, in whole pixels, as [x, y, width,
+// height]. box: [x1, y1, x2, y2] fractions; width, height: the picture's size in pixels.
+function cropRect(box, width, height) {
+  const x1 = box[0] * width, y1 = box[1] * height, x2 = box[2] * width, y2 = box[3] * height;
+  const margin = 0.1 * Math.max(x2 - x1, y2 - y1);
+  const left = Math.trunc(Math.max(0, x1 - margin)), top = Math.trunc(Math.max(0, y1 - margin));
+  return [left, top, Math.trunc(Math.min(width, x2 + margin)) - left, Math.trunc(Math.min(height, y2 + margin)) - top];
+}
+
+function boxIoU(a, b) {
+  const ix = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
+  const iy = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  const inter = ix * iy, union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+// A box [x1, y1, x2, y2] or point [x, y] a model wrote over the picture it was sent - the capture
+// canvas, with the picture drawn at (x, y, w, h) inside it - as fractions of the picture itself.
+function toPicture(coords, sent) {
+  const along = (v, size, offset, extent) => Math.min(1, Math.max(0, (v * size - offset) / extent));
+  return coords.map((v, i) => i % 2 === 0 ? along(v, sent.canvasWidth, sent.x, sent.w) : along(v, sent.canvasHeight, sent.y, sent.h));
+}
+
+// Whether a mark is on the target: its box overlaps one of the target's boxes at IoU 0.5 or more, or
+// its point is inside one.
+function onTarget(mark, boxes) {
+  if (mark?.box) return boxes.some(box => boxIoU(mark.box, box) >= 0.5);
+  if (mark?.point) return boxes.some(box => box[0] <= mark.point[0] && mark.point[0] <= box[2] &&
+    box[1] <= mark.point[1] && mark.point[1] <= box[3]);
+  return false;
+}
+
+// A classifier's answer on a spot-set picture, from each detector box classified on its own
+// (boxes: [{box, species, label, score}]): whether it named the target, and whether a box it named
+// is the target's own (IoU 0.5 or more with a labelled box). score: the best such box's probability.
+function spotResult(targetBoxes, boxes, target) {
+  const named = boxes.filter(entry => entry.species === target).sort((a, b) => b.score - a.score);
+  const right = named.filter(entry => targetBoxes.some(box => boxIoU(entry.box, box) >= 0.5));
+  return {spot: true, named: named.length > 0, right: right.length > 0, score: (right[0] ?? named[0])?.score ?? null, boxes};
+}
+
+// A VLM's answer to a Name preset on a spot-set picture (readNameAnswer), its coordinates over the
+// capture canvas (sent): named the target, and its box or point on the target's own.
+function spotFromAnswer(answer, sent, targetBoxes, target) {
+  const first = answer?.items.find(entry => entry.name) ?? null;
+  const named = Boolean(first) && speciesKey(first.name) === target;
+  const marked = answer?.items.find(entry => entry.box || entry.point) ?? null;
+  const mark = marked && {box: marked.box ? toPicture(marked.box, sent) : null, point: marked.point ? toPicture(marked.point, sent) : null};
+  return {spot: true, named, located: Boolean(marked), right: named && onTarget(mark, targetBoxes),
+    score: first?.probability ?? null, species: first ? speciesKey(first.name) : null, label: first?.name ?? "", boxes: []};
+}
+
+// One spot-set picture's verdict: spotted (named on the target itself), named on the wrong one,
+// named without saying where (a VLM's answer with no box or point), missed; and for a picture without
+// the target, a false alarm or a correct silence.
+function spotVerdict(present, result) {
+  if (present) {
+    if (result.right) return {ok: true, text: `✓ spotted${typeof result.score === "number" ? ` ${percentText(result.score)}` : ""}`};
+    if (result.named && result.located === false) return {ok: false, text: "✗ named it, no box or point"};
+    return {ok: false, text: result.named ? "✗ named the wrong one" : "✗ missed"};
+  }
+  return result.named ? {ok: false, text: "✗ false alarm"} : {ok: true, text: "✓ not here"};
+}
+
+// Score of a spot run: rows of {present, named, located (false: named without a box or point), right,
+// boxed (a detector box covers the target)}.
+function scoreSpots(rows) {
+  const score = {present: 0, spotted: 0, wrongOne: 0, unlocated: 0, missed: 0, boxed: 0, absent: 0, falseAlarms: 0};
+  for (const row of rows) {
+    if (row.present) {
+      score.present += 1; score.boxed += Boolean(row.boxed);
+      if (row.right) score.spotted += 1;
+      else if (row.named && row.located === false) score.unlocated += 1;
+      else if (row.named) score.wrongOne += 1;
+      else score.missed += 1;
+    } else {
+      score.absent += 1; score.falseAlarms += Boolean(row.named);
+    }
+  }
+  return score;
+}
+
+if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, namePreset, presetFits, presetForSubject, tabBar, cropRect, boxIoU, toPicture, onTarget, spotResult, spotFromAnswer, spotVerdict, scoreSpots, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -945,7 +1058,11 @@ if (typeof document !== "undefined") {
   let overlay = null;
   // The sample set (/api/samples): its images, coverage for the selected classifier, and that
   // classifier's results so far. A run is cancelled by Stop, a model switch or a new run.
-  const samples = {list: [], byId: new Map(), results: new Map(), model: null, run: null, unscorable: false};
+  // The sample sets (/api/samples), one tab each. set: the tab shown; list and byId: its images;
+  // choice: the tab the user picked (null follows the selected classifier's subject); classifier and
+  // subject: what loadSamples was asked for, so a tab change can judge what the new set can score.
+  const samples = {sets: [], set: null, choice: null, classifier: null, subject: null, list: [], byId: new Map(),
+    results: new Map(), model: null, run: null, unscorable: false};
   // ?model=<id> (a bookmarkable/kiosk link) requests a switch once the backend is confirmed
   // ready, the same one-shot pattern as ?source=reachy below - honoured once, and only if
   // nothing else was chosen while the page was loading.
@@ -1145,10 +1262,11 @@ if (typeof document !== "undefined") {
     $("overlayToggleButton").hidden = state.kind !== "classifier" && !named;
     $("overlayToggleButton").setAttribute("aria-pressed", String(state.overlays));
     $("overlayToggleButton").textContent = `Saliency overlay: ${state.overlays ? "On" : "Off"}`;
-    const scorable = state.kind === "classifier" ? !samples.unscorable : named?.subject === SAMPLE_SUBJECT;
+    const scorable = sampleSetScorable(named);
     $("sampleRunAll").disabled = !scorable || !state.ready || state.busy || switchingEngine() || !samples.list.length;
-    $("sampleRunAll").title = scorable ? ""
-      : `Choose a Name the ${NAME_SUBJECTS[SAMPLE_SUBJECT].preset} quick preset to score this model on the sample set`;
+    $("sampleRunAll").title = scorable ? "" : state.kind === "classifier"
+      ? `${engineData?.active?.name ?? "This classifier"} can name nothing this set is labelled with`
+      : `Choose a Name the ${NAME_SUBJECTS[samples.set?.subject]?.preset ?? "Pokémon or dog breed"} quick preset to score this model on the ${samples.set?.title ?? "sample"} set`;
     $("sampleStop").hidden = !samples.run;
     $("liveToggleButton").setAttribute("aria-pressed", String(state.liveStreaming));
     $("liveToggleButton").textContent = `Live streaming: ${state.liveStreaming ? "On" : "Off"}`;
@@ -1444,10 +1562,14 @@ if (typeof document !== "undefined") {
         overlay = answer.marks.length ? {natural: image.natural, sent: image.sent, marks: answer.marks} : null;
         drawOverlay();
         // Scored against the sample's label only when the preset asks about what the set shows.
-        const sample = source === $("uploadedImage") && named.subject === SAMPLE_SUBJECT ? state.sampleId : null;
+        const sample = source === $("uploadedImage") && sampleSetScorable(named) ? state.sampleId : null;
         const key = `${state.model}|${prompt}`;
-        if (sample && samples.byId.has(sample) && (samples.model === null || samples.model === key)) {
-          samples.model = key; samples.results.set(sample, cosmosResult(answer)); renderSampleTiles();
+        const item = sample ? samples.byId.get(sample) : null;
+        if (item && (samples.model === null || samples.model === key)) {
+          samples.model = key;
+          samples.results.set(sample, samples.set.task === "spot"
+            ? spotFromAnswer(answer, image.sent, item.boxes, samples.set.target) : cosmosResult(answer));
+          renderSampleTiles();
         }
       }
       // speakText() itself no-ops while a previous utterance is still in flight (see its own
@@ -1488,6 +1610,8 @@ if (typeof document !== "undefined") {
   // exactly as a sample-set run does, rather than a re-encoded capture of it.
   async function classify(source, trigger = "manual", sampleId = null) {
     if (source === $("reachyImage") && !reachyFrameReady()) { renderReachySampling(); controls(); return null; }
+    const spotItem = sampleId && samples.set?.task === "spot" ? samples.byId.get(sampleId) : null;
+    if (spotItem && spotItem.covered !== false) return spotCandidates(spotItem, trigger);
     // A Name preset needs the saliency map even with the overlay off: it is where the box or point
     // comes from.
     const named = namePreset($("prompt").value.trim());
@@ -1546,7 +1670,9 @@ if (typeof document !== "undefined") {
         label: `${speciesName(result.species, result.label)} ${percentText(result.score)}`, derived: true}] : [];
       overlay = result.saliency ? {...placement, saliency: result.saliency, marks} : null;
       drawOverlay();
-      if (sampleId && samples.byId.has(sampleId) && (samples.model === null || samples.model === state.model)) {
+      // A whole-picture answer scores a species set only, and only for a classifier that can.
+      if (sampleId && !spotItem && !samples.unscorable && samples.byId.has(sampleId) &&
+          (samples.model === null || samples.model === state.model)) {
         samples.model = state.model; samples.results.set(sampleId, result); renderSampleTiles();
       }
       state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
@@ -1584,8 +1710,11 @@ if (typeof document !== "undefined") {
   // derived from a classifier's saliency are dashed, because they are an estimate, not a detection.
   function drawOverlay() {
     const layer = $("overlayCanvas"), box = layer.parentElement;
-    const show = Boolean(state.overlays && overlay && (overlay.saliency || overlay.marks?.length) &&
+    const modelShown = Boolean(state.overlays && overlay && (overlay.saliency || overlay.marks?.length) &&
       overlay.natural.width && overlay.natural.height);
+    // "Show where … is": the labelled boxes of the spot-set picture shown, with or without an answer.
+    const truth = revealMarks(), picture = $("uploadedImage");
+    const show = modelShown || (truth.length > 0 && picture.naturalWidth > 0 && picture.naturalHeight > 0);
     layer.hidden = !show;
     const help = [];
     // The active entry's id, not state.model: a model switch redraws this before state.model moves.
@@ -1598,9 +1727,13 @@ if (typeof document !== "undefined") {
     } else if (overlay?.saliency && flat && namePreset($("prompt").value.trim())) {
       help.push("This classifier's evidence is spread over the whole picture, so no box or point is derived from it.");
     }
-    if (overlay?.marks?.some(mark => !mark.derived)) {
+    if (overlay?.marks?.some(mark => !mark.derived && !mark.kind)) {
       help.push("The box or point is Cosmos3-Edge's own 2D grounding: coordinates it wrote in its answer, normalized 0-1000 over the picture it was sent. Its percentage is how likely the model found the name it wrote.");
     }
+    if (overlay?.marks?.some(mark => mark.kind === "spotted" || mark.kind === "candidate") && samples.set?.task === "spot") {
+      help.push(`Each box is one the set's detector drew; the classifier named each on its own, from a crop of it. Green: the boxes it named ${speciesName(samples.set.target)}.`);
+    }
+    if (truth.length) help.push(`Dashed amber: where ${samples.set.target_name} is, as labelled.`);
     if (!help.length && state.kind === "classifier") {
       help.push(`None of these classifiers outputs boxes, points or masks: their 2D grounding is a saliency heatmap` +
         (flat ? "." : `, and the Name the ${NAME_SUBJECTS[state.subject]?.preset ?? "Pokémon or dog breed"} presets add a box or point derived from it.`));
@@ -1613,10 +1746,14 @@ if (typeof document !== "undefined") {
     const context = layer.getContext("2d");
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
-    const {clip, grid} = overlayPlacement(overlay.sent, overlay.natural, width, height);
+    // The answer's own placement, or - for the labelled boxes alone - the shown picture, whole.
+    const natural = modelShown ? overlay.natural : {width: picture.naturalWidth, height: picture.naturalHeight};
+    const sent = modelShown ? overlay.sent
+      : {canvasWidth: natural.width, canvasHeight: natural.height, x: 0, y: 0, w: natural.width, h: natural.height};
+    const {clip, grid} = overlayPlacement(sent, natural, width, height);
     context.save();
     context.beginPath(); context.rect(clip.x, clip.y, clip.width, clip.height); context.clip();
-    if (overlay.saliency) {
+    if (modelShown && overlay.saliency) {
       const {w, h, cells} = overlay.saliency;
       const tile = document.createElement("canvas"); tile.width = w; tile.height = h;
       const pixels = tile.getContext("2d").createImageData(w, h);
@@ -1626,18 +1763,23 @@ if (typeof document !== "undefined") {
       context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
       context.drawImage(tile, grid.x, grid.y, grid.width, grid.height);
     }
-    const at = (x, y) => [grid.x + x * grid.width, grid.y + y * grid.height];
-    context.font = "600 13px Inter, ui-sans-serif, sans-serif";
-    for (const mark of overlay.marks || []) {
-      const color = mark.derived ? "#7dd3fc" : "#b4f679";
-      context.setLineDash(mark.derived ? [7, 5] : []);
+    // A mark's coordinates are over the picture the model was sent (grid), or with space "picture"
+    // over the picture itself (clip): the spot sets' detector and labelled boxes.
+    const overSent = (x, y) => [grid.x + x * grid.width, grid.y + y * grid.height];
+    const overPicture = (x, y) => [clip.x + x * clip.width, clip.y + y * clip.height];
+    for (const mark of [...(modelShown ? overlay.marks || [] : []), ...truth]) {
+      const style = MARK_STYLES[mark.kind ?? (mark.derived ? "derived" : "model")];
+      const color = style.color, at = mark.space === "picture" ? overPicture : overSent;
+      context.font = `600 ${style.font}px Inter, ui-sans-serif, sans-serif`;
+      context.setLineDash(style.dash);
       let labelAt = null;
       if (mark.box) {
         const [x1, y1] = at(mark.box[0], mark.box[1]), [x2, y2] = at(mark.box[2], mark.box[3]);
-        for (const [lineWidth, stroke] of [[5, "rgba(0,0,0,0.6)"], [2.5, color]]) {
+        for (const [lineWidth, stroke] of [[style.width + 2.5, "rgba(0,0,0,0.6)"], [style.width, color]]) {
           context.lineWidth = lineWidth; context.strokeStyle = stroke; context.strokeRect(x1, y1, x2 - x1, y2 - y1);
         }
-        labelAt = [x1, y1];
+        // A labelled box's label goes under it: a classifier's label for the same box sits on top.
+        labelAt = mark.kind === "truth" ? [x1, y2, "below"] : [x1, y1];
       }
       if (mark.point) {
         const [x, y] = at(mark.point[0], mark.point[1]);
@@ -1650,12 +1792,13 @@ if (typeof document !== "undefined") {
         labelAt ??= [x + 14, y - 14];
       }
       if (mark.label && labelAt) {
-        const textWidth = context.measureText(mark.label).width;
+        const textWidth = context.measureText(mark.label).width, tall = style.font + 7;
         const lx = Math.min(Math.max(labelAt[0], clip.x), clip.x + clip.width - textWidth - 10);
-        const ly = Math.max(labelAt[1] - 22, clip.y);
+        const ly = Math.min(Math.max(labelAt[2] === "below" ? labelAt[1] + 2 : labelAt[1] - tall - 2, clip.y),
+          clip.y + clip.height - tall);
         context.setLineDash([]);
-        context.fillStyle = "rgba(10,16,12,0.82)"; context.fillRect(lx, ly, textWidth + 10, 20);
-        context.fillStyle = color; context.fillText(mark.label, lx + 5, ly + 15);
+        context.fillStyle = "rgba(10,16,12,0.82)"; context.fillRect(lx, ly, textWidth + 10, tall);
+        context.fillStyle = color; context.fillText(mark.label, lx + 5, ly + style.font + 2);
       }
     }
     context.restore();
@@ -1671,9 +1814,12 @@ if (typeof document !== "undefined") {
     if (samples.run) samples.run.cancelled = true;
     samples.results.clear(); samples.model = null; renderSampleTiles();
   }
-  // The sample set: thumbnails anyone can open in the preview, and - with a classifier selected -
-  // a run over every image, scored against its label as each answer lands.
-  // model: the selected classifier's id, for which species it can name; null for a Cosmos engine.
+  // The sample sets, one tab each: thumbnails anyone can open in the preview, and a run of the
+  // selected model over every image, scored against its labels as each answer lands. A "species" set
+  // labels each image with its species; a "spot" set says whether one target is in each picture and
+  // where, and lists every box its detector drew there.
+  // model: the selected classifier's id, for what each set's labels it can name; null for a VLM.
+  // subject: that classifier's subject, which picks the tab until the user picks one.
   // Only the latest request lands: a quick second switch must not get the first one's coverage.
   let samplesRequest = 0;
   async function loadSamples(model, subject = null) {
@@ -1682,19 +1828,67 @@ if (typeof document !== "undefined") {
       const response = await fetch(`/api/samples${model ? `?model=${encodeURIComponent(model)}` : ""}`, {cache: "no-store"});
       const data = await response.json();
       if (request !== samplesRequest) return;
-      if (!response.ok || !Array.isArray(data?.images)) throw new Error("Sample set unavailable");
-      samples.list = data.images.filter(item => typeof item?.id === "string" && typeof item.species === "string");
-      samples.byId = new Map(samples.list.map(item => [item.id, item]));
-      // A classifier for another subject, or one that can name none of the set's species, has
-      // nothing in it to score: the panel stays hidden while it is selected. The registry's subject
-      // decides even when the classifier service is down and the images carry no coverage.
-      samples.unscorable = Boolean(model) && ((Boolean(subject) && subject !== SAMPLE_SUBJECT) ||
-        (samples.list.length > 0 && samples.list.every(item => item.covered === false)));
-      $("samplePanel").hidden = !data.configured || samples.unscorable;
-      $("sampleGrid").replaceChildren(...samples.list.map(sampleTile));
-      renderSampleTiles();
+      if (!response.ok || !Array.isArray(data?.sets)) throw new Error("Sample sets unavailable");
+      const box = b => Array.isArray(b) && b.length === 4 && b.every(v => typeof v === "number" && v >= 0 && v <= 1);
+      samples.sets = data.sets.filter(set => typeof set?.id === "string" && typeof set.title === "string" &&
+          Array.isArray(set.images) && (set.task !== "spot" || typeof set.target === "string"))
+        .map(set => ({...set, images: set.images.filter(item => typeof item?.id === "string" && (set.task === "spot"
+          ? Array.isArray(item.boxes) && item.boxes.every(box) && Array.isArray(item.candidates) && item.candidates.every(box)
+          : typeof item.species === "string"))}));
+      samples.classifier = model; samples.subject = subject;
+      $("samplePanel").hidden = !data.configured || !samples.sets.length;
+      useSampleSet(samples.sets.find(set => set.id === samples.choice) ??
+        samples.sets.find(set => subject && set.subject === subject) ?? samples.sets[0]);
     } catch (_) { /* keep what was shown; the next model change asks again */ }
     controls();
+  }
+  // Whether the selected model can be scored on the set shown: a classifier that can name what the set
+  // is labelled with (not a classifier for another subject, nor one that knows none of its labels),
+  // or a VLM with a Name preset for the set's subject.
+  function sampleSetScorable(named = namePreset($("prompt").value.trim())) {
+    if (!samples.set) return false;
+    return state.kind === "classifier" ? !samples.unscorable : Boolean(named) && presetFits(named, samples.set.subject);
+  }
+  function useSampleSet(set) {
+    if (!set) return;
+    if (samples.set?.id !== set.id) {
+      // Results are one set's: another tab starts over.
+      if (samples.run) samples.run.cancelled = true;
+      samples.results.clear(); samples.model = null;
+    }
+    samples.set = set; samples.list = set.images; samples.byId = new Map(set.images.map(item => [item.id, item]));
+    // A classifier for another subject, or one that can name none of the set's labels, has nothing
+    // in it to score. The registry's subject decides even when the classifier service is down and
+    // the images carry no coverage.
+    const {classifier, subject} = samples;
+    samples.unscorable = Boolean(classifier) && ((Boolean(subject) && Boolean(set.subject) && subject !== set.subject) ||
+      (set.images.length > 0 && set.images.every(item => item.covered === false)));
+    renderSampleTabs();
+    const spot = set.task === "spot";
+    $("sampleRevealLabel").hidden = !spot;
+    $("sampleRevealText").textContent = spot ? `Show where ${set.target_name} is` : "";
+    $("speciesSetHint").hidden = spot; $("spotSetHint").hidden = !spot;
+    if (spot) {
+      $("spotSetHint").textContent = `Pictures each labelled with whether ${set.target_name} (${speciesName(set.target)}) ` +
+        `is in it, and where. Choose one to show it and run the selected model on it, and "Show where ${set.target_name} is" ` +
+        `draws the labelled box. A classifier that can name ${speciesName(set.target)} classifies every box the set's ` +
+        "detector drew on its own, cropped the way the Bernese mode's breed scorer crops it, and the boxes it names " +
+        `${speciesName(set.target)} turn green; a VLM answers a Name preset with one name and one box. Run scores every ` +
+        "picture: spotted (named, on the right one), named on the wrong one, named without saying where, missed, and false " +
+        "alarms in pictures without it.";
+    }
+    $("sampleGrid").classList.toggle("spot", spot);
+    $("sampleGrid").replaceChildren(...samples.list.map(sampleTile));
+    renderSampleTiles(); drawOverlay(); controls();
+  }
+  function renderSampleTabs() {
+    const container = $("sampleTabs"), set = samples.set;
+    container.replaceChildren(...(samples.sets.length > 1 ? [tabBar(document,
+      samples.sets.map(entry => [entry.id, `${entry.title} (${entry.images.length})`]), set?.id, (key, focus) => {
+        samples.choice = key; useSampleSet(samples.sets.find(entry => entry.id === key));
+        if (focus) focusTab(container, key);
+      }, "Sample sets", Boolean(samples.run))] : []));
+    $("samplesTitle").textContent = samples.sets.length > 1 ? "Sample sets" : `Sample ${set?.title ?? ""} set`;
   }
   function sampleTile(item) {
     const tile = document.createElement("button");
@@ -1702,13 +1896,16 @@ if (typeof document !== "undefined") {
     tile.title = [item.credit, item.license].filter(Boolean).join(" · ");
     const image = document.createElement("img");
     image.loading = "lazy"; image.alt = ""; image.src = `/api/samples/${encodeURIComponent(item.id)}`;
-    const truth = document.createElement("span"); truth.className = "truth"; truth.textContent = speciesName(item.species);
+    const truth = document.createElement("span"); truth.className = "truth";
+    truth.textContent = samples.set?.task === "spot"
+      ? `${item.caption}${item.boxes.length ? ` · ${samples.set.target_name}` : ""}` : speciesName(item.species);
     const verdict = document.createElement("span"); verdict.className = "verdict";
     tile.append(image, truth, verdict);
     tile.addEventListener("click", () => showSample(item.id));
     return tile;
   }
   function renderSampleTiles() {
+    if (samples.set?.task === "spot") { renderSpotTiles(); return; }
     const rows = [];
     for (const tile of $("sampleGrid").children) {
       const item = samples.byId.get(tile.dataset.sampleId), result = samples.results.get(tile.dataset.sampleId);
@@ -1744,6 +1941,41 @@ if (typeof document !== "undefined") {
       : `${samples.list.length} images · ${new Set(samples.list.map(item => item.species)).size} species` +
         (state.kind === "classifier" && covered < samples.list.length ? ` · ${covered} of a species this classifier can name` : "");
   }
+  // Whether the set's detector drew a box on the target in this picture (IoU 0.5 or more): a
+  // classifier that names boxes can only spot what was boxed.
+  const targetBoxed = item => item.boxes.some(box => item.candidates.some(candidate => boxIoU(candidate, box) >= 0.5));
+  function renderSpotTiles() {
+    const rows = [], set = samples.set;
+    for (const tile of $("sampleGrid").children) {
+      const item = samples.byId.get(tile.dataset.sampleId), result = samples.results.get(tile.dataset.sampleId);
+      if (!item) continue;
+      const verdict = tile.querySelector(".verdict");
+      const uncovered = state.kind === "classifier" && item.covered === false;
+      const judged = result ? spotVerdict(item.boxes.length > 0, result) : null;
+      tile.classList.toggle("selected", item.id === state.sampleId);
+      tile.classList.toggle("uncovered", uncovered);
+      tile.classList.toggle("correct", Boolean(judged?.ok));
+      tile.classList.toggle("wrong", Boolean(judged) && !judged.ok);
+      if (result) rows.push({present: item.boxes.length > 0, named: result.named, located: result.located, right: result.right,
+        boxed: targetBoxed(item)});
+      verdict.textContent = judged ? judged.text : uncovered ? "Not a species it knows" : "";
+      tile.hidden = $("sampleMistakes").checked && !(judged && !judged.ok);
+    }
+    const score = scoreSpots(rows), name = engineData?.active?.name || "the selected model";
+    const boxesOnly = state.kind === "classifier" && score.boxed < score.present;
+    $("sampleScore").hidden = !rows.length;
+    const pictures = n => `${n} ${n === 1 ? "picture" : "pictures"}`;
+    $("sampleScore").textContent = !rows.length ? "" : `${name}: ` + [
+      score.present ? `spotted ${set.target_name} in ${score.spotted} of ${pictures(score.present)} with it` : "",
+      score.wrongOne ? `named ${speciesName(set.target)} on the wrong one in ${score.wrongOne}` : "",
+      score.unlocated ? `named it without a box or point in ${score.unlocated}` : "",
+      score.absent ? `false alarms in ${score.falseAlarms} of ${pictures(score.absent)} without it` : "",
+      boxesOnly ? `the detector's boxes covered ${set.target_name} in ${score.boxed} of the ${score.present}` : "",
+    ].filter(Boolean).join(" · ");
+    const present = samples.list.filter(item => item.boxes.length > 0).length;
+    $("sampleStatus").textContent = samples.run ? `Running ${samples.results.size} of ${samples.list.length}…`
+      : `${samples.list.length} pictures · ${set.target_name} in ${present}`;
+  }
   async function showSample(id) {
     const item = samples.byId.get(id);
     if (!item || state.busy) return;
@@ -1756,8 +1988,100 @@ if (typeof document !== "undefined") {
     try { await $("uploadedImage").decode(); } catch (_) { error("This sample could not be decoded."); return; }
     if (state.sampleId !== id) return;
     $("uploadedImage").hidden = false; $("video").hidden = true; $("placeholder").hidden = true;
-    $("sourceStatus").textContent = `Sample · ${speciesName(item.species)}`; controls();
+    $("sourceStatus").textContent = samples.set?.task === "spot" ? `Sample · ${samples.set.title} ${item.caption}`
+      : `Sample · ${speciesName(item.species)}`;
+    drawOverlay(); controls();
     if (state.ready && !switchingEngine()) await analyze($("uploadedImage"));
+  }
+  // Every detector box of a spot-set picture through the selected classifier on its own, cropped as
+  // the Bernese mode's breed scorer crops it (cropRect) and sent as a JPEG: [{box, species, label,
+  // score}] and the summed inference time.
+  async function classifyCandidates(picture, candidates, model, signal) {
+    const width = picture.naturalWidth, height = picture.naturalHeight, canvas = document.createElement("canvas");
+    const boxes = [];
+    let inferenceMs = 0;
+    for (const box of candidates) {
+      const [x, y, w, h] = cropRect(box, width, height);
+      if (w < 2 || h < 2) continue;
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(picture, x, y, w, h, 0, 0, w, h);
+      const response = await fetch("/api/classify", {
+        method: "POST", headers: {"Content-Type": "application/json"}, signal,
+        body: JSON.stringify({model, image: canvas.toDataURL("image/jpeg", 0.92), saliency: false, topk: 3})
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw Object.assign(new Error(body?.error?.message || `Classifier returned HTTP ${response.status}.`), {status: response.status});
+      }
+      const result = readClassification(body);
+      if (result.inferenceMs !== null) inferenceMs += result.inferenceMs;
+      boxes.push({box, species: result.species, label: result.label, score: result.score});
+    }
+    return {boxes, inferenceMs};
+  }
+  // The shown spot-set picture through the selected classifier, box by box: the same request rules
+  // as classify(), each box drawn with what the classifier named it, the target's in green.
+  async function spotCandidates(item, trigger = "manual") {
+    const set = samples.set, timingGroup = state.timingGroup;
+    const ticket = engineRequests.begin(), controller = ticket.controller;
+    state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
+    $("ttft").textContent = "—"; $("totalTime").textContent = "—";
+    $("runStatus").textContent = `Classifying ${item.candidates.length} boxes…`;
+    try {
+      const shown = $("uploadedImage"), width = shown.naturalWidth, height = shown.naturalHeight;
+      state.captureAt = performance.now();
+      $("captureStatus").textContent = `Sample ${width}×${height} · ${item.candidates.length} detector boxes, each cropped`;
+      const started = performance.now();
+      const found = await classifyCandidates(shown, item.candidates, state.model, controller.signal);
+      controller.signal.throwIfAborted();
+      if (state.abort !== controller || !engineRequests.current(ticket)) return null;
+      const result = spotResult(item.boxes, found.boxes, set.target);
+      $("totalTime").textContent = duration(performance.now() - started);
+      const target = speciesName(set.target), named = found.boxes.filter(entry => entry.species === set.target);
+      const others = found.boxes.filter(entry => entry.species !== set.target).sort((a, b) => b.score - a.score).slice(0, 3)
+        .map(entry => `${speciesName(entry.species, entry.label)} ${percentText(entry.score)}`).join(" · ");
+      $("answer").textContent = !found.boxes.length ? "No detector boxes in this picture: nothing for the classifier to name"
+        : (named.length
+          ? `${target} · ${percentText(Math.max(...named.map(entry => entry.score)))} - on ${named.length} of ${found.boxes.length} boxes`
+          : `No ${target} among ${found.boxes.length} boxes`) + (others ? `\nThe others: ${others}` : "");
+      if (timingGroup === state.timingGroup && found.boxes.length) {
+        serverFirstTextMs = null;
+        latency.add(found.inferenceMs);
+        $("timingStatus").textContent = `Classifier inference on the server, summed over ${found.boxes.length} boxes · excludes decoding and preprocessing.`;
+        renderLatency();
+      }
+      const full = {canvasWidth: width, canvasHeight: height, x: 0, y: 0, w: width, h: height};
+      overlay = {natural: {width, height}, sent: full, marks: found.boxes.map(entry => ({box: entry.box, space: "picture",
+        kind: entry.species === set.target ? "spotted" : "candidate",
+        label: `${speciesName(entry.species, entry.label)} ${percentText(entry.score)}`}))};
+      drawOverlay();
+      if (samples.byId.has(item.id) && (samples.model === null || samples.model === state.model)) {
+        samples.model = state.model; samples.results.set(item.id, result); renderSampleTiles();
+      }
+      state.completed += 1; $("requestCount").textContent = `${state.completed} completed`;
+      $("runStatus").textContent = "Classified every box";
+      if (autoSpeak && named.length) speakText(target);
+      return result;
+    } catch (err) {
+      if (state.abort !== controller) return null;
+      if (err.name === "AbortError" || controller.signal.aborted) $("runStatus").textContent = "Stopped";
+      else { error(err.message); $("runStatus").textContent = "Request failed"; }
+      return null;
+    } finally {
+      engineRequests.release(ticket);
+      if (state.abort === controller) {
+        state.abort = null; state.busy = false; state.activeTrigger = null;
+        if (!state.running) releaseCamera();
+        controls();
+      }
+    }
+  }
+  // With "Show where … is" ticked, the shown spot-set picture's labelled boxes.
+  function revealMarks() {
+    if (!$("sampleReveal").checked || samples.set?.task !== "spot" || state.running || !state.sampleId ||
+        $("uploadedImage").hidden) return [];
+    const item = samples.byId.get(state.sampleId);
+    return item ? item.boxes.map(box => ({box, space: "picture", kind: "truth", label: samples.set.target_name})) : [];
   }
   // One answer read off the token stream without touching the caption: the text and its per-token
   // logprobs. Used by the sample run; analyze() streams into the caption itself.
@@ -1792,17 +2116,18 @@ if (typeof document !== "undefined") {
     return {output, logprobs};
   }
   // Every sample through the selected model, scored as each answer lands: a classifier by sample id
-  // (the server's own copy of the file), or Cosmos3-Edge with a Name the Pokémon preset, sent the
-  // way this page sends any picture, with that preset's prompt and the current settings.
+  // (the server's own copy of the file) - or, on a spot set, every detector box of it on its own -
+  // or a VLM with a Name preset for the set's subject, sent the way this page sends any picture,
+  // with that preset's prompt and the current settings.
   async function runSamples() {
     const prompt = $("prompt").value.trim(), named = namePreset(prompt);
-    const classifier = state.kind === "classifier";
-    if (!(classifier ? !samples.unscorable : named?.subject === SAMPLE_SUBJECT) || !state.ready || state.busy ||
-        samples.run || switchingEngine()) return;
+    const classifier = state.kind === "classifier", spot = samples.set?.task === "spot";
+    if (!sampleSetScorable(named) || !state.ready || state.busy || samples.run || switchingEngine()) return;
     let advanced;
     try { advanced = advancedValues(); } catch (err) { error(err.message); return; }
     stop(); error();
     const run = samples.run = {cancelled: false, model: state.model};
+    renderSampleTabs();   // locked while the run lasts
     const ticket = engineRequests.begin();
     samples.results.clear(); samples.model = classifier ? run.model : `${run.model}|${prompt}`;
     state.busy = true; renderSampleTiles(); controls();
@@ -1810,7 +2135,13 @@ if (typeof document !== "undefined") {
       for (const item of samples.list) {
         if (run.cancelled || !engineRequests.current(ticket)) break;
         let result;
-        if (classifier) {
+        if (classifier && spot) {
+          const picture = new Image();
+          picture.src = `/api/samples/${encodeURIComponent(item.id)}`;
+          await picture.decode();
+          const found = await classifyCandidates(picture, item.candidates, run.model, ticket.controller.signal);
+          result = spotResult(item.boxes, found.boxes, samples.set.target);
+        } else if (classifier) {
           const response = await fetch("/api/classify", {
             method: "POST", headers: {"Content-Type": "application/json"}, signal: ticket.controller.signal,
             body: JSON.stringify({model: run.model, sample: item.id, saliency: false, topk: 5})
@@ -1829,7 +2160,8 @@ if (typeof document !== "undefined") {
             logprobs: true, top_logprobs: NAME_TOP_LOGPROBS, max_tokens: Number($("maxTokens").value),
             messages: [{role: "user", content: [{type: "text", text: prompt}, {type: "image_url", image_url: {url: image.url}}]}]},
             ticket.controller.signal);
-          result = cosmosResult(readNameAnswer(answer.output, answer.logprobs));
+          const read = readNameAnswer(answer.output, answer.logprobs);
+          result = spot ? spotFromAnswer(read, image.sent, item.boxes, samples.set.target) : cosmosResult(read);
         }
         if (run.cancelled || !engineRequests.current(ticket)) break;
         samples.results.set(item.id, result);
@@ -1840,12 +2172,13 @@ if (typeof document !== "undefined") {
     } finally {
       engineRequests.release(ticket);
       if (samples.run === run) samples.run = null;
-      state.busy = false; renderSampleTiles(); controls();
+      state.busy = false; renderSampleTabs(); renderSampleTiles(); controls();
     }
   }
   $("sampleRunAll").addEventListener("click", runSamples);
   $("sampleStop").addEventListener("click", () => { if (samples.run) samples.run.cancelled = true; });
   $("sampleMistakes").addEventListener("change", renderSampleTiles);
+  $("sampleReveal").addEventListener("change", drawOverlay);
 
   // Lightweight cadence for either live source: capture after each answer, at most once
   // per interval. A Reachy frame only counts as ready while the bridge reports live.
@@ -2043,8 +2376,8 @@ if (typeof document !== "undefined") {
     // MediaStream tracks were never being stopped when switching straight to Reachy, which could
     // leave the camera hardware held (and on some browsers, unavailable to reacquire later).
     releaseCamera();
-    overlay = null; drawOverlay();
     state.running = true; state.source = "reachy";
+    overlay = null; drawOverlay();   // after state.running: no labelled box over the live picture
     const generation = ++state.cameraGeneration;
     Object.assign(reachy, {polling: null, live: false, wasLive: false, healthAt: 0, audioLive: false,
       statusText: "checking the bridge…", openedAt: 0, streamOK: false, listening: false,
@@ -2069,6 +2402,7 @@ if (typeof document !== "undefined") {
     if (active) {
       $("reachyImage").hidden = true;
       if (state.imageURL) $("uploadedImage").hidden = false; else $("placeholder").hidden = false;
+      drawOverlay();
     }
   }
   function releaseCamera() {
@@ -2127,8 +2461,8 @@ if (typeof document !== "undefined") {
     }
     releaseCamera();  // drop any existing stream first - flipping cameras while one is open can
                        // otherwise ask a phone to hold two camera handles at once and fail.
-    overlay = null; drawOverlay();
     state.running = true; state.source = "camera"; const generation = ++state.cameraGeneration; controls();
+    overlay = null; drawOverlay();   // after state.running: no labelled box over the live picture
     // Visible right next to the preview the user is looking at - not just the catch block's
     // error() below, which renders far away in the output panel and is easy to miss entirely
     // (reported bug: pressing Start appeared to do nothing but briefly re-layout the buttons).
@@ -2152,6 +2486,7 @@ if (typeof document !== "undefined") {
         const message = `Camera unavailable: ${err.message}`;
         stop();  // stop() -> releaseCamera() would otherwise overwrite sourceStatus with a
                  // generic "Camera stopped", erasing the reason right after we show it.
+        drawOverlay();   // the picture is still shown: its labelled box, if ticked, comes back
         $("sourceStatus").textContent = message;
         error(`${message}. You can choose an image instead.`);
       }
@@ -2593,12 +2928,24 @@ if (typeof document !== "undefined") {
   }
   // One health/engine poll owns the complete model snapshot. Switches retire it
   // and refresh every endpoint on success and rollback; camera/robot preview stays.
+  // After a tab bar is redrawn, the keyboard focus goes back to the tab just selected.
+  function focusTab(container, key) {
+    for (const tab of container.querySelectorAll('[role="tab"]')) if (tab.dataset.tab === key) tab.focus();
+  }
   function renderEngines() {
     if (!engineData) return;
     $("engineSwitchRow").hidden = false;
     $("engineSwitchHint").hidden = false;
+    // Redrawn on every backend poll: a tab or model button that had the keyboard focus gets it back.
+    const focused = $("modelButtons").contains(document.activeElement) ? document.activeElement : null;
     renderEngineChoices($("modelButtons"), engineData, switchingEngine(), switchToEngine, engineTabChoice,
-      key => { engineTabChoice = key; renderEngines(); });
+      (key, focus) => { engineTabChoice = key; renderEngines(); if (focus) focusTab($("modelButtons"), key); });
+    if (focused?.dataset.tab) focusTab($("modelButtons"), focused.dataset.tab);
+    else if (focused?.dataset.modelId) {
+      for (const button of $("modelButtons").querySelectorAll("button[data-model-id]")) {
+        if (button.dataset.modelId === focused.dataset.modelId && !button.disabled) button.focus();
+      }
+    }
     $("engineSwitchStatus").textContent = switchingEngine()
       ? "Switching model… Preview stays connected; inference is paused."
       : `Current model: ${engineData.active?.name || "Unavailable"}`;

@@ -65,8 +65,10 @@ def main():
         images.append({"id": path.stem.lower(), "file": record["file"], "species": record["species"],
                        "credit": record.get("attribution", ""), "license": record.get("license", ""),
                        "source": record.get("source_url", "")})
-    manifest = {"name": source.get("name", ""), "description": source.get("description", ""),
-                "license_note": source.get("license_note", ""), "images": images}
+    # title: the set's tab in Live Vision; subject: which Name presets and classifiers it is for.
+    manifest = {"name": source.get("name", ""), **{k: source[k] for k in ("title", "subject") if k in source},
+                "description": source.get("description", ""), "license_note": source.get("license_note", ""),
+                "images": images}
     (args.target / "manifest.json").write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
     print(f"{len(images)} of {len(source['images'])} images in {args.target}")
     if differs:

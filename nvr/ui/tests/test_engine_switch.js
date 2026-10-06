@@ -2,8 +2,8 @@
 // Synthetic browser-contract tests; no device, backend or model calls.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices,
-  renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, SSEParser, readCompletionEvent} = require("../web/app.js");
+const {EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups,
+  tabBar, needsDemoMode, demoWarning, runEngineSwitch, SSEParser, readCompletionEvent} = require("../web/app.js");
 
 const policy = {prompt: "Synthetic fixed identification prompt.", max_tokens: 64,
   temperature: 0, image_tokens: 512, stream: false};
@@ -156,6 +156,30 @@ test("models are grouped: a tab per kind, the registry's groups inside, prefixes
   engines.engines = engines.engines.filter(e => e.kind !== "classifier");
   renderEngineChoices(container, engines, false, () => {});
   assert.equal(container.children[0].className, "model-group");
+});
+
+test("tabs are selectable: a click, the arrow keys, Home and End; the focus follows a key", () => {
+  const document = {createElement: tag => element(tag, document)};
+  const calls = [];
+  const bar = tabBar(document, [["a", "Alpha (3)"], ["b", "Beta (2)"], ["c", "Gamma (1)"]], "a",
+    (key, focus) => calls.push([key, focus]), "Sample sets");
+  const [a, b, c] = bar.children;
+  assert.equal(bar.attributes.role, "tablist"); assert.equal(bar.attributes["aria-label"], "Sample sets");
+  assert.deepEqual([a, b, c].map(t => [t.textContent, t.attributes.role, t.attributes["aria-selected"], t.tabIndex]),
+    [["Alpha (3)", "tab", "true", 0], ["Beta (2)", "tab", "false", -1], ["Gamma (1)", "tab", "false", -1]]);
+  a.events.click(); assert.deepEqual(calls, []);          // already selected
+  b.events.click(); assert.deepEqual(calls.pop(), ["b", false]);
+  const key = (target, name) => { let stopped = false;
+    bar.events.keydown({key: name, target, preventDefault() { stopped = true; }}); return stopped; };
+  assert.equal(key(a, "ArrowRight"), true); assert.deepEqual(calls.pop(), ["b", true]);
+  key(a, "ArrowLeft"); assert.deepEqual(calls.pop(), ["c", true]);     // wraps around
+  key(a, "End"); assert.deepEqual(calls.pop(), ["c", true]);
+  assert.equal(key(a, "Enter"), false); assert.deepEqual(calls, []); // not a tab key: left alone
+  // While a run is going the bar is shown but cannot change.
+  const locked = tabBar(document, [["a", "A"], ["b", "B"]], "a", (k, f) => calls.push([k, f]), "", true);
+  assert.equal(locked.children[1].disabled, true);
+  locked.events.keydown({key: "ArrowRight", target: locked.children[0], preventDefault() {}});
+  assert.deepEqual(calls, []);
 });
 
 test("complete-answer SSE is compatible without fabricating token metrics", () => {

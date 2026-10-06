@@ -1198,8 +1198,9 @@ Since 2026-10-03 it is the Live UI the board starts at boot, in place of the Liv
 also drives the robot: motors, head pose, antennas, onboard apps, volume, and speech through the
 robot's speaker. Its model panel switches the shim between the board's Cosmos3-Edge engines and peer
 VLMs, or picks one of five image classifiers - two for Pokémon, three for dog breeds - which draw a
-saliency overlay over the picture; the Pokémon ones can be scored on a labelled sample set ("Models"
-below).
+saliency overlay over the picture. Its sample sets, one tab each, score a model as the answers land:
+189 Pokémon photos, and on this Orin the doggy-daycare frames, where the dog classifiers try to spot
+the Bernese ("Models" below).
 
 Its code is the [live-vision-cosmos-demo](https://github.com/nv-asotelo/live-vision-cosmos-demo)
 repo at `e84cd37`, plus this repo's model switching and classifiers. `nvr/ui/scripts/engine_backends.py`,
@@ -1244,7 +1245,7 @@ which repeats `lan.conf`'s command and adds:
 | `--reachy-daemon-url http://<reachy-ip>:8000` | The robot daemon's REST API: motors, pose, apps, volume, sound upload and play. Not the camera: video and audio come from the bridge, relayed under `/reachy/` (`--reachy-url`, default `http://127.0.0.1:8099`) with or without this flag. Needs `requests`, which this interpreter has: porch-feed runs on it too |
 | `--piper-bin`, `--piper-model` | Speech: Piper synthesizes on the Orin and the robot's speaker plays it ("Piper" below). Refused without `--reachy-daemon-url`, so with no robot leave out all three |
 | `--engine-link /opt/tensorrt-edgellm/models/default`, `--engines-config /home/orin/nvr/ui/config/engines.json` | The model buttons, from [`ui/config/engines.orin.json`](ui/config/engines.orin.json) ("Models" below) |
-| `--classifier-url http://127.0.0.1:8094`, `--samples-dir /home/orin/nvr/classifier/samples` | The classifiers' service and the labelled Pokémon sample set ([`classifier/README.md`](classifier/README.md)) |
+| `--classifier-url http://127.0.0.1:8094`, `--samples-dir /home/orin/nvr/classifier/samples` | The classifiers' service and the labelled Pokémon sample set ([`classifier/README.md`](classifier/README.md)). Each further `--samples-dir` is one more tab: this Orin adds `/home/orin/nvr/classifier/samples-daycare`, a private set that is not in git ("Sample sets" below) |
 | `--services-config /home/orin/nvr/ui/config/services.json` | Adds the classifier service to the page's status bar, from [`ui/config/services.orin.json`](ui/config/services.orin.json) |
 
 Without `--reachy-daemon-url` the robot panel is not shown at all, which is also what a drop-in that
@@ -1257,16 +1258,23 @@ written `lan.conf` (deploy/07 §3), and after the classifiers (`classifier/READM
 install -D -m 0644 nvr/ui/config/engines.orin.json /home/orin/nvr/ui/config/engines.json
 install -m 0644 nvr/ui/config/services.orin.json /home/orin/nvr/ui/config/services.json
 read -rp "Reachy Mini address: " REACHY_IP     # its LAN IP or hostname - never commit it
+DAYCARE=/home/orin/nvr/classifier/samples-daycare   # a private spot set, this Orin only ("Sample sets")
+EXTRA=; [ -f "$DAYCARE/manifest.json" ] && EXTRA=" --samples-dir $DAYCARE"
 sudo install -d /etc/systemd/system/cosmos-edge-ui.service.d
-sed "s/<reachy-ip>/$REACHY_IP/g" nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf \
+sed -e "s/<reachy-ip>/$REACHY_IP/g" \
+    -e "/^ExecStart=\//s# --samples-dir /home/orin/nvr/classifier/samples # --samples-dir /home/orin/nvr/classifier/samples$EXTRA #" \
+    nvr/systemd/dropins/cosmos-edge-ui.service.d-zz-live-vision-demo.conf \
   | sudo tee /etc/systemd/system/cosmos-edge-ui.service.d/zz-live-vision-demo.conf >/dev/null
 sudo systemctl daemon-reload
 systemctl cat cosmos-edge-ui | grep -c '<reachy-ip>'   # must print 0
+systemctl cat cosmos-edge-ui | grep -o -- '--samples-dir [^ ]*'   # one line per sample-set tab
 sudo systemctl restart cosmos-edge-ui
 ```
 
 The `grep` matters: `serve_ui.py` does not check the address at startup, so a drop-in installed
 with the placeholder starts normally, and its robot panel just reads "Robot daemon unreachable".
+The committed file lists only the Pokémon set; the second `sed` adds the daycare set where it exists,
+since that set is not in the repo.
 
 **Why `zz-`.** `lan.conf` and this file both reset `ExecStart=`, systemd applies a unit's drop-ins
 in file-name order, and the last command wins. `zz-` sorts after `lan.conf`. The numeric prefix the
@@ -1333,11 +1341,41 @@ returns to the engine the shim still holds without a restart. With a classifier 
 frame, upload or sample gets its most likely label - the species or the breed - the next four, and
 a saliency overlay, which **Saliency overlay** turns off. None of the classifiers outputs boxes,
 points or masks: the overlay is saliency, where the evidence came from, and the page says so under
-the picture. The **Sample Pokémon set** panel lists 189 labelled photos: choose one to show it and run
-the selected model on it, or run the selected classifier over all of them and read its top-1 and
-top-5 score as the answers land. Samples are classified from the server's copy of each file, so the
-score does not depend on the browser's capture settings. The panel is hidden while a classifier that
-can name none of its species is selected: the dog-breed ones.
+the picture.
+
+**Sample sets.** The **Sample sets** panel has a tab per `--samples-dir`, in their order; click one, or
+move between them with the arrow keys, as in the model panel. The tab opens on the set for the
+selected classifier's subject until you pick one.
+- **Pokémon (189):** labelled photos. Choose one to show it and run the selected model on it, or run
+  the selected classifier over all of them and read its top-1 and top-5 score as the answers land.
+  Samples are classified from the server's copy of each file, so the score does not depend on the
+  browser's capture settings.
+- **Doggy daycare (132), this Orin only:** the frames Reachy filmed of the daycare feed on
+  2026-10-04, each labelled with whether the Bernese is in it and where (the labels of
+  [`vlmbench/README.md`](vlmbench/README.md), "Bernese mountain dog"). It is a *spot* set
+  ([`classifier/make_spot_set.py`](classifier/make_spot_set.py)), and stays out of git. **Show where
+  your dog is** draws the labelled box, dashed amber. With a dog-breed classifier selected, every box
+  the RT-DETR detector drew in the frame is classified on its own, cropped as the Bernese mode's breed
+  scorer crops it, and each box is drawn with its breed; the ones named Bernese turn green. A VLM
+  answers a Name the dog breed preset with one name and one box. Run scores the whole set: spotted
+  (Bernese, on the right dog), named on the wrong dog, named without a box or point (a VLM's answer
+  that says nowhere), missed, and false alarms in frames without it.
+
+Run on the Orin on 2026-10-05, through this page:
+
+| Model | Spotted the Bernese, of the 50 frames with it | Named it on the wrong dog | False alarms, of the 82 frames without it | Run |
+|---|---:|---:|---:|---:|
+| wesleyacheng ViT-B/16 | 18 | 0 | 1 | 38 s |
+| ImageNet ViT-B/16 | 12 | 0 | 0 | 39 s |
+| Dog-Breed-120 SigLIP2 | 20 | 1 | 15 | 36 s |
+| Cosmos v3, Name the dog breed · box | 0 | 0 | 0 | 126 s |
+
+The detector's boxes covered the Bernese in only 34 of the 50 frames, so no classifier could spot it
+in more. Cosmos v3 never answered "Bernese Mountain Dog" in any of the 132 frames, so it spotted
+nothing and raised no false alarm. The run scores the name, and a box only once the name is right, so
+it does not show which dog Cosmos picked; on the one frame checked by hand it named and boxed a golden
+retriever. wesleyacheng is the one to watch with: it spots the Bernese in a third of the frames and
+almost never anywhere else.
 
 **Dog-breed classifiers.** The "Dog breeds" group has three: the ImageNet ViT-B/16 the Bernese mode
 scores with (1,000 ImageNet classes, 121 of them dogs), wesleyacheng's ViT-B/16 fine-tuned on Stanford
@@ -1385,7 +1423,8 @@ measured comparison of eleven prompts on the 189 samples; Cosmos3-Edge names the
 32/189, its probability averaging 60% on right answers and 10% on wrong ones. The two dog-breed
 presets were added on 2026-10-05 in the same form and were not compared that way; on a Commons photo
 of a Bernese, Cosmos v3 answered `{"name": "Bernese Mountain Dog", "bbox_2d": [0, 195, 998, 948]}`, at
-74%. Only the Pokémon presets score the sample set.
+74%. A preset scores a sample set about its own subject: the Pokémon presets the Pokémon set, the
+dog-breed presets the daycare set.
 
 A classifier answers the presets for its own subject - the registry's `"subject"`, `"pokemon"` or
 `"dog"` - with its top label and a box or point derived from its saliency map, drawn dashed and

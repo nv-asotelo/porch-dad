@@ -506,10 +506,11 @@ def media_type(response):
 # --------------------------------------------------------------------------- classifiers
 # "kind": "classifier" registry entries run on a separate loopback service (nvr/classifier):
 # selecting one leaves the shim and its engine alone, and /api/classify relays one image to it.
-# A sample set (--samples-dir) lets the page run the selected classifier over labelled images
+# Sample sets (--samples-dir, one per tab) let the page run the selected model over labelled images
 # the server already holds, by manifest id: a request never names a path.
 
 SAMPLE_ID = re.compile(r"[a-z0-9][a-z0-9_.-]{0,95}\Z")
+SAMPLE_SET_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}\Z")
 SAMPLE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
 
@@ -602,14 +603,54 @@ def classifier_result(value):
                           and math.isfinite(v) and 0 <= v < 600000}}
 
 
-def load_samples(directory):
-    """manifest.json beside the images: {"images": [{id, file, species, credit?, license?, source?}]}."""
+def unit_box(value):
+    """[x1, y1, x2, y2] as fractions of the picture, with x1 < x2 and y1 < y2; anything else is None."""
+    if not isinstance(value, list) or len(value) != 4 or not all(
+            type(v) in (int, float) and math.isfinite(v) and 0 <= v <= 1 for v in value):
+        return None
+    return [float(v) for v in value] if value[0] < value[2] and value[1] < value[3] else None
+
+
+def load_sample_set(directory):
+    """One sample set, from manifest.json beside its images:
+
+      {"id"?, "title"?, "subject"?, "task"?, "target"?, "target_name"?,
+       "images": [{id, file, species, credit?, license?, source?, caption?, boxes?, candidates?}]}
+
+    A "species" set, the default, labels each image with its species, and the page scores a model's
+    answer against it. A "spot" set asks whether one "target" species is in each picture, and where:
+    an image's "boxes" are where the target is (none when it is not there), its "candidates" every box
+    a detector drew around something of the target's kind, which the page can classify one by one.
+    Boxes are [x1, y1, x2, y2] fractions of the picture. "subject" ("pokemon", "dog") is what the
+    page's Name presets and classifiers say the set is about; "id" defaults to the directory's name."""
     root = directory.resolve()
     manifest = json.loads((root / "manifest.json").read_text())
     images = manifest.get("images") if isinstance(manifest, dict) else None
     if not isinstance(images, list) or not images:
         raise ValueError("manifest.json lists no images")
-    samples = {}
+    if "id" in manifest:
+        set_id = manifest["id"]
+        if not isinstance(set_id, str) or not SAMPLE_SET_ID.fullmatch(set_id):
+            raise ValueError(f"invalid set id {set_id!r}")
+    else:   # the directory's name, made into an id: "Pokemon" -> "pokemon", "samples.v2" -> "samples-v2"
+        set_id = re.sub(r"[^a-z0-9_-]+", "-", root.name.lower()).lstrip("_-")[:32] or "samples"
+    task = manifest.get("task", "species")
+    if task not in {"species", "spot"}:
+        raise ValueError('task must be "species" or "spot"')
+    def text(key, limit, default):
+        value = manifest.get(key)
+        if value is None:   # an explicit null is the key left out
+            value = default
+        if value is not None and (not isinstance(value, str) or not value or len(value) > limit):
+            raise ValueError(f"{key} must be text of at most {limit} characters")
+        return value
+    target = text("target", 64, None)
+    if (task == "spot") != (target is not None):
+        raise ValueError('a "spot" set needs a target species, and only a spot set has one')
+    sample_set = {"id": set_id, "title": text("title", 40, set_id), "subject": text("subject", 32, None),
+                  "task": task, "target": target,
+                  "target_name": text("target_name", 40, "the target") if task == "spot" else None, "images": {}}
+    samples = sample_set["images"]
     for item in images:
         sid = item.get("id") if isinstance(item, dict) else None
         if not isinstance(sid, str) or not SAMPLE_ID.fullmatch(sid) or sid in samples:
@@ -621,11 +662,43 @@ def load_samples(directory):
         path = (root / file).resolve()
         if path.parent != root or not path.is_file():
             raise ValueError(f"{sid}: {file} is missing")
-        if not isinstance(species, str) or not species or len(species) > 64:
+        if task == "species" and (not isinstance(species, str) or not species or len(species) > 64):
             raise ValueError(f"{sid}: species is required")
-        samples[sid] = {"id": sid, "path": path, "species": species,
-                        **{k: str(item.get(k) or "")[:300] for k in ("credit", "license", "source")}}
-    return samples
+        if task == "spot" and species is not None:
+            raise ValueError(f"{sid}: a spot set's images carry boxes, not a species")
+        sample = {"id": sid, "path": path, "species": species,
+                  **{k: str(item.get(k) or "")[:300] for k in ("credit", "license", "source")}}
+        if task == "spot":
+            boxes, candidates = item.get("boxes"), item.get("candidates", [])
+            if not isinstance(boxes, list) or len(boxes) > 16 or not isinstance(candidates, list) or \
+                    len(candidates) > 64 or any(unit_box(b) is None for b in boxes + candidates):
+                raise ValueError(f"{sid}: boxes (at most 16) and candidates (at most 64) must be "
+                                 "[x1, y1, x2, y2] fractions with x1 < x2 and y1 < y2")
+            sample.update(caption=str(item.get("caption") or sid)[:40], boxes=[unit_box(b) for b in boxes],
+                          candidates=[unit_box(b) for b in candidates])
+        samples[sid] = sample
+    return sample_set
+
+
+def load_samples(directory):
+    """One set's images by id (load_sample_set)."""
+    return load_sample_set(directory)["images"]
+
+
+def load_sample_sets(directories):
+    """Every --samples-dir, in order: (the sets, all their images by id). An image id names one image
+    in all of them, because /api/classify and /api/samples/<id> take the id alone."""
+    sets, samples = [], {}
+    for directory in directories:
+        sample_set = load_sample_set(directory)
+        if any(s["id"] == sample_set["id"] for s in sets):
+            raise ValueError(f"{directory}: set id {sample_set['id']!r} is already used")
+        repeated = sorted(set(sample_set["images"]) & set(samples))
+        if repeated:
+            raise ValueError(f"{directory}: image ids already used by another set: {', '.join(repeated[:5])}")
+        sets.append(sample_set)
+        samples.update(sample_set["images"])
+    return sets, samples
 
 
 class EngineSwitcher:
@@ -1011,7 +1084,9 @@ class Server(ThreadingHTTPServer):
         # Populated in main(): {name: {"cmdline_match": str, "path": str}} for services this
         # process does not itself manage (the shim, the Reachy bridge) - see --services-config.
         self.services_config = {}
-        # Populated in main() from --samples-dir: {id: {"path", "species", ...}} - see load_samples.
+        # Populated in main() from --samples-dir (load_sample_sets): the sets in order, and all their
+        # images by id - {id: {"path", "species", ...}}.
+        self.sample_sets = []
         self.samples = {}
         # Populated in main() from --demo-mode-script (DemoMode), else None.
         self.demo_mode = None
@@ -1181,11 +1256,15 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/reachy/state":
             self.reachy_state()
             return
-        if route == "/api/samples":
-            self.samples_list(query)
-            return
-        if route.startswith("/api/samples/"):
-            self.sample_image(route[len("/api/samples/"):])
+        if route == "/api/samples" or route.startswith("/api/samples/"):
+            # A sample set can be private frames (a spot set of your own camera's): a page on
+            # another name that DNS rebinding points here must not read them.
+            if self.host_refused():
+                return
+            if route == "/api/samples":
+                self.samples_list(query)
+            else:
+                self.sample_image(route[len("/api/samples/"):])
             return
         if route == "/api/reachy/apps":
             self.reachy_apps()
@@ -1244,6 +1323,8 @@ class Handler(BaseHTTPRequestHandler):
             self.demo_switch(self.path == "/api/demo/on")
             return
         if self.path == "/api/classify":
+            if self.host_refused():   # it classifies a sample by id: the same private frames
+                return
             self.classify()
             return
         if self.path != "/v1/chat/completions":
@@ -1288,8 +1369,9 @@ class Handler(BaseHTTPRequestHandler):
             GENERATION_LOCK.release()
 
     def samples_list(self, query):
-        """The sample set, by id; ?model=<classifier id> adds whether each species is one that
-        model can name at all, so a score can be read against what it was trained on."""
+        """Every sample set with its images, by id; ?model=<classifier id> adds whether each image's
+        species - a spot set's target - is one that model can name at all, so a score can be read
+        against what it was trained on."""
         switcher = self.server.engine_switcher
         model = (parse_qs(query).get("model") or [None])[0]
         known = None
@@ -1297,10 +1379,20 @@ class Handler(BaseHTTPRequestHandler):
             listed = (switcher.classifier_models() or {}).get(model) or {}
             if isinstance(listed.get("species"), list):
                 known = set(listed["species"])
-        images = [{"id": s["id"], "species": s["species"], "credit": s["credit"], "license": s["license"],
-                   "source": s["source"], **({"covered": s["species"] in known} if known is not None else {})}
-                  for s in self.server.samples.values()]
-        body = json.dumps({"configured": bool(self.server.samples), "images": images}).encode()
+        sets = []
+        for sample_set in self.server.sample_sets:
+            spot = sample_set["task"] == "spot"
+            images = []
+            for s in sample_set["images"].values():
+                image = {key: s[key] for key in ("id", "species", "credit", "license", "source")}
+                if spot:
+                    image.update({key: s[key] for key in ("caption", "boxes", "candidates")})
+                if known is not None:
+                    image["covered"] = (sample_set["target"] if spot else s["species"]) in known
+                images.append(image)
+            sets.append({**{key: sample_set[key] for key in ("id", "title", "subject", "task", "target", "target_name")},
+                         "images": images})
+        body = json.dumps({"configured": bool(sets), "sets": sets}).encode()
         self.send_headers(200, "application/json", len(body))
         self.wfile.write(body)
 
@@ -1871,9 +1963,10 @@ def main():
     parser.add_argument("--classifier-url", default="",
                         help='Loopback classifier service (nvr/classifier), such as '
                              'http://127.0.0.1:8094. Required by "kind": "classifier" registry entries.')
-    parser.add_argument("--samples-dir", type=Path, default=None,
+    parser.add_argument("--samples-dir", type=Path, action="append", default=[],
                         help="Directory holding manifest.json and the labelled images it lists, which "
-                             "the page can run the selected classifier over (/api/samples).")
+                             "the page can run the selected model over (/api/samples). Repeat it for "
+                             "more sets: each is a tab, in this order.")
     parser.add_argument("--demo-mode-script", type=Path, default=None,
                         help="nvr/demo-mode.sh: turns on the page's Demo mode button, and lets engine "
                              'entries marked "needs_demo_mode" load after the page has warned the user. '
@@ -1935,12 +2028,10 @@ def main():
             bridge_address(args.classifier_url)
         except ValueError:
             parser.error("--classifier-url must look like http://127.0.0.1:8094")
-    samples = {}
-    if args.samples_dir:
-        try:
-            samples = load_samples(args.samples_dir)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            parser.error(f"--samples-dir: {exc}")
+    try:
+        sample_sets, samples = load_sample_sets(args.samples_dir)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        parser.error(f"--samples-dir: {exc}")
     services_config = {}
     if args.services_config:
         try:
@@ -1988,7 +2079,7 @@ def main():
         server.piper = piper
         server.engine_switcher = engine_switcher
         server.demo_mode = demo_mode
-        server.samples = samples
+        server.sample_sets, server.samples = sample_sets, samples
         server.services_config = services_config
         server.https_port = args.https_port
         server.allowed_hosts = allowed_hosts
@@ -2003,7 +2094,7 @@ def main():
             secure.piper = piper
             secure.engine_switcher = engine_switcher
             secure.demo_mode = demo_mode
-            secure.samples = samples
+            secure.sample_sets, secure.samples = sample_sets, samples
             secure.services_config = services_config
             secure.allowed_hosts = allowed_hosts
             secure.socket = context.wrap_socket(secure.socket, server_side=True)
@@ -2019,7 +2110,8 @@ def main():
         print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)
         print(f"Engines: {', '.join(engines) if engines else 'not configured'}", flush=True)
         print(f"Demo mode: {args.demo_mode_script or 'not configured'}", flush=True)
-        print(f"Sample set: {f'{len(samples)} images' if samples else 'not configured'}", flush=True)
+        print("Sample sets: " + (", ".join(f"{s['title']} ({len(s['images'])})" for s in sample_sets)
+                                 or "not configured"), flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
