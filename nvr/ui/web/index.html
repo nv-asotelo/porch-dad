@@ -42,6 +42,12 @@
       <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="flipCameraButton" hidden title="Switch between the outward-facing and self-facing camera">⟲ Flip camera</button><button id="reachyButton" aria-describedby="reachyHelp">Use Reachy Mini</button><button id="listenButton" aria-pressed="false" hidden>Listen: Off</button><button id="stopButton" disabled>Stop</button><button id="analyzeButton" disabled>Run inference</button><button id="liveToggleButton" aria-pressed="true" aria-describedby="liveToggleHelp">Live streaming: On</button><button id="overlayToggleButton" aria-pressed="true" aria-describedby="overlayHelp" hidden>Saliency overlay: On</button><button id="autoSpeakButton" aria-pressed="false" aria-describedby="autoSpeakHelp" hidden>Auto-speak: Off</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
       <p id="overlayHelp" class="hint" hidden></p>
       <p id="autoSpeakHelp" class="hint" hidden>Speaks each completed caption aloud through Reachy's speaker as soon as it lands, at the speech rate set below. If Reachy is still speaking the previous one when a new caption completes, that caption is skipped rather than queued, so speech never falls further and further behind.</p>
+      <div class="controls" aria-label="Shared Reachy bridge">
+        <button id="releaseBridgeButton" disabled>Release bridge</button>
+        <button id="resumeBridgeButton" disabled>Resume bridge</button>
+        <span id="bridgeControlStatus" role="status" aria-live="polite">Checking bridge…</span>
+      </div>
+      <p class="hint">Shared by Porch Dad, Live Vision and other local viewers. Release stops this Orin’s camera/microphone connection so another client can use Reachy. Robot settings stay saved. Resume to reconnect; Stop above only closes this preview.</p>
       <details id="reachyControls" aria-label="Reachy Mini controls" hidden>
         <summary><span>Reachy Mini controls</span><span id="reachyControlStatus" class="hint">Checking robot…</span></summary>
         <div class="controls">

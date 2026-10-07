@@ -45,6 +45,8 @@ ROOT = Path(__file__).resolve().parents[1] / "web"
 # over a feature nobody asked for; main() refuses --reachy-daemon-url instead, at the point where
 # the user actually asked for it.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "reachy"))
+from bridge_control import BRIDGE_CONTROL
+
 try:
     from reachy import Reachy
 except ImportError:
@@ -1084,6 +1086,7 @@ class Server(ThreadingHTTPServer):
         # Populated in main(): {name: {"cmdline_match": str, "path": str}} for services this
         # process does not itself manage (the shim, the Reachy bridge) - see --services-config.
         self.services_config = {}
+        self.bridge_control = BRIDGE_CONTROL
         # Populated in main() from --samples-dir (load_sample_sets): the sets in order, and all their
         # images by id - {id: {"path", "species", ...}}.
         self.sample_sets = []
@@ -1253,6 +1256,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
+        if route == "/api/reachy/bridge":
+            self.reachy_bridge_status()
+            return
         if route == "/api/reachy/state":
             self.reachy_state()
             return
@@ -1312,6 +1318,9 @@ class Handler(BaseHTTPRequestHandler):
         self.headers_in = self.headers
         if not self.origin_allowed():
             self.json_error(403, "Cross-origin requests are disabled.")
+            return
+        if self.path.startswith("/api/reachy/bridge/"):
+            self.reachy_bridge_change(self.path[len("/api/reachy/bridge/"):])
             return
         if self.path.startswith("/api/reachy/"):
             self.reachy_control(self.path[len("/api/reachy/"):])
@@ -1727,6 +1736,32 @@ class Handler(BaseHTTPRequestHandler):
     def reachy_result(self, ok, msg):
         body = json.dumps({"ok": ok, "message": msg}).encode()
         self.send_headers(200 if ok else 400, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_bridge_status(self):
+        if not self.control_allowed("reading bridge state"):
+            return
+        body = json.dumps(self.server.bridge_control.status()).encode()
+        self.send_headers(200, "application/json", len(body))
+        self.wfile.write(body)
+
+    def reachy_bridge_change(self, action):
+        if not self.control_allowed("changing the Reachy bridge"):
+            return
+        if action not in {"release", "resume"}:
+            self.json_error(404, "Unknown bridge action.")
+            return
+        try:
+            if self.headers.get("Transfer-Encoding"):
+                raise ValueError("Chunked uploads are disabled.")
+            if self.read_json_body(1024):
+                raise ValueError("Bridge control takes no settings or robot address.")
+        except (ValueError, TypeError) as exc:
+            self.json_error(400, str(exc))
+            return
+        result = self.server.bridge_control.change(action)
+        body = json.dumps(result).encode()
+        self.send_headers(200 if result.get("ok") else 503, "application/json", len(body))
         self.wfile.write(body)
 
     def reachy_state(self):

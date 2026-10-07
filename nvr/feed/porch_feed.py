@@ -53,6 +53,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 
 from reachy import (ANTENNA_LIMIT_RAD, ANTENNA_PARK_DEG, LIMITS_M, LIMITS_RAD, MOTOR_MODES,
                     Reachy as ReachyClient)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "reachy"))
+from bridge_control import BRIDGE_CONTROL
 from scout import Scout as ScoutClient
 # roller_eye_srv.py lives in nvr/scout/, not here - it is the direct-TCPROS-to-the-robot service
 # caller (nav_cancel, nav_path_start/save, nav_patrol, ...), a different thing from scout.py's
@@ -1027,6 +1029,16 @@ def service_status(key: str) -> dict:
         boot_state = (out.strip().splitlines() or ["unknown"])[-1][:60]
 
     intent = load_intent().get(key) or {}
+    if s["kind"] == "systemd" and str(s.get("unit", "")).strip().removesuffix(".service") == "reachy-mjpeg-bridge":
+        # Both UIs record the fixed bridge's requested state in its own locked
+        # sidecar. A later generic Services action still wins via its timestamp.
+        shared_intent = BRIDGE_CONTROL.intent()
+        try:
+            previous_at = float(intent.get("at") or 0)
+        except (TypeError, ValueError):
+            previous_at = 0
+        if shared_intent and shared_intent["at"] > previous_at:
+            intent = shared_intent
     return {
         "key": key,
         "label": s.get("label", key),
@@ -1782,6 +1794,9 @@ def reachy_latest():
     """
     if not REACHY_CAM:
         raise HTTPException(404, "reachy_camera_url is not configured")
+    bridge = BRIDGE_CONTROL.status()
+    if not bridge.get("active"):
+        raise HTTPException(409, bridge["message"])
     try:
         r = requests.get(f"{REACHY_CAM}/still.jpg", timeout=5)
     except requests.RequestException as e:
@@ -1804,14 +1819,38 @@ def reachy_audio():
     """
     if not REACHY_CAM:
         raise HTTPException(404, "reachy_camera_url is not configured")
+    bridge = BRIDGE_CONTROL.status()
+    if not bridge.get("active"):
+        raise HTTPException(409, bridge["message"])
     try:
         upstream = requests.get(f"{REACHY_CAM}/audio.mp3", stream=True, timeout=10)
     except requests.RequestException as e:
         raise HTTPException(502, f"camera bridge unreachable: {e}")
     if upstream.status_code != 200:
+        upstream.close()
         raise HTTPException(502, f"bridge returned {upstream.status_code}")
-    return StreamingResponse(upstream.iter_content(chunk_size=4096), media_type="audio/mpeg",
+    def audio_chunks():
+        try:
+            yield from upstream.iter_content(chunk_size=4096)
+        finally:
+            upstream.close()
+    return StreamingResponse(audio_chunks(), media_type="audio/mpeg",
                               headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/reachy/bridge")
+def api_reachy_bridge():
+    """Observe the shared local bridge without starting it or touching the robot."""
+    return BRIDGE_CONTROL.status()
+
+
+@app.post("/api/reachy/bridge/{action}")
+def api_reachy_bridge_change(action: str, request: Request):
+    require_control(request)
+    if action not in {"release", "resume"}:
+        raise HTTPException(404, "unknown bridge action")
+    result = BRIDGE_CONTROL.change(action)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 503)
 
 
 # lan_link and reachy_health_summary are pure for the same reason as boot_command: the tests
@@ -1873,6 +1912,10 @@ def api_reachy():
            "link": lan_link(webui, LINKS_HOST),
            "live_vision_link": lan_link(REACHY_LIVE_VISION, LINKS_HOST)}
     if not REACHY_CAM:
+        return out
+    bridge = BRIDGE_CONTROL.status()
+    if not bridge.get("active"):
+        out.update(state=bridge["state"], reason=bridge["message"])
         return out
     try:
         d = requests.get(f"{REACHY_CAM}/healthz", timeout=4).json()
@@ -2813,6 +2856,12 @@ button.mini{padding:3px 9px;font-size:11.5px}
            style="display:none">Open in Live Vision</a>
       </div>
     </div>
+    <div class="row" style="margin-top:8px">
+      <button id="reachyBridgeRelease" class="warn" onclick="reachyBridgeChange('release')" disabled>Release bridge</button>
+      <button id="reachyBridgeResume" onclick="reachyBridgeChange('resume')" disabled>Resume bridge</button>
+      <span id="reachyBridgeStatus" class="hint" role="status" aria-live="polite">Checking bridge…</span>
+    </div>
+    <p class="hint">Shared by Porch Dad, Live Vision and other local viewers; release stops this Orin’s camera/microphone connection, keeps robot settings. Resume to reconnect.</p>
     <img id="reachyImg" class="still" alt="Reachy Mini camera" style="display:none">
     <p class="hint" id="reachyHint" style="display:none">
       No frames. This reads <code>reachy-mjpeg-bridge.service</code> on this box, which pulls the
@@ -2825,7 +2874,7 @@ button.mini{padding:3px 9px;font-size:11.5px}
         <input type="checkbox" id="reachyListenBtn" onchange="reachyListenToggle(this.checked)">
         <span class="track"></span><span class="tlabel" id="reachyListenLbl">🔊 Listen</span>
       </label>
-      <button onclick="rq('/api/reachy/check')"
+      <button id="reachyLookButton" onclick="rq('/api/reachy/check')"
               title="Grabs one frame from the camera above and sends it to Cosmos3-Edge. This is the button that writes a new caption.">
         Look &amp; describe</button>
     </div>
@@ -3565,6 +3614,68 @@ function scoutGpLoop(sid){
   s.gpRAF = requestAnimationFrame(() => scoutGpLoop(sid));
 }
 
+// The bridge belongs to this Orin, not this tab. Poll its state even while released so
+// a resume from Live Vision appears here. Reading the page never starts the bridge.
+let reachyBridgeSnapshot = null, reachyBridgePending = false, reachyBridgeVersion = 0;
+function reachyBridgeBlocked(){
+  return reachyBridgePending || !reachyBridgeSnapshot || !reachyBridgeSnapshot.active;
+}
+function stopReachyPreview(){
+  const img = document.getElementById('reachyImg');
+  img.style.display = 'none'; img.removeAttribute('src');
+  document.getElementById('reachyListenBtn').checked = false;
+  reachyListenToggle(false);
+}
+function renderReachyBridge(){
+  const state = reachyBridgeSnapshot;
+  const blocked = reachyBridgeBlocked();
+  document.getElementById('reachyBridgeRelease').disabled = reachyBridgePending || !state?.active;
+  document.getElementById('reachyBridgeResume').disabled = reachyBridgePending || !state || !['released','failed'].includes(state.state);
+  document.getElementById('reachyListenBtn').disabled = blocked;
+  document.getElementById('reachyLookButton').disabled = blocked;
+  if(!reachyBridgePending)
+    document.getElementById('reachyBridgeStatus').textContent = state?.message || 'Bridge state unavailable. Retrying…';
+  if(blocked){
+    stopReachyPreview();
+    document.getElementById('reachyState').textContent = reachyBridgePending ? 'Changing bridge connection…' : state?.message || 'Checking bridge…';
+    document.getElementById('reachyState').style.color = 'var(--mut)';
+    document.getElementById('reachyHint').style.display = 'none';
+  }
+}
+async function refreshReachyBridge(){
+  if(reachyBridgePending) return;
+  const version = reachyBridgeVersion;
+  try{
+    const response = await fetch('/api/reachy/bridge', {cache:'no-store'});
+    if(!response.ok) throw new Error('Bridge status unavailable');
+    const state = await response.json();
+    if(version !== reachyBridgeVersion) return;
+    reachyBridgeSnapshot = state;
+  }catch(e){
+    if(version !== reachyBridgeVersion) return;
+    reachyBridgeSnapshot = null;
+  }
+  renderReachyBridge();
+}
+async function reachyBridgeChange(action){
+  if(reachyBridgePending || !['release','resume'].includes(action)) return;
+  reachyBridgePending = true; reachyBridgeVersion += 1;
+  document.getElementById('reachyBridgeStatus').textContent = action === 'release' ? 'Releasing bridge…' : 'Starting bridge; waiting for camera…';
+  renderReachyBridge();
+  try{
+    const response = await fetch('/api/reachy/bridge/' + action, {method:'POST',
+      headers:{'X-Porch-Token': await tokenReady()}});
+    const result = await response.json();
+    if(!response.ok || !result.ok) throw new Error(result.message || result.detail || 'Bridge change failed');
+    reachyBridgeSnapshot = result;
+    say(result.message, true);
+  }catch(e){ say(e.message, false); }
+  finally{
+    reachyBridgePending = false; reachyBridgeVersion += 1;
+    await refreshReachyBridge();
+  }
+}
+
 // Reachy Listen: the bridge already serves its mic as a continuous browser-native MP3 stream
 // (proxied same-origin at /reachy/audio.mp3, see reachy_audio()), so this is just pointing an
 // <audio> element at it - no WebAudio/PCM plumbing needed, unlike the Scouts' raw-socket path.
@@ -3574,6 +3685,10 @@ function reachyListenToggle(checked){
   const el = document.getElementById('reachyAudioEl');
   const lbl = document.getElementById('reachyListenLbl');
   if(!el) return;
+  if(checked && reachyBridgeBlocked()){
+    document.getElementById('reachyListenBtn').checked = false;
+    return;
+  }
   if(!checked){
     el.pause(); el.removeAttribute('src'); el.load();
     if(lbl) lbl.textContent = '🔊 Listen';
@@ -3582,7 +3697,7 @@ function reachyListenToggle(checked){
   el.src = `/reachy/audio.mp3?t=${Date.now()}`;
   el.play().then(() => { if(lbl) lbl.textContent = '🔊 Listening'; })
            .catch(e => { const cb = document.getElementById('reachyListenBtn'); if(cb) cb.checked = false;
-                          say('reachy listen: ' + e.message, false); });
+                          if(!reachyBridgeBlocked()) say('reachy listen: ' + e.message, false); });
 }
 
 // Reflects /api/reachy/alert's live cooldown_s/speak into the two auto-check controls. Skips the
@@ -4131,6 +4246,7 @@ async function load(){
   }catch(e){}
 
   try{
+    const bridgeVersion = reachyBridgeVersion;
     const rc = await (await fetch('/api/reachy',{cache:'no-store'})).json();
     const img = document.getElementById('reachyImg');
     const st  = document.getElementById('reachyState');
@@ -4143,7 +4259,10 @@ async function load(){
     // `reason` once it gets long enough to mean the robot needs a power-cycle.
     st.title = rc.state ? `bridge ${rc.state}` + (rc.failed_streak ? ` · ${rc.failed_streak} `
                           + `session(s) in a row without video` : '') : '';
-    if(rc.connected){
+    if(reachyBridgeBlocked() || bridgeVersion !== reachyBridgeVersion){
+      // A late health response from before Release cannot bring the preview back.
+      renderReachyBridge();
+    } else if(rc.connected){
       const a = rc.audio, p = rc.push;
       st.textContent = `● live · ${rc.frames} frames · via ${rc.source||'bridge'}`
         + (a ? (a.live ? ' · 🎙 mic live' + (a.listeners ? ` (${a.listeners} listening)` : '')
@@ -4237,6 +4356,7 @@ async function load(){
 // The Scouts refresh on their own timer: their cameras are worth seeing at a higher rate than the
 // 10 s whole-page poll, and they must keep updating even when the robot sections are hidden. Cards
 // are built once from /api/scouts, then each polls on the shared 3 s tick.
+refreshReachyBridge(); setInterval(refreshReachyBridge, 5000);
 showSelfUrl(); initCtl(); load(); setInterval(load, 10000);
 buildScoutCards().then(() => { refreshScouts(); setInterval(refreshScouts, 3000); });
 </script></body></html>"""

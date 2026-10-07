@@ -1214,6 +1214,38 @@ two files differ only where the demo names its own layout:
 | `nvr/ui/scripts/serve_ui.py` | The module docstring, which `--help` prints, the comment on the `reachy.py` import and `EngineSwitcher`'s docstring: `nvr/` paths, a bridge that listens on loopback and the Docker gateway (deploy/07 §1), no `setup-orin.sh` | The demo's paths, its loopback-only bridge and its setup script are not this repo's |
 | `nvr/ui/web/index.html` | The image-token help names `max_image_tokens_per_image` in the engine's `visual/config.json`, read when the shim starts (deploy/05 §5). The clocks help names `jetson_clocks` (deploy/02) | The demo fixes the budget at 512 when its `setup-orin.sh` builds the engine, and pins clocks with a unit that script installs |
 
+### Release the shared Reachy bridge
+
+Both Porch Dad's Reachy card and Live Vision now provide **Release bridge** and
+**Resume bridge**. This ports the explicit bridge-stop behavior from the standalone
+Live Vision setup controls (`151d67f`), retaining Porch Dad's existing robot settings
+and its model/classifier controls.
+
+Release stops only this Orin's `reachy-mjpeg-bridge.service`, ending its WebRTC
+camera/microphone session for **all local viewers** (including Frigate and Live VLM
+WebUI). A browser's **Stop** button only closes that browser's preview. Robot motor,
+speaker and onboard-app controls are separate; release does not put the robot to
+sleep, reboot it, change its address or stop another computer's connection.
+
+Resume starts the same service with its existing configuration. The UI reports
+service startup separately from fresh camera frames; choose **Use Reachy Mini** to
+open a Live Vision preview again. Status polls and page reloads never start the
+bridge. Release preserves boot enablement: rebooting the Orin or explicitly starting
+the service (including Demo mode) can reconnect it.
+
+For human or agent deployment, copy `nvr/reachy/bridge_control.py` along with the
+updated Porch Feed and Live Vision files, then restart those web services. The
+service account needs only the exact `systemctl start/stop reachy-mjpeg-bridge.service`
+sudo commands in `nvr/ui/config/sudoers-live-vision-engines`. Do not replace private
+robot settings or rebuild engines. Both interfaces use a process-shared lock, record the requested state privately
+for the service-status panel, and verify the unit/PID after an action; a timeout or failed stop must remain a visible
+error, not a successful release.
+
+Verify release gives an inactive unit with PID zero, and resume gives a fresh
+`/healthz` frame and usable preview. Keep any unrelated Orin untouched. These changes
+add no dependency or vendored third-party source; Pollen's stream-client notices are
+unchanged. The standalone demo's discovery/installation pipeline is not copied here.
+
 Compared with the UI this repo carried before (`b3f069c`):
 
 * **Auto-speak keeps the selected rate.** It no longer switches to 2x when turned on (`b3f069c`),

@@ -1040,7 +1040,16 @@ function scoreSpots(rows) {
   return score;
 }
 
-if (typeof module !== "undefined") module.exports = {SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, namePreset, presetFits, presetForSubject, tabBar, cropRect, boxIoU, toPicture, onTarget, spotResult, spotFromAnswer, spotVerdict, scoreSpots, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
+// One local systemd bridge is shared by every app. A browser Stop is only a viewer stop.
+function bridgeButtons(snapshot, busy = false) {
+  return {
+    releaseDisabled: busy || snapshot?.active !== true,
+    resumeDisabled: busy || !["released", "failed"].includes(snapshot?.state),
+    message: busy ? "Changing shared bridge…" : snapshot?.message || "Bridge state unavailable.",
+  };
+}
+
+if (typeof module !== "undefined") module.exports = {bridgeButtons, SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, namePreset, presetFits, presetForSubject, tabBar, cropRect, boxIoU, toPicture, onTarget, spotResult, spotFromAnswer, spotVerdict, scoreSpots, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -2369,6 +2378,9 @@ if (typeof document !== "undefined") {
     applyReachyHealth(health, failure, relay, slots, stream, askedAt);
   }
   function startReachy() {
+    if (bridgeSnapshot?.released || bridgeBusy) {
+      reachyRequested = false; error("Resume the shared Reachy bridge first."); return;
+    }
     // No getUserMedia: the robot's video comes from the Jetson, so this works over plain HTTP.
     error(); reachyRequested = false;
     // Same reasoning as startCamera()'s own releaseCamera() call: switching source while one is
@@ -2593,6 +2605,55 @@ if (typeof document !== "undefined") {
     }).catch(() => {});
   }
   startDeviceTelemetry();
+
+  let bridgeSnapshot = null, bridgeBusy = false, bridgeEpoch = 0;
+  function renderBridgeControls() {
+    const view = bridgeButtons(bridgeSnapshot, bridgeBusy);
+    $("releaseBridgeButton").disabled = view.releaseDisabled;
+    $("resumeBridgeButton").disabled = view.resumeDisabled;
+    $("bridgeControlStatus").textContent = view.message;
+  }
+  async function bridgeRequest(path, method = "GET") {
+    const credentials = await loadAccess();
+    const response = await fetch(path, {method, cache: "no-store", credentials: "same-origin",
+      headers: {"X-Reachy-Token": credentials.reachy_token}, signal: AbortSignal.timeout(30000)});
+    const body = await response.json();
+    if (response.status === 401 || response.status === 403) access = null;
+    if (!response.ok || body.ok === false) throw Error(body?.error?.message || body.message || "Bridge request failed.");
+    return body;
+  }
+  async function pollBridge() {
+    if (bridgeBusy) return;
+    const epoch = ++bridgeEpoch;
+    try {
+      const snapshot = await bridgeRequest("/api/reachy/bridge");
+      if (epoch !== bridgeEpoch || bridgeBusy) return;
+      bridgeSnapshot = snapshot;
+      // Another app can release the same bridge. Close this viewer, never the browser webcam.
+      if (snapshot.released && state.source === "reachy" && state.running) stop();
+    } catch (err) {
+      if (epoch !== bridgeEpoch || bridgeBusy) return;
+      bridgeSnapshot = {state: "unavailable", message: err.message};
+    }
+    renderBridgeControls();
+  }
+  async function changeBridge(action) {
+    if (bridgeBusy) return;
+    bridgeBusy = true; ++bridgeEpoch; renderBridgeControls();
+    if (action === "release" && state.source === "reachy" && state.running) stop();
+    let failure;
+    try { bridgeSnapshot = await bridgeRequest(`/api/reachy/bridge/${action}`, "POST"); }
+    catch (err) { failure = err.message; error(failure); }
+    finally {
+      bridgeBusy = false; renderBridgeControls();
+      const refreshedEpoch = bridgeEpoch + 1;
+      await pollBridge();
+      if (failure && !bridgeBusy && bridgeEpoch === refreshedEpoch) $("bridgeControlStatus").textContent = failure;
+    }
+  }
+  $("releaseBridgeButton").addEventListener("click", () => changeBridge("release"));
+  $("resumeBridgeButton").addEventListener("click", () => changeBridge("resume"));
+  pollBridge(); setInterval(pollBridge, 5000);
 
   // Reachy Mini motor/app/speech controls: talks to /api/reachy/* (this server's own routes onto
   // the robot's daemon - see serve_ui.py's reachy_control), separate from the /reachy/ camera+mic

@@ -36,3 +36,6 @@ orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now cosmos3-edge-shim
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now cosmos-edge-ui
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now reachy-mjpeg-bridge
 orin ALL=(root) NOPASSWD: /usr/bin/systemctl enable --now pokemon-classifier
+
+# Shared camera bridge release/resume from Live Vision or Porch Dad. No robot-daemon privileges.
+orin ALL=(root) NOPASSWD: /usr/bin/systemctl stop reachy-mjpeg-bridge.service, /usr/bin/systemctl start reachy-mjpeg-bridge.service

@@ -45,3 +45,8 @@ nvr/classifier/samples*/
 
 # Per-box values compose reads (e.g. SCOUT_1F_WHEELED_IP) - LAN addresses stay off this public repo
 nvr/.env
+
+# Cross-process lock for the local Reachy bridge controls.
+nvr/reachy/.bridge-control.lock
+nvr/reachy/.bridge-control.json
+nvr/reachy/.bridge-control.json.*.tmp
