@@ -280,6 +280,13 @@ class FrameCadence {
 // WebUI "every 30 video frames" becomes the 6 s those 30 frames take, labelled as time-based.
 const REACHY_BRIDGE_FPS = 5;
 const REACHY_SAMPLE_MS = 30 / REACHY_BRIDGE_FPS * 1000;
+// The cameras this page reaches through the Jetson, not the browser: each a bridge serve_ui.py
+// relays under its prefix, with the same routes (/healthz, /still.jpg, /mjpeg). fps is what the
+// bridge publishes, which sets the Live VLM cadence (30 frames' worth). Only the robot's has audio.
+const RELAYED_SOURCES = Object.freeze({
+  reachy: Object.freeze({prefix: "/reachy", name: "Reachy Mini", fps: REACHY_BRIDGE_FPS}),
+  luma: Object.freeze({prefix: "/luma", name: "VITURE Luma Ultra", fps: 15}),
+});
 const REACHY_HEALTH_MS = 2000;
 // A health answer older than this no longer vouches for the stream.
 const REACHY_HEALTH_STALE_MS = 6000;
@@ -1049,7 +1056,7 @@ function bridgeButtons(snapshot, busy = false) {
   };
 }
 
-if (typeof module !== "undefined") module.exports = {bridgeButtons, SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, namePreset, presetFits, presetForSubject, tabBar, cropRect, boxIoU, toPicture, onTarget, spotResult, spotFromAnswer, spotVerdict, scoreSpots, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
+if (typeof module !== "undefined") module.exports = {bridgeButtons, SSEParser, readCompletionEvent, CAPTURE_PRESETS, FrameCadence, PROMPT_PRESETS, LatencySummary, appendTelemetrySample, telemetrySegments, ADVANCED_DEFAULTS, validateAdvancedSettings, readServerInferenceMs, readServerFirstTextMs, describeReachyHealth, readRelayStream, readRelaySlots, skippedSampleReason, REACHY_SAMPLE_MS, RELAYED_SOURCES, EngineRequestScope, EnginePolicySettings, enginePolicy, engineChoices, renderEngineChoices, engineGroups, needsDemoMode, demoWarning, runEngineSwitch, speciesName, readClassification, describeClassification, overlayPlacement, heatColor, scoreSamples, speciesKey, parseGrounding, nameProbability, NAME_PRESETS, NAME_SUBJECTS, namePreset, presetFits, presetForSubject, tabBar, cropRect, boxIoU, toPicture, onTarget, spotResult, spotFromAnswer, spotVerdict, scoreSpots, saliencyLocation, SALIENCY_LOCATION_PARAMS, readNameAnswer, cosmosResult, percentText};
 
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
@@ -1100,10 +1107,21 @@ if (typeof document !== "undefined") {
         if (typeof body?.reachy_token !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(body.reachy_token)) {
           throw new Error("Live Vision server sent no relay token.");
         }
+        showLuma(body.luma === true);
         return access = body;
       })
       .finally(() => { accessRequest = null; });
     return accessRequest;
+  }
+  // Every access load says whether this server relays a VITURE Luma Ultra (--luma-url): only then
+  // does the page offer it or mention it.
+  function showLuma(available) {
+    $("lumaButton").hidden = $("lumaHelp").hidden = !available;
+    $("placeholderHint").textContent = available ? "Start your camera, use Reachy Mini or the VITURE Luma Ultra, or choose an image."
+      : "Start your camera, use Reachy Mini, or choose an image.";
+    if (!window.isSecureContext) {
+      $("cameraHelpText").textContent = `Image upload${available ? ", Reachy Mini and the VITURE Luma Ultra" : " and Reachy Mini"} work here. This device's camera requires HTTPS.`;
+    }
   }
   function reachyURL(path, params = {}) {
     return `${path}?${new URLSearchParams({...params, token: access.reachy_token})}`;
@@ -1118,14 +1136,16 @@ if (typeof document !== "undefined") {
   // one-shot fetch of /reachy/still.jpg - a plain request/response with no long-lived
   // decode state to go stale - and draws that instead of the preview element.
   async function fetchReachyStill() {
-    if (!access) throw new Error("Reachy access token not available yet.");
-    const response = await fetch(reachyURL("/reachy/still.jpg"), {cache: "no-store"});
-    if (!response.ok) throw new Error("Could not fetch a fresh frame from Reachy.");
+    const source = relayed() ?? RELAYED_SOURCES.reachy;
+    if (!access) throw new Error("The camera relay's token is not available yet.");
+    const response = await fetch(reachyURL(`${source.prefix}/still.jpg`), {cache: "no-store"});
+    if (!response.ok) throw new Error(`Could not fetch a fresh frame from ${source.name}.`);
     const blob = await response.blob();
     return createImageBitmap(blob);
   }
-  // ?source=reachy (a bookmarkable link) selects the robot once inference can run.
-  let reachyRequested = new URLSearchParams(window.location.search).get("source") === "reachy";
+  // ?source=reachy or ?source=luma (a bookmarkable link) selects that camera once inference can run.
+  let reachyRequested = Object.hasOwn(RELAYED_SOURCES, new URLSearchParams(window.location.search).get("source") ?? "")
+    ? new URLSearchParams(window.location.search).get("source") : false;
   const duration = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`;
   const latency = new LatencySummary();
   let serverFirstTextMs = null;
@@ -1252,9 +1272,10 @@ if (typeof document !== "undefined") {
   function controls() {
     $("startButton").disabled = state.running || state.busy || switchingEngine();
     $("reachyButton").disabled = state.running || state.busy || switchingEngine();
+    $("lumaButton").disabled = state.running || state.busy || switchingEngine();
     $("stopButton").disabled = !state.running && !state.busy;
     const sourceReady = state.running
-      ? (state.source === "reachy" ? reachyFrameReady() : Boolean(state.media && $("video").readyState >= 2))
+      ? (relayed() ? reachyFrameReady() : Boolean(state.media && $("video").readyState >= 2))
       : Boolean(state.imageURL);
     $("analyzeButton").disabled = !sourceReady || !state.ready || state.busy || !state.advancedValid || switchingEngine();
     for (const id of ["prompt", "maxTokens", "imageTokenPreset", "customImageTokens", "topP"]) {
@@ -1407,8 +1428,13 @@ if (typeof document !== "undefined") {
     }
     // Honoured once, and only if nothing else was chosen while the backend was loading.
     if (state.ready && reachyRequested) {
+      const requested = reachyRequested;
       reachyRequested = false;
-      if (!state.running && !state.busy && !state.imageURL) startReachy();
+      // The Luma needs to know the server has one; the relay token is needed either way.
+      if (!state.running && !state.busy && !state.imageURL) {
+        loadAccess().then(() => { if (!state.running && !state.busy && !state.imageURL) startReachy(requested); })
+          .catch(() => startReachy(requested));
+      }
     }
     if (state.ready && modelRequested && engineData?.configured) {
       const target = modelRequested; modelRequested = null;
@@ -1463,7 +1489,7 @@ if (typeof document !== "undefined") {
     // through a bad sample, and the next one tries again. Only Stop, a preset change, pagehide
     // or a failed manual request do. The camera keeps stopping on a real failure, as before;
     // both skip what the server turned away for now (skippedSampleReason).
-    const keepSource = trigger === "live" && state.source === "reachy";
+    const keepSource = trigger === "live" && relayed() !== null;
     const policy = state.policy;
     const prompt = policy?.prompt ?? $("prompt").value.trim();
     const maxTokens = policy?.max_tokens ?? Number($("maxTokens").value);
@@ -1625,7 +1651,7 @@ if (typeof document !== "undefined") {
     // comes from.
     const named = namePreset($("prompt").value.trim());
     const saliency = state.overlays || Boolean(named);
-    const keepSource = trigger === "live" && state.source === "reachy";
+    const keepSource = trigger === "live" && relayed() !== null;
     const timingGroup = state.timingGroup;
     const ticket = engineRequests.begin(), controller = ticket.controller;
     state.busy = true; state.abort = controller; state.activeTrigger = trigger; controls(); error();
@@ -2216,8 +2242,9 @@ if (typeof document !== "undefined") {
     }
     state.frameCallback = video.requestVideoFrameCallback(frame);
   }
-  // Live VLM WebUI cadence for Reachy: the frame-counting loop above needs a <video>, so this
-  // samples every REACHY_SAMPLE_MS instead, still skipping (and counting) samples while busy.
+  // Live VLM WebUI cadence for a relayed camera: the frame-counting loop above needs a <video>, so
+  // this samples every 30 of the bridge's frames by time instead, still skipping (and counting)
+  // samples while busy.
   // Ticks while the bridge is not live send nothing and are not counted as skipped.
   function reachyCadenceLoop(generation) {
     function tick() {
@@ -2228,13 +2255,20 @@ if (typeof document !== "undefined") {
         else if (state.ready) void analyze($("reachyImage"), "live");
       }
       renderReachySampling();
-      reachy.cadence = setTimeout(tick, REACHY_SAMPLE_MS);
+      reachy.cadence = setTimeout(tick, relaySampleMs());
     }
-    reachy.cadence = setTimeout(tick, REACHY_SAMPLE_MS);
+    reachy.cadence = setTimeout(tick, relaySampleMs());
   }
+  // The relayed camera that is the source (Reachy's or the Luma's), or null for this device's own.
+  function relayed() { return RELAYED_SOURCES[state.source] ?? null; }
+  function relayActive() { return state.running && relayed() !== null; }
+  // The robot alone: its microphone (Listen) and its bridge's release.
   function reachyActive() { return state.running && state.source === "reachy"; }
-  function liveSource() { return state.source === "reachy" ? $("reachyImage") : $("video"); }
-  function liveFrameReady() { return state.source === "reachy" ? reachyFrameReady() : $("video").readyState >= 2; }
+  // The bridge's own --fps when its health reports one (the Luma's does), else the source's default.
+  function relayFps() { return reachy.fps ?? relayed()?.fps ?? REACHY_BRIDGE_FPS; }
+  function relaySampleMs() { return 30 / relayFps() * 1000; }
+  function liveSource() { return relayed() ? $("reachyImage") : $("video"); }
+  function liveFrameReady() { return relayed() ? reachyFrameReady() : $("video").readyState >= 2; }
   // Only a frame this connection delivered (load) while the bridge is live and the relay still
   // has the stream: never the last picture of a stream that has quietly ended.
   function reachyFrameReady() {
@@ -2249,7 +2283,7 @@ if (typeof document !== "undefined") {
     // Replacing src also ends the previous connection.
     reachy.streamToken = Array.from(crypto.getRandomValues(new Uint32Array(3)),
       word => word.toString(36).padStart(7, "0")).join("");
-    reachy.streamURL = reachyURL("/reachy/mjpeg", {stream: reachy.streamToken});
+    reachy.streamURL = reachyURL(`${relayed().prefix}/mjpeg`, {stream: reachy.streamToken});
     reachy.openedAt = performance.now(); reachy.streamOK = false;
     $("reachyImage").src = reachy.streamURL;
   }
@@ -2282,15 +2316,15 @@ if (typeof document !== "undefined") {
     audio.pause(); audio.removeAttribute("src"); audio.load();
   }
   function renderReachyStatus() {
-    if (!reachyActive()) return;
+    if (!relayActive()) return;
     const image = $("reachyImage");
-    // The <img> keeps its last frame when the robot goes quiet; do not let it look live.
+    // The <img> keeps its last frame when the camera goes quiet; do not let it look live.
     image.classList.toggle("stale", !reachyFrameReady());
-    const parts = ["Reachy Mini", reachy.statusText];
+    const parts = [relayed().name, reachy.statusText];
     if (reachy.live) {
       if (document.visibilityState !== "visible") parts.push("video paused while this tab is hidden");
       else if (reachy.slotsFull && !reachy.streamOK) {
-        parts.push(`All ${reachy.slotsFull} Reachy streams on this server are in use – close another Live Vision tab or turn Listen off`);
+        parts.push(`All ${reachy.slotsFull} camera and microphone streams on this server are in use – close another Live Vision tab or turn Listen off`);
       } else if (reachy.streamURL === null) parts.push("video reconnecting");
       else if (!reachy.streamOK || !image.naturalWidth) parts.push("waiting for video");
       else parts.push(`${image.naturalWidth}×${image.naturalHeight}`);
@@ -2301,20 +2335,21 @@ if (typeof document !== "undefined") {
     $("sourceStatus").textContent = parts.join(" · ");
   }
   function renderReachySampling() {
-    if (!reachyActive()) return;
+    if (!relayActive()) return;
+    const {name} = relayed(), fps = relayFps();
     let text;
     if (!reachyFrameReady()) {
-      text = !reachy.healthAt ? "Checking the Reachy bridge"
-        : reachy.live ? "Not sending · waiting for Reachy video" : "Not sending · Reachy Mini is not live";
+      text = !reachy.healthAt ? `Checking the ${name} bridge`
+        : reachy.live ? `Not sending · waiting for ${name} video` : `Not sending · ${name} is not live`;
     } else if (!state.liveStreaming) text = "Live streaming off · use Run inference";
     else if (state.preset === "live-vlm") {
-      text = `${state.sampled} frames sent · ${state.skipped} skipped while busy · every ${REACHY_SAMPLE_MS / 1000} s, time-based (30 frames at the bridge's ~${REACHY_BRIDGE_FPS} FPS)`;
+      text = `${state.sampled} frames sent · ${state.skipped} skipped while busy · every ${relaySampleMs() / 1000} s, time-based (30 frames at the bridge's ~${fps} FPS)`;
     } else text = "Capture after each answer";
     $("samplingStatus").textContent = text;
   }
   // The sampling line after a skipped live sample; each live loop otherwise writes its own.
   function renderLiveCounts() {
-    if (state.source === "reachy") renderReachySampling();
+    if (relayed()) renderReachySampling();
     else if (state.preset === "live-vlm" && state.liveStreaming) {
       $("samplingStatus").textContent = `${state.sampled} frames sent · ${state.skipped} skipped while busy`;
     }
@@ -2324,6 +2359,7 @@ if (typeof document !== "undefined") {
     const now = performance.now();
     reachy.live = status.live; reachy.statusText = status.text; reachy.healthAt = now;
     reachy.audioLive = !failure && health?.audio?.live === true;
+    reachy.fps = !failure && Number.isInteger(health?.fps) && health.fps >= 1 && health.fps <= 60 ? health.fps : null;
     // A hidden tab keeps its video closed (visibilitychange below); it reopens when shown.
     if (status.live && document.visibilityState === "visible") {
       // The relay's answer is about the stream this poll named; a reopen since makes it moot.
@@ -2357,7 +2393,7 @@ if (typeof document !== "undefined") {
     let health = null, failure = null, relay = null, slots = null;
     try {
       await loadAccess();
-      const response = await fetch(reachyURL("/reachy/healthz", stream ? {stream} : {}),
+      const response = await fetch(reachyURL(`${relayed()?.prefix ?? "/reachy"}/healthz`, stream ? {stream} : {}),
         {cache: "no-store", signal: AbortSignal.timeout(2500)});
       const body = await response.json().catch(() => null);
       if (response.status === 401) {
@@ -2374,29 +2410,35 @@ if (typeof document !== "undefined") {
     } finally {
       if (reachy.polling === poll) reachy.polling = null;
     }
-    if (!reachyActive() || generation !== state.cameraGeneration) return;
+    if (!relayActive() || generation !== state.cameraGeneration) return;
     applyReachyHealth(health, failure, relay, slots, stream, askedAt);
   }
-  function startReachy() {
-    if (bridgeSnapshot?.released || bridgeBusy) {
+  // A camera relayed through the Jetson: "reachy", the robot's, or "luma", the VITURE glasses' on the
+  // Jetson's USB-C port.
+  function startReachy(key = "reachy") {
+    if (key === "reachy" && (bridgeSnapshot?.released || bridgeBusy)) {
       reachyRequested = false; error("Resume the shared Reachy bridge first."); return;
     }
-    // No getUserMedia: the robot's video comes from the Jetson, so this works over plain HTTP.
+    // Refused only on the server's own word; without an answer yet, the health poll asks again.
+    if (key === "luma" && access && access.luma !== true) {
+      reachyRequested = false; error("This Live Vision server relays no VITURE Luma Ultra (it was started without --luma-url)."); return;
+    }
+    // No getUserMedia: the video comes from the Jetson, so this works over plain HTTP.
     error(); reachyRequested = false;
     // Same reasoning as startCamera()'s own releaseCamera() call: switching source while one is
     // already open otherwise leaks the previous one instead of properly stopping it - a webcam's
     // MediaStream tracks were never being stopped when switching straight to Reachy, which could
     // leave the camera hardware held (and on some browsers, unavailable to reacquire later).
     releaseCamera();
-    state.running = true; state.source = "reachy";
+    state.running = true; state.source = key;
     overlay = null; drawOverlay();   // after state.running: no labelled box over the live picture
     const generation = ++state.cameraGeneration;
-    Object.assign(reachy, {polling: null, live: false, wasLive: false, healthAt: 0, audioLive: false,
+    Object.assign(reachy, {polling: null, live: false, wasLive: false, healthAt: 0, audioLive: false, fps: null,
       statusText: "checking the bridge…", openedAt: 0, streamOK: false, listening: false,
       streamRefused: false, slotsFull: 0, retryAt: 0});
     state.sampled = 0; state.skipped = 0;
     $("video").hidden = true; $("uploadedImage").hidden = true; $("placeholder").hidden = true;
-    $("reachyImage").hidden = false;
+    $("reachyImage").alt = `${RELAYED_SOURCES[key].name} camera`; $("reachyImage").hidden = false;
     renderReachyStatus(); renderReachySampling(); controls();
     reachy.poll = setInterval(() => pollReachy(generation), REACHY_HEALTH_MS);
     void pollReachy(generation);
@@ -2424,7 +2466,7 @@ if (typeof document !== "undefined") {
     state.media = null; $("video").srcObject = null; $("liveIndicator").hidden = true;
     releaseReachy();
     $("sourceStatus").textContent = state.imageURL ? "Selected image"
-      : state.source === "reachy" ? "Reachy Mini stopped" : "Camera stopped";
+      : relayed() ? `${relayed().name} stopped` : "Camera stopped";
   }
   function stop() {
     state.running = false; state.cameraGeneration += 1; state.abort?.abort();
@@ -2514,7 +2556,8 @@ if (typeof document !== "undefined") {
   // has always torn down an active Reachy session - so this needs to work while the camera is
   // already running, not only from a stopped state. That asymmetry (camera->Reachy silently did
   // nothing unless Stop was clicked first; Reachy->camera always worked) was the reported bug.
-  $("reachyButton").addEventListener("click", () => { if (!state.busy) startReachy(); });
+  $("reachyButton").addEventListener("click", () => { if (!state.busy) startReachy("reachy"); });
+  $("lumaButton").addEventListener("click", () => { if (!state.busy) startReachy("luma"); });
   $("listenButton").addEventListener("click", () => {
     if (!reachyActive()) return;
     error();
@@ -2525,7 +2568,7 @@ if (typeof document !== "undefined") {
   $("reachyImage").addEventListener("load", () => {
     // The first frame of this connection: proof that it delivers. Until the relay says
     // otherwise, the picture it shows is current.
-    if (!reachyActive() || $("reachyImage").getAttribute("src") !== reachy.streamURL) return;
+    if (!relayActive() || $("reachyImage").getAttribute("src") !== reachy.streamURL) return;
     reachy.streamOK = true; reachy.slotsFull = 0;
     renderReachyStatus(); renderReachySampling(); controls();
   });
@@ -2533,7 +2576,7 @@ if (typeof document !== "undefined") {
     // src = "" on Stop fires this too; only the current stream failing counts. Its cause
     // (bridge down, stream cap, a restarted server) is not visible here, so the next poll
     // retries, and its X-Reachy-Slots says whether the cap was why.
-    if (!reachyActive() || reachy.streamURL === null || $("reachyImage").getAttribute("src") !== reachy.streamURL) return;
+    if (!relayActive() || reachy.streamURL === null || $("reachyImage").getAttribute("src") !== reachy.streamURL) return;
     reachy.streamToken = null; reachy.streamURL = null; reachy.streamOK = false; reachy.streamRefused = true;
     renderReachyStatus(); renderReachySampling(); controls();
   });
@@ -2542,7 +2585,7 @@ if (typeof document !== "undefined") {
   // there is no frame to send. Listen keeps its audio playing, which is what it is for with the
   // tab in the background. Shown again, a poll now reopens the video.
   document.addEventListener("visibilitychange", () => {
-    if (!reachyActive()) return;
+    if (!relayActive()) return;
     if (document.visibilityState === "visible") { void pollReachy(state.cameraGeneration); return; }
     if (reachy.streamURL !== null) closeReachyStream();
     renderReachyStatus(); renderReachySampling(); controls();
@@ -2587,14 +2630,15 @@ if (typeof document !== "undefined") {
   window.addEventListener("pagehide", stop);
   setInterval(() => { if (state.captureAt !== null) $("frameAge").textContent = duration(performance.now() - state.captureAt); }, 100);
   applyPreset("lightweight", false);
-  if (reachyRequested) $("sourceStatus").textContent = "Reachy Mini · starts when the local backend is ready";
+  if (reachyRequested) $("sourceStatus").textContent = `${RELAYED_SOURCES[reachyRequested].name} · starts when the local backend is ready`;
   setInterval(checkBackend, 5000); checkBackend(); controls();
   // Read once at load: the relay token, and over plain HTTP the camera's HTTPS link. If this
   // fails, the Reachy poll asks again when it needs the token; the link is not retried.
   const accessLoaded = loadAccess();
   accessLoaded.catch(() => {});
   if (!window.isSecureContext) {
-    $("cameraHelp").textContent = "Image upload and Reachy Mini work here. Camera access requires HTTPS.";
+    $("cameraHelp").replaceChildren(Object.assign(document.createElement("span"), {id: "cameraHelpText",
+      textContent: "Image upload and Reachy Mini work here. This device's camera requires HTTPS."}));
     accessLoaded.then(info => {
       if (!Number.isInteger(info.https_port) || info.https_port < 1 || info.https_port > 65535) return;
       const url = new URL(window.location.href);

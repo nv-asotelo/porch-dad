@@ -4,7 +4,8 @@
 No model, cloud fallback, downloaded dependency or synthetic inference lives here.
 Run on the Jetson alongside the Cosmos3-Edge shim (nvr/shim/cosmos3_shim_v1.py).
 
-It also relays the Reachy Mini bridge (nvr/reachy/reachy_mjpeg_bridge.py) under /reachy/.
+It also relays the Reachy Mini bridge (nvr/reachy/reachy_mjpeg_bridge.py) under /reachy/, and the
+VITURE Luma Ultra camera bridge (nvr/luma/luma_camera_bridge.py) under /luma/.
 The bridge listens on loopback and the Docker gateway only, and a same-origin relay is what
 lets the page draw the robot's frames into a canvas for inference without tainting it.
 Those routes need this process's token, which only the page itself can read (/api/access),
@@ -60,11 +61,16 @@ GENERATION_LOCK = threading.Lock()
 GENERATION_WAIT_LOCK = threading.Lock()
 HANDOFF_SECONDS = 0.75
 
-# Reachy bridge routes: page path -> (bridge path, the only Content-Type accepted from it).
-REACHY_FETCHES = {"/reachy/healthz": ("/healthz", "application/json"),
-                  "/reachy/still.jpg": ("/still.jpg", "image/jpeg")}
-REACHY_STREAMS = {"/reachy/mjpeg": ("/mjpeg", "multipart/x-mixed-replace"),
-                  "/reachy/audio.mp3": ("/audio.mp3", "audio/mpeg")}
+# Camera bridges relayed to the page: page path -> (bridge, bridge path, the only Content-Type
+# accepted from it). "reachy" is the robot's camera and microphone; "luma" the VITURE glasses' camera.
+REACHY_FETCHES = {"/reachy/healthz": ("reachy", "/healthz", "application/json"),
+                  "/reachy/still.jpg": ("reachy", "/still.jpg", "image/jpeg"),
+                  "/luma/healthz": ("luma", "/healthz", "application/json"),
+                  "/luma/still.jpg": ("luma", "/still.jpg", "image/jpeg")}
+REACHY_STREAMS = {"/reachy/mjpeg": ("reachy", "/mjpeg", "multipart/x-mixed-replace"),
+                  "/reachy/audio.mp3": ("reachy", "/audio.mp3", "audio/mpeg"),
+                  "/luma/mjpeg": ("luma", "/mjpeg", "multipart/x-mixed-replace")}
+BRIDGE_NAMES = {"reachy": "Reachy bridge", "luma": "Luma camera bridge"}
 REACHY_SECONDS = 3
 # Each open stream pins a handler thread (and a disconnect watcher) for as long as a tab
 # watches or listens, in a process with a listen queue of 8 (request_queue_size). The cap is
@@ -487,9 +493,9 @@ def allowed_host_name(value):
     return name
 
 
-def bridge_address(url):
-    """(host, port) of the Reachy bridge. Plain HTTP only: it never leaves the Jetson."""
-    message = "--reachy-url must look like http://127.0.0.1:8099"
+def bridge_address(url, flag="--reachy-url", example="http://127.0.0.1:8099"):
+    """(host, port) of a camera bridge. Plain HTTP only: it never leaves the Jetson."""
+    message = f"{flag} must look like {example}"
     try:
         parsed = urlsplit(url)
         port = parsed.port or 80
@@ -1083,6 +1089,8 @@ class Server(ThreadingHTTPServer):
         self.https_port = None
         # Names besides IP literals and localhost that /reachy/ and /api/access answer to.
         self.allowed_hosts = frozenset()
+        # The VITURE Luma Ultra camera bridge (--luma-url), or None: no /luma/ relay, no Luma source.
+        self.luma_address = None
         # Populated in main(): {name: {"cmdline_match": str, "path": str}} for services this
         # process does not itself manage (the shim, the Reachy bridge) - see --services-config.
         self.services_config = {}
@@ -1143,9 +1151,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_request(self, code="-", size="-"):
         # Polling is routine; do not write a system journal line every second or two.
-        if self.path.partition("?")[0] in {"/api/metrics", "/reachy/healthz"} and code == 200:
+        if self.path.partition("?")[0] in {"/api/metrics", "/reachy/healthz", "/luma/healthz"} and code == 200:
             return
-        # Nor the relay token that every /reachy/ URL carries: more can read the journal than this page.
+        # Nor the relay token every /reachy/ and /luma/ URL carries: more can read the journal than this page.
         self.log_message('"%s" %s %s', re.sub(r"([?&]token=)[^&\s]*", r"\1<redacted>", self.requestline),
                          str(getattr(code, "value", code)), str(size))
 
@@ -1237,6 +1245,8 @@ class Handler(BaseHTTPRequestHandler):
                 # Also what a page still open across a restart of this server gets: it asks
                 # /api/access again for the new token.
                 self.json_error(401, "Missing or out-of-date relay token. Reload Live Vision.")
+            elif not getattr(self.server, f"{(REACHY_STREAMS.get(route) or REACHY_FETCHES[route])[0]}_address", None):
+                self.json_error(404, "This server relays no Luma camera bridge (--luma-url).")
             elif route in REACHY_STREAMS:
                 self.reachy_stream(*REACHY_STREAMS[route], stream)
             else:
@@ -1252,7 +1262,8 @@ class Handler(BaseHTTPRequestHandler):
             # cannot, and a rebound name is refused here before it gets the chance.
             if self.host_refused():
                 return
-            body = json.dumps({"https_port": self.server.https_port, "reachy_token": RELAY_TOKEN}).encode()
+            body = json.dumps({"https_port": self.server.https_port, "reachy_token": RELAY_TOKEN,
+                               "luma": bool(getattr(self.server, "luma_address", None))}).encode()
             self.send_headers(200, "application/json", len(body))
             self.wfile.write(body)
             return
@@ -1586,15 +1597,17 @@ class Handler(BaseHTTPRequestHandler):
             if watcher:
                 watcher.join(timeout=0.5)
 
-    def reachy_refusal(self, status, raw):
+    def reachy_refusal(self, status, raw, bridge="reachy"):
         # Pass the bridge's own status and words through: its 503 says why there is no frame
         # ("no fresh frame (dormant: camera held by the robot app 'x')"), which is the useful part.
         text = raw[:MAX_RESPONSE].decode("utf-8", "replace").strip()[:300]
         self.json_error(status if 400 <= status <= 599 else 502,
-                        f"Reachy bridge: {text or f'HTTP {status}'}")
+                        f"{BRIDGE_NAMES[bridge]}: {text or f'HTTP {status}'}")
 
-    def reachy_fetch(self, path, content_type, token=None):
-        """One bounded answer from the bridge: its health, or its newest frame."""
+    def reachy_fetch(self, bridge, path, content_type, token=None):
+        """One bounded answer from a camera bridge (Reachy's or the Luma's): its health, or its
+        newest frame."""
+        name = BRIDGE_NAMES[bridge]
         extra_headers = {}
         with RELAYED_STREAMS_LOCK:
             entry = RELAYED_STREAMS.get(token) if token else None
@@ -1605,7 +1618,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/healthz":
             # A refused <img> cannot see its 503, so health says whether the cap is why.
             extra_headers["X-Reachy-Slots"] = f"{slots}/{MAX_REACHY_STREAMS}"
-        connection = http.client.HTTPConnection(*self.server.reachy_address, timeout=REACHY_SECONDS)
+        connection = http.client.HTTPConnection(*getattr(self.server, f"{bridge}_address"), timeout=REACHY_SECONDS)
         response = None
         try:
             try:
@@ -1613,14 +1626,14 @@ class Handler(BaseHTTPRequestHandler):
                 response = connection.getresponse()
                 data = response.read(MAX_RESPONSE + 1)
             except (OSError, http.client.HTTPException):
-                self.json_error(502, "Reachy bridge is not reachable.")
+                self.json_error(502, f"{name} is not reachable.")
                 return
             if len(data) > MAX_RESPONSE:
-                self.json_error(502, "Reachy bridge response exceeded the size limit.")
+                self.json_error(502, f"{name} response exceeded the size limit.")
             elif response.status != 200:
-                self.reachy_refusal(response.status, data)
+                self.reachy_refusal(response.status, data, bridge)
             elif media_type(response) != content_type:
-                self.json_error(502, "Reachy bridge returned an unexpected content type.")
+                self.json_error(502, f"{name} returned an unexpected content type.")
             else:
                 self.send_headers(200, content_type, len(data), extra_headers)
                 self.wfile.write(data)
@@ -1631,7 +1644,7 @@ class Handler(BaseHTTPRequestHandler):
                 response.close()
             connection.close()
 
-    def reachy_stream(self, path, content_type, token=None):
+    def reachy_stream(self, bridge, path, content_type, token=None):
         """Relay an endless bridge stream (MJPEG or MP3) until the browser or the bridge stops.
 
         Never takes GENERATION_LOCK: watching or listening to the robot must neither wait for
@@ -1639,13 +1652,14 @@ class Handler(BaseHTTPRequestHandler):
         ends the same way: both sockets closed, the slot returned, the token forgotten.
         """
         global OPEN_REACHY_STREAMS
+        name = BRIDGE_NAMES[bridge]
         if not REACHY_STREAM_SLOTS.acquire(timeout=STREAM_HANDOFF_SECONDS):
-            self.json_error(503, f"{MAX_REACHY_STREAMS} Reachy streams are already open on this server. "
-                                 "Close another Live Vision tab or turn Listen off.")
+            self.json_error(503, f"{MAX_REACHY_STREAMS} camera and microphone streams are already open on this "
+                                 "server. Close another Live Vision tab or turn Listen off.")
             return
         with RELAYED_STREAMS_LOCK:
             OPEN_REACHY_STREAMS += 1
-        connection = http.client.HTTPConnection(*self.server.reachy_address, timeout=REACHY_SECONDS)
+        connection = http.client.HTTPConnection(*getattr(self.server, f"{bridge}_address"), timeout=REACHY_SECONDS)
         finished = threading.Event()
         response = None
         watcher = None
@@ -1660,12 +1674,12 @@ class Handler(BaseHTTPRequestHandler):
             connection.request("GET", path, headers={"Accept": content_type})
             response = connection.getresponse()
             if response.status != 200:
-                self.reachy_refusal(response.status, response.read(MAX_RESPONSE + 1))
+                self.reachy_refusal(response.status, response.read(MAX_RESPONSE + 1), bridge)
                 return
             # Relayed whole, because the multipart boundary lives in it.
             upstream_type = response.getheader("Content-Type", "")
             if media_type(response) != content_type or not re.fullmatch(r"[\x20-\x7e]{1,200}", upstream_type):
-                self.json_error(502, "Reachy bridge returned an unexpected content type.")
+                self.json_error(502, f"{name} returned an unexpected content type.")
                 return
             upstream_socket.settimeout(STREAM_IDLE_SECONDS)
 
@@ -1695,7 +1709,7 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, http.client.HTTPException):
             if not started:
                 try:
-                    self.json_error(502, "Reachy bridge is not reachable.")
+                    self.json_error(502, f"{name} is not reachable.")
                 except OSError:
                     pass
         finally:
@@ -1968,6 +1982,9 @@ def main():
                         help="Explicitly allow LAN HTTP for image uploads. Cameras need HTTPS.")
     parser.add_argument("--reachy-url", default="http://127.0.0.1:8099",
                         help="Reachy Mini bridge relayed under /reachy/ (plain HTTP on the Jetson).")
+    parser.add_argument("--luma-url", default="",
+                        help="VITURE Luma Ultra camera bridge (nvr/luma/luma_camera_bridge.py, such as "
+                             "http://127.0.0.1:8103), relayed under /luma/. Empty: the page offers no Luma source.")
     parser.add_argument("--allowed-host", action="append", default=[], metavar="NAME",
                         help="A host name (such as orin.local) that /reachy/ and /api/access answer "
                              "to, besides IP addresses and localhost. Repeat for more names.")
@@ -2023,6 +2040,7 @@ def main():
         parser.error("--host must be an IP address or localhost.")
     try:
         reachy_address = bridge_address(args.reachy_url)
+        luma_address = bridge_address(args.luma_url, "--luma-url", "http://127.0.0.1:8103") if args.luma_url else None
     except ValueError as exc:
         parser.error(str(exc))
     if args.reachy_daemon_url and Reachy is None:
@@ -2109,7 +2127,7 @@ def main():
         server = Server((args.host, args.port), Handler)
         servers.append(server)
         server.backend_port = args.backend_port
-        server.reachy_address = reachy_address
+        server.reachy_address, server.luma_address = reachy_address, luma_address
         server.reachy_client = reachy_client
         server.piper = piper
         server.engine_switcher = engine_switcher
@@ -2124,7 +2142,7 @@ def main():
             secure = Server((args.host, args.https_port), Handler, telemetry=server.telemetry)
             servers.append(secure)
             secure.backend_port = args.backend_port
-            secure.reachy_address = reachy_address
+            secure.reachy_address, secure.luma_address = reachy_address, luma_address
             secure.reachy_client = reachy_client
             secure.piper = piper
             secure.engine_switcher = engine_switcher
@@ -2140,6 +2158,8 @@ def main():
         scheme = "https" if primary_tls else "http"
         print(f"UI: {scheme}://{args.host}:{args.port}; backend: http://127.0.0.1:{args.backend_port}", flush=True)
         print(f"Reachy Mini bridge: {args.reachy_url}, relayed under /reachy/", flush=True)
+        print(f"VITURE Luma Ultra camera bridge: {args.luma_url or 'not configured'}"
+              f"{', relayed under /luma/' if args.luma_url else ''}", flush=True)
         print(f"Reachy Mini daemon (motors/apps/volume): "
               f"{args.reachy_daemon_url or 'not configured'}", flush=True)
         print(f"Speech: {'Piper at ' + str(args.piper_bin) if piper else 'not configured'}", flush=True)

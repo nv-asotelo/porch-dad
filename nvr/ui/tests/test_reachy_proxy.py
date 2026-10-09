@@ -191,9 +191,9 @@ class ReachyRelayTest(unittest.TestCase):
         self.slots.stop()
 
     def get(self, path, headers=None, token=True):
-        # /reachy/ URLs carry the relay token, as the page's do. token=None sends none, and a
-        # string is sent in its place.
-        if path.startswith("/reachy/") and token is not None:
+        # /reachy/ and /luma/ URLs carry the relay token, as the page's do. token=None sends none,
+        # and a string is sent in its place.
+        if (path.startswith("/reachy/") or path.startswith("/luma/")) and token is not None:
             value = serve_ui.RELAY_TOKEN if token is True else token
             path += ("&" if "?" in path else "?") + urlencode({"token": value})
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
@@ -436,9 +436,33 @@ class ReachyRelayTest(unittest.TestCase):
             self.assertNotIn(serve_ui.RELAY_TOKEN.encode(), response.read())
         self.assertEqual(self.bridge.paths, [])
 
+    def test_the_luma_camera_is_relayed_only_where_configured(self):
+        # Without --luma-url there is no /luma/ relay, and the page is told so.
+        self.assertEqual(self.get_json("/api/access")[2]["luma"], False)
+        status, _, body = self.get_json("/luma/healthz")
+        self.assertEqual((status, "--luma-url" in body["error"]["message"]), (404, True))
+        self.assertEqual(self.bridge.paths, [])
+        # With it, the same three routes as the robot's video, to that bridge.
+        self.ui.luma_address = ("127.0.0.1", self.bridge.server_address[1])
+        self.assertEqual(self.get_json("/api/access")[2]["luma"], True)
+        for path in ("/luma/healthz", "/luma/still.jpg", "/luma/mjpeg"):
+            _, response = self.get(path)
+            self.assertEqual(response.status, 200, path)
+            response.read()
+        self.assertEqual(self.bridge.paths, ["/healthz", "/still.jpg", "/mjpeg"])
+        # No audio: the glasses' microphone is not relayed.
+        self.assertEqual(self.get_json("/luma/audio.mp3")[0], 404)
+        # The same locks as the robot's: the relay token, and a rebound name refused.
+        self.assertEqual(self.get_json("/luma/still.jpg", token=None)[0], 401)
+        self.assertEqual(self.get_json("/luma/still.jpg", {"Host": "rebind.attacker.example"})[0], 421)
+        # An unreachable Luma bridge is named as such, not as the robot's.
+        self.ui.luma_address = ("127.0.0.1", unused_port())
+        status, _, body = self.get_json("/luma/healthz")
+        self.assertEqual((status, body["error"]["message"]), (502, "Luma camera bridge is not reachable."))
+
     def test_access_hands_the_token_only_to_this_servers_own_names(self):
         self.ui.https_port = 8443
-        expected = {"https_port": 8443, "reachy_token": serve_ui.RELAY_TOKEN}
+        expected = {"https_port": 8443, "reachy_token": serve_ui.RELAY_TOKEN, "luma": False}
         for host in (f"127.0.0.1:{self.port}", "192.0.2.10:8092", "192.0.2.10", "[::1]:8092", "LocalHost",
                      "[2001:db8::1]:8443", "localhost:8092", "reachy.localhost:8092", "localhost."):
             self.assertEqual(self.get_json("/api/access", {"Host": host})[::2], (200, expected), host)

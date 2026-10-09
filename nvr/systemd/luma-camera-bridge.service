@@ -1,0 +1,20 @@
+[Unit]
+Description=VITURE Luma Ultra camera bridge for Live Vision (loopback :8103)
+After=network.target
+
+[Service]
+Type=simple
+User=orin
+Group=orin
+# The glasses' camera is a plain UVC webcam on the Orin's USB-C port. The bridge finds it beside the
+# glasses' own VITURE USB devices, runs it only while something asks (Live Vision polling its
+# health, an open stream) and says why when it cannot: unplugged, or no frames. orin is in the
+# video group, which owns /dev/video*. Needs gst-launch-1.0, which JetPack ships.
+ExecStart=/usr/bin/python3 /home/orin/nvr/luma/luma_camera_bridge.py --listen 127.0.0.1 --port 8103 --size 1280x720 --fps 15
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

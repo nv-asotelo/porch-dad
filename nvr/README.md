@@ -1190,8 +1190,9 @@ and draws a contact sheet. That is how the numbers above were taken.
 
 ## Live Vision: models, classifiers, Reachy Mini control and Piper speech
 
-Live Vision (`nvr/ui`, `cosmos-edge-ui.service`) captions a browser camera, or the Reachy Mini's
-through the bridge (deploy/07 §5), with the shim. The unit binds loopback `:8092`; with the LAN
+Live Vision (`nvr/ui`, `cosmos-edge-ui.service`) captions a browser camera, the Reachy Mini's
+through the bridge (deploy/07 §5), or the VITURE Luma Ultra glasses' camera on the Orin's USB-C port
+(deploy/11), with the shim. The unit binds loopback `:8092`; with the LAN
 drop-in from `enable_lan_ui.sh` it serves the LAN on `:8092` and `:8443`, and a LAN request for
 `/` on `:8092` is redirected to HTTPS, the only place a browser grants a camera (deploy/07 §3).
 Since 2026-10-03 it is the Live UI the board starts at boot, in place of the Live VLM WebUI, and it
@@ -1232,6 +1233,26 @@ service startup separately from fresh camera frames; choose **Use Reachy Mini** 
 open a Live Vision preview again. Status polls and page reloads never start the
 bridge. Release preserves boot enablement: rebooting the Orin or explicitly starting
 the service (including Demo mode) can reconnect it.
+
+### VITURE Luma Ultra: the glasses' camera as a source
+
+**Use VITURE Luma Ultra** shows the camera of the VITURE Luma Ultra XR glasses plugged into the Orin's
+USB-C port, and runs the selected model on it like any other source: live, or one frame at a time
+with **Run inference**. The camera is a plain UVC webcam inside the glasses (deploy/11 has what the
+glasses present, and what their display and head tracking need beyond this port), served by
+[`luma/luma_camera_bridge.py`](luma/luma_camera_bridge.py) (`luma-camera-bridge.service`, loopback
+`:8103`) and relayed under `/luma/` exactly as the robot's video is under `/reachy/`: the same
+`/healthz`, `/still.jpg` and `/mjpeg`, the same relay token and stream cap. Each capture is a fresh
+`/still.jpg`, so a stalled preview never feeds a model an old frame.
+
+The bridge finds the camera by its neighbours - the glasses' own VITURE USB devices on the same hub -
+not by `/dev/videoN`, which moves with plug order. It passes the camera's MJPEG through as it comes,
+1280x720 at 15 fps (about 1.2 MB/s on the LAN), and runs the camera only while something asks: a page
+watching it polls `/healthz` every 2 s, and 30 s after the last request the camera stops. Asked
+again, it is live in about 1.4 s. Unplugged, the button's status says so, and the bridge picks the
+camera up again when the glasses come back. Measured 2026-10-09: Cosmos v3 described a frame from the
+glasses as "A Charmander toy dinosaur is biting a yellow object." The button appears only where the
+server is given `--luma-url`.
 
 For human or agent deployment, copy `nvr/reachy/bridge_control.py` along with the
 updated Porch Feed and Live Vision files, then restart those web services. The
@@ -1279,6 +1300,7 @@ which repeats `lan.conf`'s command and adds:
 | `--engine-link /opt/tensorrt-edgellm/models/default`, `--engines-config /home/orin/nvr/ui/config/engines.json` | The model buttons, from [`ui/config/engines.orin.json`](ui/config/engines.orin.json) ("Models" below) |
 | `--classifier-url http://127.0.0.1:8094`, `--samples-dir /home/orin/nvr/classifier/samples` | The classifiers' service and the labelled Pokémon sample set ([`classifier/README.md`](classifier/README.md)). Each further `--samples-dir` is one more tab: this Orin adds `/home/orin/nvr/classifier/samples-daycare`, a private set that is not in git ("Sample sets" below) |
 | `--services-config /home/orin/nvr/ui/config/services.json` | Adds the classifier service to the page's status bar, from [`ui/config/services.orin.json`](ui/config/services.orin.json) |
+| `--luma-url http://127.0.0.1:8103` | The VITURE Luma Ultra source: the glasses' camera through [`luma/luma_camera_bridge.py`](luma/luma_camera_bridge.py), relayed under `/luma/` ("VITURE Luma Ultra" above, deploy/11). Without it the page has no Luma button |
 
 Without `--reachy-daemon-url` the robot panel is not shown at all, which is also what a drop-in that
 never took effect looks like.
@@ -1329,7 +1351,10 @@ is warm before tightening the cap: `systemctl show cosmos-edge-ui -p MemoryCurre
 (deploy/07 §5), but robot control (`POST /api/reachy/*`) checks only that a request is not
 cross-origin, so any LAN client can move the robot or make it speak through Live Vision. The robot's
 daemon answers on the LAN at `:8000` anyway, which is how this UI reaches it: this adds a browser
-route to the robot, not new reach.
+route to the robot, not new reach. The VITURE Luma Ultra's camera is different: its bridge listens on
+loopback only, so with `--luma-url` Live Vision is the one LAN path to it, behind the same token -
+which stops drive-by pages, not a LAN client - and a request turns the camera on. Leave out
+`--luma-url` where that is unwanted.
 
 ### Models: VLMs and classifiers
 
